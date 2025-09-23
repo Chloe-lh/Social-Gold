@@ -8,8 +8,7 @@ See [the web page](https://uofa-cmput404.github.io/general/project.html) for a d
 
 Make a distributed social network!
 
-**Team Members:
-**
+**Team Members:**
 - Aesoji
 - chobo
 - Emoji_King

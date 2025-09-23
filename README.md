@@ -15,7 +15,6 @@ Make a distributed social network!
 - Irisveil
 - Pooja
 - zaara
-- mdane
 
 ## License
 

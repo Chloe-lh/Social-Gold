@@ -8,6 +8,15 @@ See [the web page](https://uofa-cmput404.github.io/general/project.html) for a d
 
 Make a distributed social network!
 
+**Team Members:
+**
+- Aesoji
+- chobo
+- Emoji_King
+- Irisveil
+- Pooja
+- zaara
+
 ## License
 
 * Choose an OSI approved license, name it here, and copy the license text to a file called `LICENSE`.

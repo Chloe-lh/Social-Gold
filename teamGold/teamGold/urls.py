@@ -1,5 +1,5 @@
 """
-URL configuration for gold project.
+URL configuration for teamGold project.
 
 The `urlpatterns` list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/5.2/topics/http/urls/
@@ -15,9 +15,9 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path
 
 urlpatterns = [
-    path("GoldFeed/", include("GoldFeed.urls")),
+    path("golden/", include(golden.urls)),
     path('admin/', admin.site.urls),
 ]

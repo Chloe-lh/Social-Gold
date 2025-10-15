@@ -1,6 +1,6 @@
 from django.db import models
+from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 
-# Create your models here.
 '''
 Relationship Summary
 Author 1 ────> * Entry
@@ -15,8 +15,26 @@ Note: When building a federated social platform, each object must
 have a fully qualified URL (FQID) that includes the nodes domain
 '''
 
-class Author(models.Model):
-    pass
+class AuthorManager(BaseUserManager):
+    def new_user(self, username, password=None, **extra_fields):
+        user = self.model(userName = username, **extra_fields)
+        user.set_password(password)
+        user.save(using=self.db)
+        return user
+
+class Author(AbstractBaseUser):
+    id = models.AutoField(primary_key=True)
+    userName = models.CharField(max_length=50, unique=True, default="goldenuser")
+    password = models.CharField(max_length=50, default="goldenpassword")
+    is_admin = models.BooleanField(default=False)
+    following = models.ManyToManyField('self', symmetrical=False, related_name='followers_set', blank=True)
+    followers_info = models.JSONField(default=dict, blank=True)
+    objects = AuthorManager()
+
+    USERNAME_FIELD = "id"
+
+    def __str__(self):
+        return self.userName
 
 class Entry(models.Model):
     # We use a FULL URL (FQID) as the primary key instead of an integer.
@@ -46,8 +64,8 @@ class Entry(models.Model):
     visibility = models.CharField(max_length=10, choices=VISIBILITY_CHOICES, default='PUBLIC')
     
     # auto_now_add=True means it is only set ONCE on creation.
-    posted = models.DateTimeField(auto_now_add=True)
-    updated = models.DateTimeField(auto_now=True)
+    is_posted = models.DateTimeField(auto_now_add=True)
+    is_updated = models.DateTimeField(auto_now=True)
 
     # We use URLs for authors to support remote likes from different nodes.
     likes = models.ManyToManyField(
@@ -61,7 +79,7 @@ class Entry(models.Model):
         return f"Entry by {self.author} ({self.visibility})"
 
 class Comments(models.Model):
-
+    
     post = models.ForeignKey(Entry, on_delete=models.CASCADE, related_name="comments")
     author = models.ForeignKey(Author, on_delete=models.CASCADE, related_name="comments")
     reply_to = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='replies')

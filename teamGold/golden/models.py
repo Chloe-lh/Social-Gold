@@ -16,7 +16,16 @@ have a fully qualified URL (FQID) that includes the nodes domain
 '''
 
 class Author(models.Model):
-    pass
+    id = models.AutoField(primary_key=True)
+    userName = models.CharField(max_length=100, unique=True)
+    password = models.CharField(max_length=20)
+    is_admin = models.BooleanField(default=False)
+    following = models.ManyToManyField('self', symmetrical=False, related_name='followers_set', blank=True)
+    followers_info = models.JSONField(default=dict, blank=True)
+
+
+    def __str__(self):
+        return self.username
 
 class Entry(models.Model):
     # We use a FULL URL (FQID) as the primary key instead of an integer.

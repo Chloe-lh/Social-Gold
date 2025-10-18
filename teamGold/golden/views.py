@@ -10,6 +10,9 @@ def index(request):
 def base(request):
     return render(request, "base.html")
 
+def profile_view(request):
+    return render(request, 'profile.html')
+
 def login_view(request):
     # a post is sent when the log in button is pressed
     if request.method == "POST":

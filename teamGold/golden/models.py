@@ -109,6 +109,7 @@ class Comments(models.Model):
 class Node(models.Model):
     """
     Represents a remote or local node / server.
+    remote node : other servers/seperate instances of app
     id: full URL of node (e.g. https://node.example)
     remote_nodes: JSON list of known node URLs (optional)
     """
@@ -117,6 +118,9 @@ class Node(models.Model):
 
     title = models.CharField(max_length=200, blank=True)
     description = models.TextField(blank=True)
+    # this allows for HTTP Authentication
+    auth_user = models.CharField(max_length=100)
+    auth_pass = models.CharField(max_length=100)
 
     # Who administrates this node (local admins)
     admins = models.ManyToManyField(

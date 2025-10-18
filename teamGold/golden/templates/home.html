@@ -1,0 +1,63 @@
+{% csrf_token %}
+
+<!DOCTYPE html>
+
+<html lang="en">
+    <head>
+        <meta charset="utf-8"/>
+        <meta name="home" content=<"width=device-width,initial-scale=1"/> 
+        <title>{{ title }}</title>
+    </head>
+    <body>
+
+        <h1> GOLDEN </h1>
+
+
+        <hr>
+        <h2> How are you feeling? </h2>
+          <section>
+            <form method="POST" action="{% url 'home' %}">
+                <textarea rows="10" cols="50" placeholder="Enter your text here..."></textarea> <br> <br>
+                <button name="entry_post">Post</button>
+            </form>            
+        </section>
+
+        <section>
+        <table>
+            <thread>
+                <tr>
+                    <th>Author</th>
+                    <th>Content</th>
+                    <th>Likes</th>
+                </tr>
+            </thread>
+            <tbody>
+            {% for entry in entries %}
+                <tr>
+                    <td> {{ entry.author}} </td>
+                    <td> {{ entry.content }} </td>
+                    <td> {{ entry.likes }} </td>
+                    <td>
+                        <button name="entry_edit">Edit Entry</button>
+                        <button name="entry_delete">Delete Entry</button>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table> 
+        </section>
+
+        
+
+
+
+
+
+
+
+        
+       
+
+
+
+    </body> 

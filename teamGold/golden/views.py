@@ -37,6 +37,12 @@ def signup(request):
         form = CustomUserForm()
     return render(request, "signup.html", {"form": form})
 
+ """
+ This code is coming from a conflict, saved just in case
+ def profile_view(request):
+    return render(request, 'profile.html')
+ """
+  
 # class signup(FormView):
 #     template_name = "signup.html"
 #     form_class = CustomUserForm

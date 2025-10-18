@@ -41,6 +41,7 @@ class Author(models.Model):
     userName = models.CharField(max_length=100, unique=True, default="temp_user")
     password = models.CharField(max_length=20,  default="temp_pass")
     is_admin = models.BooleanField(default=False)
+    is_approved = models.BooleanField(default=False)
     following = models.ManyToManyField(
         'self', symmetrical=False, 
         related_name='followers_set', 

@@ -1,11 +1,7 @@
 <!-- This file contains the header and side nav bar for most of the pages on our site
  to add it, place {% extends 'base.html'} at the top of your file
  Example:
-    {% extends "base.html" %}
-    {% block content %}
-        <h2>Profile Page</h2>
-        <p>Welcome to your profile!</p>
-    {% endblock %}
+   
   -->
  <!doctype html>
  <head>
@@ -133,7 +129,8 @@
     </div>
         <main class="content">
             <!-- Child templates will over ride to display page content-->
-            {% block content %}{% endblock %}
+            {% block content %}
+            {% endblock %}
         </main>
      </div>
  </body>

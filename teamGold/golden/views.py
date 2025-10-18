@@ -11,7 +11,6 @@ def index(request):
 
 def home(request):
     context = {}
-
     entry = EntryList()
     entries = Entry.objects.all()
     context['entries'] = entries

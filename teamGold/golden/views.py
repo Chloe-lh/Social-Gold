@@ -6,3 +6,6 @@ from django.shortcuts import render
 
 def base(request):
     return render(request, "base.html")
+
+def profile_view(request):
+    return render(request, 'profile.html')

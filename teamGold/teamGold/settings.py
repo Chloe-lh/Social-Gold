@@ -123,3 +123,9 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Sets the default user as the Author model in golden
+AUTH_USER_MODEL = "golden.Author"
+
+# Sets the default login page
+LOGIN_URL = "login"

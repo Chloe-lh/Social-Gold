@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.models import AbstractUser
 
 # Create your models here.
 '''
@@ -28,7 +29,7 @@ FOLLOW_STATE_CHOICES = [
     ("REJECTED", "rejected"),
 ]
 
-class Author(models.Model):
+class Author(AbstractUser):
     """
     Author object matching spec. Public identity MUST be the full API URL.
     Example id: "http://nodeaaaa/api/authors/111"
@@ -38,7 +39,7 @@ class Author(models.Model):
     github = models.URLField(blank=True)
     web = models.URLField(blank=True)
     profileImage = models.URLField(blank=True)
-    userName = models.CharField(max_length=100, unique=True, default="temp_user")
+    username = models.CharField(max_length=100, unique=True, default="temp_user")
     password = models.CharField(max_length=20,  default="temp_pass")
     is_admin = models.BooleanField(default=False)
     following = models.ManyToManyField(
@@ -47,9 +48,12 @@ class Author(models.Model):
         blank=True)
     followers_info = models.JSONField(default=dict, blank=True)
 
+    # Authentication
+    USERNAME_FIELD = "username"
+    REQUIRED_FIELDS = []
 
     def __str__(self):
-        return self.userName
+        return self.username
 
 class Entry(models.Model):
     """

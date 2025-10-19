@@ -1,4 +1,11 @@
 from django.contrib import admin
-from .models import Author  # import your model
+from golden.models import Author, Entry, Comments, Node
 
-admin.site.register(Author)
+models_class = [Author, Entry, Comments, Node]
+
+for model in models_class:
+    admin.site.register(model)
+
+
+
+

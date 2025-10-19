@@ -10,5 +10,7 @@ urlpatterns = [
     path('search/', views.search_authors, name='search_authors'),
     path('followers/', views.followers, name='followers'),
     path('following/', views.following, name='following'),
-    path("home", views.home, name="home")
+    path("home/", views.home, name="home")
 ]
+    
+

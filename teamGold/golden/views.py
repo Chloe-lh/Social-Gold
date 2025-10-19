@@ -1,27 +1,35 @@
-from django.shortcuts import render, redirect
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
+# BASE DJANGO 
+from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
 from django.conf import settings
+from django.db import transaction
+from django.http import HttpResponseForbidden
 
-# Import login authentication stuff (# get_user_model added from entries)
-from django.contrib.auth.decorators import login_required
-from django.contrib.auth import authenticate, login, logout, get_user_model
-from django.views.generic.edit import FormView
+# REST FRAMEWORKS 
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+
+# BASE GOLDEN
+from golden.models import Entry, EntryImage, Author
+from golden.entry import EntryList
 from .forms import CustomUserForm
+
+# Import login authentication stuff
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth import authenticate, login, logout
+from django.views.generic.edit import FormView
 import uuid
 
 # Imports for entries
-from golden.models import Entry, Author
-from golden.entry import EntryList
+from django.contrib.auth import get_user_model
+from .decorators import require_author
 import markdown 
 
-# Create your views here.
 def index(request):
     objects = Author.objects.values()
     print("USERS:")
     for obj in objects:
-        print(obj.username) # type: ignore
+        print(obj['username']) 
     return render(request, "index.html")
 
 def signup(request):
@@ -47,7 +55,7 @@ def signup(request):
             #if not next_page:
                 #next_page = "/golden/"
 
-            return redirect('profile')           # TODO: Change the link to homepage after it's done
+            return redirect('home')     
     else:
         form = CustomUserForm()
         # next_page = request.GET.get('next')
@@ -86,48 +94,115 @@ def following(request):
     return render(request, "search.html", {"authors": authors, "query": query, 'page_type': 'following',})
 
 @login_required
+@require_author 
 def home(request):
+    """
+    @require_author is linked with deorators.py to ensure user distinction
+    """
+    if request.current_author is None:
+        return redirect('signup')
+    
     context = {}
-    form = Entry()
-    entries = Entry.objects.all()
+    form = EntryList()
+    editing_entry = None # because by default, users are not in editing mode 
+    entries = Entry.objects.all().order_by('-is_posted')
     context['entries'] = entries
-    context['title'] = "Home"
 
-    # User clicked the Post Button
+    # FEATURE POST AN ENTRY
     if request.method == "POST" and "entry_post" in request.POST:
-        entry_id = "https://node1.com/api/entries/" + str(uuid.uuid4()), 
+        entry_id = f"https://node1.com/api/entries/{uuid.uuid4()}"
 
-        # This is temporary because login feature doesn't exist yet
-        if request.user.is_authenticated:
-            try: 
-                author = Author.objects.get(userName=request.user.username) 
-            except:
-                author = Author.objects.create(userName=request.user.username, password=request.user.password)
-
+        # Markdown conversion 
         markdown_content = request.POST['content']
         html_content = markdown.markdown(markdown_content)
-        entry = Entry(
-            id=entry_id,
-            author=author, # type: ignore
-            content=html_content,
-            visibility=request.POST.get('visibility', 'PUBLIC')
-        )
-        entry.save()
 
+        with transaction.atomic(): 
+            entry = Entry.objects.create(
+                id=entry_id,
+                author=request.current_author,
+                content=html_content,
+                visibility=request.POST.get('visibility', 'PUBLIC')
+            )
+
+        images = request.FILES.getlist('images')
+        for idx, image in enumerate(images):
+            EntryImage.objects.create(
+                entry=entry, image=image, order=idx)
+                    
         return redirect('home')
     
-    # User clicks delete button
+    # FEATURE DELETE AN ENTRY 
     if request.method == "POST" and "entry_delete" in request.POST:
         primary_key = request.POST.get('entry_delete')
         entry = Entry.objects.get(id=primary_key)
+
+        # also for testing purposes 
+        if entry.author.id != request.current_author.id:
+            return HttpResponseForbidden("This isn't yours")
+
         entry.delete()
         return redirect('home')
+    
+    # FEATURE UPDATE AN EDITED ENTRY
+    if request.method == "POST" and "entry_update" in request.POST:
+        primary_key = request.POST.get("entry_update")
+        editing_entry = get_object_or_404(Entry, id=primary_key)
 
-    # User clicks the edit button
+        # for testing 
+        if editing_entry.author.id != request.current_author.id:
+            return HttpResponseForbidden("No editing")
+        
+        raw_md = request.POST.get("content", "")
+        visibility = request.POST.get("visibility", editing_entry.visibility)
+
+        # difference between adding a new image and remove an image 
+        new_images = request.FILES.getlist("images")
+        remove_images = request.POST.getlist("remove_images")
+        remove_ids = []
+        for x in remove_images:
+            try:
+                remove_ids.append(int(x))
+            except (TypeError, ValueError):
+                pass 
+
+        with transaction.atomic():
+            editing_entry.content = markdown.markdown(raw_md)
+            editing_entry.visibility = visibility
+            editing_entry.contentType = "text/html"
+            editing_entry.save()
+
+            if remove_ids:
+                EntryImage.objects.filter(entry=editing_entry, id__in=remove_ids).delete()
+
+            # Append any newly uploaded images, preserving order
+            if new_images:
+                current_max = editing_entry.images.count()
+                for idx, f in enumerate(new_images):
+                    EntryImage.objects.create(
+                        entry=editing_entry,
+                        image=f,
+                        order=current_max + idx
+                    )
+
+        context = {}
+        context['form'] = EntryList()  
+        context['editing_entry'] = None 
+        context['entries'] = Entry.objects.select_related("author").all()
+        return render(request, "home.html", context | {'entries': entries})
+
+    # FEATURE EDIT BUTTON CLICKED 
     if request.method == "POST" and "entry_edit" in request.POST:
         primary_key = request.POST.get('entry_edit')
-        entry = Entry.objects.get(id=primary_key)
-        form = EntryList(request.POST, instance=entry)
-        entry.save()
+        editing_entry = get_object_or_404(Entry, id=primary_key)
+
+        form = EntryList(instance=editing_entry)
+        context["editing_entry"] = editing_entry
+        context["form"] = form
+        context["entries"] = Entry.objects.select_related("author").all()
+        return render(request, "home.html", context | {'entries': entries})
+
     context['form'] = form 
-    return render(request, "home.html", context)
+    context["editing_entry"] = editing_entry
+    context["entries"] = Entry.objects.select_related("author").all()
+
+    return render(request, "home.html", context | {'entries': entries})

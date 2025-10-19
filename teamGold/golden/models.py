@@ -177,3 +177,10 @@ class Follow(models.Model):
 
     def __str__(self):
         return f"Follow {self.id} {self.actor} -> {self.object} ({self.state})"
+
+    class inbox(models.Model):
+        id = models.URLField(primary_key=True)
+        recipient = models.ForeignKey(Author, on_delete=models.CASCADE)
+        item_type = models.CharField(max_length=20)  # "entry", "comment", "like", "follow"
+        content = models.JSONField()
+        received_at = models.DateTimeField(auto_now_add=True)

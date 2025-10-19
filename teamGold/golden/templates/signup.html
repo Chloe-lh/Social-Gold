@@ -4,64 +4,16 @@
         <title>Golden - Login</title>
         <meta charset="UTF-8">
 
-        <style>
-            html {
-                background: linear-gradient(to bottom, #F08A4B 0%, #F08A4B 55%, #FFF9E9 55%, #FFF9E9 100%);
-                background-repeat: no-repeat;
-                background-size: contain;
-                width: 100%;
-                height: 100%;
-            }
-
-            body {
-                display: flex;
-                margin: 0;
-                height: 100%;
-                width: 100%;
-                justify-content: center;
-                align-items: center;
-            }
-
-            section {
-                width: min(50vw, 70vh);
-                min-width: 300px;
-                height: min(50vw, 70vh);
-                min-height: 300px;
-                background-color: #FFF9E9;
-                border: 1px solid black;
-                padding: 30px;
-                box-sizing: border-box;
-            }
-
-            h2 {
-                -webkit-text-stroke: 0.7px black;
-                font-size: 50px;
-                color: #F3CA40;
-                margin: 0;
-            }
-
-            input {
-                background-color: #E7B393;
-                border: 1px solid black;
-                border-radius: 6px;
-                font-size: 22px;
-                color: #FFF9E9;
-                padding: 5px 15px;
-            }
-
-            input::placeholder {
-                color: #FFF9E9;
-            }
-
-        </style>
+        <link rel="stylesheet" href="{% static 'golden/css/login.css' %}">
     </head>
 
     <body>
         <section>
-            <!-- login -->
+            <!-- signup -->
              <header>
                 <h2>Golden</h2>
              </header>
+
             {% if form.errors %}
                 {% for field, errors in form.errors.items %}
                     {% for error in errors %}
@@ -69,6 +21,7 @@
                     {% endfor %}
                 {% endfor %}
             {% endif %}
+
              <form name="signup" method="POST" enctype="application/x-www-form-urlencoded">
                 {% csrf_token %}
                 <input name="username" aria-label="Username" placeholder="Username">
@@ -78,13 +31,11 @@
                 <input type="hidden" name="next" value="{{ next }}">
              </form>
                 <p>Already have an account?</p>
+
                 {% if next %}
-                <a href="{% url 'login' next %}">Login</a>
-                
+                    <a href="{% url 'login' %}?next={{ next }}">Login</a>
                 {% else %}
-
-                <a href="{% url 'login' %}">Login with next</a>
-
+                    <a href="{% url 'login' %}">Login</a>
                 {% endif %}
         </section>
         <div>

@@ -28,19 +28,30 @@ def signup(request):
     if request.method == "POST":
         # create a form instance and populate it with data from the request
         form = CustomUserForm(request.POST)
+        next_page = request.POST['next']
         
         # we don't want to create a user if the inputs are not valid since that can raise errors
         if form.is_valid():
             user = form.save()
-            print(user)
             login(request, user)
+            if not next_page:
+                next_page = "/golden/"
 
-            return redirect("/golden/")
-            # return HttpResponseRedirect(reverse("index"))
+            return redirect(next_page)
     else:
+        # just in case the method is not GET
+        try:
+            next_page = request.GET.get('next')
+            print(next_page)
+        except Exception as e:
+            next_page = None
+        
         form = CustomUserForm()
 
-    return render(request, "signup.html", {"form": form})
+    if next_page is not None:
+        return render(request, "signup.html", {"form": form, "next": next_page})
+    else:
+        return render(request, "signup.html", {"form": form})
 
 
 # This code is coming from a conflict, saved just in case

@@ -129,3 +129,6 @@ AUTH_USER_MODEL = "golden.Author"
 
 # Sets the default login page
 LOGIN_URL = "login"
+
+# Sets the default redirect page after login
+LOGIN_REDIRECT_URL = '/golden/profile/'          # TODO: Change the link to homepage after it's done

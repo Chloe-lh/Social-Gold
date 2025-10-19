@@ -29,19 +29,23 @@ def signup(request):
         if form.is_valid():
             user = form.save()
             print(user)
-            login(self.request, user)
+            login(request, user)
             
-            return HttpResponseRedirect(reverse("index"))
+            # Get ?next= URL if present, otherwise go to /golden/
+            next_url = request.POST.get("next") or request.GET.get("next") or "/golden/profile/"    # TODO: Change the link to homepage after it's done
+            return redirect(next_url)
 
     else:
         form = CustomUserForm()
-    return render(request, "signup.html", {"form": form})
 
- """
- This code is coming from a conflict, saved just in case
- def profile_view(request):
+    # Pass along any ?next= parameter to the signup form
+    next_url = request.GET.get("next", "")
+    return render(request, "signup.html", {"form": form, "next": next_url})
+
+
+@login_required
+def profile_view(request):
     return render(request, 'profile.html')
- """
   
 # class signup(FormView):
 #     template_name = "signup.html"
@@ -52,3 +56,30 @@ def signup(request):
 #         user = form.save()
 #         login(self.request, user)
 #         return super().form_valid(form)
+
+@login_required
+def search_authors(request):
+    query = request.GET.get('q', '')  # get search term from input
+    if query:
+        authors = Author.objects.filter(username__icontains=query)
+    else:
+        authors = Author.objects.all()  # display all if no search
+    return render(request, "search.html", {"authors": authors, "query": query, 'page_type': 'search_authors',})
+
+@login_required
+def followers(request):
+    query = request.GET.get('q', '')  # get search term from input
+    if query:
+        authors = Author.objects.filter(username__icontains=query)
+    else:
+        authors = Author.objects.all()  # display all if no search
+    return render(request, "search.html", {"authors": authors, "query": query, 'page_type': 'followers',})
+
+@login_required
+def following(request):
+    query = request.GET.get('q', '')  # get search term from input
+    if query:
+        authors = Author.objects.filter(username__icontains=query)
+    else:
+        authors = Author.objects.all()  # display all if no search
+    return render(request, "search.html", {"authors": authors, "query": query, 'page_type': 'following',})

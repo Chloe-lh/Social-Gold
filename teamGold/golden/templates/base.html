@@ -79,6 +79,7 @@
         .content{
             margin-left: 200px;
             margin-top: 100px;
+            margin-right: 50px;
         }
         /*
         when viewed on a smaller screen, the side nav is not visible
@@ -112,7 +113,7 @@
     <nav class="top-nav">
         <h1><a href="">Golden</a></h1>
         <ul class="menu">
-            <li class="item"><a href="">Profile</a></li>
+            <li class="item"><a href="{% url 'profile' %}">Profile</a></li>
             <li class="item"><a href="">Stream</a></li>
             <li class="item"><a href="">Log Out</a></li>
         </ul>
@@ -121,14 +122,15 @@
     <button class="side-toggle" onclick="toggleSidebar()">☰</button>
     <div class="side-nav">
         <ul>
-            <li><a href="">Inbox</a></li>
-            <li><a href="">Followers</a></li>
-            <li><a href="">Following</a></li>
-            <li><a href="">New Entry</a></li>
+            <li><a href="">Home</a></li>
+            <li><a href="">New Post</a></li>
+            <li><a href="">Follow Requests</a></li>
+            <li><a href="{% url 'search_authors' %}">Search</a></li>
         </ul>
     </div>
     <main class="content">
         <!-- Child templates will over ride to display page content-->
         {% block content %}{% endblock %}
     </main>
+    {% block scripts %}{% endblock %}
  </body>

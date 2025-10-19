@@ -5,7 +5,7 @@ from django.urls import reverse
 
 # Import login authentication stuff
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth import authenticate, login
+from django.contrib.auth import authenticate, login, logout
 from django.views.generic.edit import FormView
 from .forms import CustomUserForm
 
@@ -22,33 +22,27 @@ def index(request):
     return render(request, "index.html")
 
 def signup(request):
+    # we want to log users out when they want to sign up
+    logout(request)
+
     if request.method == "POST":
-        # create a form instance and populate it with data from the request:
+        # create a form instance and populate it with data from the request
         form = CustomUserForm(request.POST)
-        # check whether it's valid:
+        
+        # we don't want to create a user if the inputs are not valid since that can raise errors
         if form.is_valid():
             user = form.save()
             print(user)
-            login(self.request, user)
-            
-            return HttpResponseRedirect(reverse("index"))
+            login(request, user)
 
+            return redirect("/golden/")
+            # return HttpResponseRedirect(reverse("index"))
     else:
         form = CustomUserForm()
+
     return render(request, "signup.html", {"form": form})
 
- """
- This code is coming from a conflict, saved just in case
- def profile_view(request):
-    return render(request, 'profile.html')
- """
-  
-# class signup(FormView):
-#     template_name = "signup.html"
-#     form_class = CustomUserForm
-#     success_url = "/"
 
-#     def form_valid(self, form):
-#         user = form.save()
-#         login(self.request, user)
-#         return super().form_valid(form)
+# This code is coming from a conflict, saved just in case
+# def profile_view(request):
+#     return render(request, 'profile.html')

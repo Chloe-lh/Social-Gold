@@ -21,7 +21,7 @@ def index(request):
     objects = Author.objects.values()
     print("USERS:")
     for obj in objects:
-        print(obj.username)
+        print(obj.username) # type: ignore
     return render(request, "index.html")
 
 def signup(request):

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+
+<html lang="en">
+    <head>
+        <meta charset="utf-8"/>
+        {% load static %}
+        <meta name="home" content=<"width=device-width,initial-scale=1"/> 
+        <title>{{ title }}</title>
+    </head>
+    <body>
+        <h1> GOLDEN </h1>
+        <hr>
+
+        <h3> Post your thoughts </h3>
+        <section>
+            {% if form %}
+            <form method="POST" action="{% url 'home' %}" enctype="multipart/form-data"> 
+                {% csrf_token %} 
+                {% if editing_entry %}
+                    <textarea name="content" rows="10" cols="50" placeholder="Enter your text here...">{{ editing_entry.content|striptags }}</textarea><br><br>
+
+                    {% if editing_entry.images.all %}
+                        {% for images in editing_entry.images.all %}
+                            <img src="{{ images.image.url }}" alt="Current image" style="max-width: 300px; height: auto;">
+                            <label>
+                                <input type="checkbox" name="remove_images" value="{{ images.id }}"> Remove this image
+                            </label><br>
+                        {% endfor %}
+                    {% endif %}
+                    
+                    <label>Upload Image:</label>
+                    <input type="file" name="images" accept="image/*" multiple><br><br>
+                    <button name="entry_update" value="{{ editing_entry.id }}">Save</button><br><br>    
+                {% else %}
+                    <textarea name="content" rows="10" cols="50" placeholder="Enter your text here">{{entry.content}}</textarea><br><br>
+                    <label>Upload Image:</label>
+                    <input type="file" name="images" accept="image/*" multiple><br><br>
+                    <button name="entry_post">Post</button><br><br> 
+                {% endif %}
+            {% endif %}
+
+
+            <hr>
+
+            <table>
+                <tbody>
+                {% for entry in entries %}
+                    <tr>
+                        <br><strong>{{ entry.author}}</strong> <spacer>
+                        
+                        {% if request.user == entry.author %}
+                            <form method="POST" action="{% url 'home' %}" style="display: inline;">
+                                {% csrf_token %}
+                                <button name="entry_edit" value="{{ entry.id }}">Edit</button>
+                            </form>
+                            <form method="POST" action="{% url 'home' %}" style="display: inline;">
+                                {% csrf_token %}
+                                <button name="entry_delete" value="{{ entry.id }}">Delete</button>
+                        {% endif %}
+
+                        <br><br>
+                        {% if entry.images.all %}
+                            {% for images in entry.images.all %}
+                                <img src="{{ images.image.url }}" alt="Post image" style="max-width: 200px; height: auto;">
+                            {% endfor %}
+                        {% endif %}
+                        {{ entry.content | safe }} 
+                        
+                        <br><hr>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table> 
+            </form>
+        </section>
+    </body> 

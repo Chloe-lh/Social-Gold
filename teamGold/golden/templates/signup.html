@@ -3,12 +3,13 @@
     <head>
         <title>Golden - Login</title>
         <meta charset="UTF-8">
+        {% load static %}
 
         <link rel="stylesheet" href="{% static 'golden/css/login.css' %}">
     </head>
 
     <body>
-        <section>
+        <section class="signup-section">
             <!-- signup -->
              <header>
                 <h2>Golden</h2>
@@ -37,9 +38,9 @@
                 {% else %}
                     <a href="{% url 'login' %}">Login</a>
                 {% endif %}
+            <div class="box-decor login-section">
+                <!-- element purely for aesthetics and no real semantic value -->
+            </div>
         </section>
-        <div>
-            <!-- element purely for aesthetics and no real semantic value -->
-        </div>
     </body>
 </html>

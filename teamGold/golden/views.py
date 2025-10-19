@@ -10,12 +10,13 @@ from django.views.generic.edit import FormView
 from .forms import CustomUserForm
 
 from .models import Author
+from django.contrib.auth import get_user_model
 
 
 # login_required brings the user to the login page if they are not logged in
 @login_required
 def index(request):
-    objects = Author.objects.all()
+    objects = Author.objects.values()
     print("USERS:")
     for obj in objects:
         print(obj.username)
@@ -24,6 +25,12 @@ def index(request):
 def signup(request):
     # we want to log users out when they want to sign up
     logout(request)
+    # objects = Author.objects.values()
+    User = get_user_model()
+    objects = User.objects.values()
+    print("USERS:")
+    for obj in objects:
+        print(obj['username'])
 
     if request.method == "POST":
         # create a form instance and populate it with data from the request

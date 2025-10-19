@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -129,3 +130,9 @@ AUTH_USER_MODEL = "golden.Author"
 
 # Sets the default login page
 LOGIN_URL = "login"
+
+# Sets the default redirect page after login
+LOGIN_REDIRECT_URL = '/golden/profile/'          # TODO: Change the link to homepage after it's done
+
+# In production, each node (server) will have its own SITE_URL value
+SITE_URL = os.environ.get("SITE_URL", "http://127.0.0.1:8000")          

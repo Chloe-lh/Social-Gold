@@ -27,6 +27,7 @@ from .models import Author, Entry
 # Imports for entries
 from django.contrib.auth import get_user_model
 from .decorators import require_author
+import markdown
 
 
 def index(request):

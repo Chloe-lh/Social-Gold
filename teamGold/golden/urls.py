@@ -1,10 +1,9 @@
 from django.urls import path
 from . import views
-from django.contrib.auth import views as auth_views
 from . import apiViews
 
 '''
-This registers all views
+These URL Patterns registers all views 
 '''
 urlpatterns = [
     path("", views.index, name="index"),
@@ -17,11 +16,15 @@ urlpatterns = [
     path("home/", views.home, name="home"),
     # API end points
     # API views will be visible in /swagger/
-    path("api/Profile/<str:id>/", apiViews.GETProfileAPIView.as_view()),
-    path("api/Entry/<str:id>/", apiViews.GETEntryAPIView.as_view()),
-    path("api/Node/<str:id>/", apiViews.GETNodeAPIView.as_view()),
-    path("api/Profile/<str:id>/", apiViews.GETProfileAPIView.as_view()),
-    path("api/Profile/<str:id>/", apiViews.GETProfileAPIView.as_view()),
+    # Switched from <str:id> to <path:id> for file and URL flexibility
+    path("api/Profile/<path:id>/", apiViews.GETProfileAPIView.as_view(), name="get-profile"),
+    path("api/Entry/<path:id>/", apiViews.GETEntryAPIView.as_view(), name="get-entry"),
+    path("api/Node/<path:id>/", apiViews.GETNodeAPIView.as_view(), name="get-node"),
+    path("api/Follow/<path:id>/", apiViews.GETFollowAPIView.as_view(), name="get-follow"),
+    path("api/Like/<path:id>/", apiViews.GETLikeAPIView.as_view(), name="get-like"),
+    path("api/Comment/<path:id>/", apiViews.GETCommentAPIView.as_view(), name="get-comment"),
+    path("api/EntryImage/<int:id>/", apiViews.GETEntryImageAPIView.as_view(), name="get-entry-image")
+
 ]
     
 

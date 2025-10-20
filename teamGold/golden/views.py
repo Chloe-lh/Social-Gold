@@ -68,7 +68,7 @@ def signup(request):
 def profile_view(request):
     return render(request, 'profile.html')
 
-FOLLOW_STATE_CHOICES = ["REQUESTING", "ACCEPTED", "REJECTED"]
+FOLLOW_STATE_CHOICES = ["REQUESTED", "ACCEPTED", "REJECTED"]
 
 @login_required
 def search_authors(request):
@@ -87,13 +87,13 @@ def search_authors(request):
                 'id': f"{actor.id}/follow/{uuid.uuid4()}",
                 'summary': f"{actor.username} wants to follow {target_author.username}",
                 'published': timezone.now(),
-                'state': "REQUESTING",
+                'state': "REQUESTED",
             }
         )
 
         if not created:
-            # Reset state to REQUESTING if already exists
-            follow.state = "REQUESTING"
+            # Reset state to REQUESTED if already exists
+            follow.state = "REQUESTED"
             follow.published = timezone.now()
             follow.save()
 
@@ -165,10 +165,23 @@ def following(request):
         target_id = request.POST.get('author_id')
         target_author = get_object_or_404(Author, id=target_id)
 
-        # Remove Follow object and ManyToMany
-        Follow.objects.filter(actor=actor, object=target_author.id).delete()
-        actor.following.remove(target_author)
-        actor.save()
+        # Delete Follow object if exists
+        existing_follow = Follow.objects.filter(actor=actor, object=target_author.id).first()
+        if existing_follow:
+            existing_follow.delete()
+
+        # Remove target from actor.following (ManyToMany)
+        if target_author in actor.following.all():
+            actor.following.remove(target_author)
+            actor.save(update_fields=["following"])
+
+        if hasattr(target_author, "followers_info") and isinstance(target_author.followers_info, dict):
+            # Convert the actor’s ID (FQID) to string key if needed
+            actor_id_str = str(actor.id)
+
+            if actor_id_str in target_author.followers_info:
+                del target_author.followers_info[actor_id_str]
+                target_author.save(update_fields=["followers_info"])
 
         return redirect(request.META.get('HTTP_REFERER', 'following'))
 
@@ -211,7 +224,7 @@ def follow_requests(request):
         return redirect("follow_requests")
 
     # GET: display all incoming follow requests
-    follow_requests = Follow.objects.filter(object=actor.id, state="REQUESTING")
+    follow_requests = Follow.objects.filter(object=actor.id, state="REQUESTED")
 
     return render(request, "follow_requests.html", {
         "follow_requests": follow_requests

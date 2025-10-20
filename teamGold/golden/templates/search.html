@@ -68,19 +68,19 @@
                                 <form method="POST" action="{% url 'followers' %}" style="display:inline;">
                                     {% csrf_token %}
                                     <input type="hidden" name="author_id" value="{{ author.id }}">
-                                    <button class="follow-btn">Unfollow</button>
+                                    <button class="follow-btn">Remove</button>
                                 </form>
                             {% elif page_type == 'following' %}
                                 <form method="POST" action="{% url 'following'%}" style="display:inline;">
                                     {% csrf_token %}
                                     <input type="hidden" name="author_id" value="{{ author.id }}">
-                                    <button class="follow-btn">Remove</button>
+                                    <button class="follow-btn">Unfollow</button>
                                 </form>
                             {% else %}
                                 <form method="POST" action="{% url 'search_authors'%}" style="display:inline;">
                                     {% csrf_token %}
                                     <input type="hidden" name="author_id" value="{{ author.id }}">
-                                    {% if author.follow_state == "REQUESTING" %}
+                                    {% if author.follow_state == "REQUESTED" %}
                                         <button class="follow-btn" disabled>Requested</button>
                                     {% elif author.follow_state == "ACCEPTED" %}
                                         <button class="follow-btn" disabled>Following</button>

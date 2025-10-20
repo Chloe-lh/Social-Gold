@@ -20,12 +20,17 @@
     </div>
 </nav>
 <div class="tabs">
-  <img class="profile-pic"
-      src=" {{ author.profileImage.url }} "  
-      alt="Profile">
+  {% if author.profileImage %}
+    <img class="profile-pic" src="{{ author.profileImage.url }}" alt="Profile">
+  {% else %}
+    <img class="profile-pic" src="{% static 'golden/images/default_profile.webp' %}" alt="Default Profile">
+  {% endif %}
     <button style="padding:0.5rem 1rem; border-radius:0.5rem;">Followers ({{ followers_count }}) </button>
     <button style="padding:0.5rem 1rem; border-radius:0.5rem;">Following ({{ following_count }}) </button>
 </div>
+<p style="font-style: italic; color: #555;">
+    {{ author.description|default:"This user hasn't added a bio yet." }}
+</p>
 
 <!-- Edit Profile Form -->
  <script>
@@ -43,6 +48,12 @@ document.getElementById('edit-profile-btn').addEventListener('click', function()
 
         <label for="profileImage">Profile Picture:</label><br>
         <input type="file" name="profileImage" accept="image/*"><br><br>
+
+        <label for="description">Bio / About Me:</label><br>
+        <textarea name="description" rows="4" cols="50" placeholder="Write something about yourself...">
+            {{ user.description }}
+        </textarea>
+        <br><br>
 
         {{ form.github.label }}<br>
         {{ form.github }}<br><br>

@@ -51,7 +51,7 @@ class Author(AbstractBaseUser):
     github = models.URLField(blank=True)
     web = models.URLField(blank=True)
     profileImage = models.ImageField(
-        default="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQBkA9WO3FnL4fddebhCcTztCr6vr2METdo9w&s",
+        default="profile_pics/default_profile.webp",
         upload_to='profile_pics/')
     username = models.CharField(max_length=50, unique=True, default="goldenuser")
     password = models.CharField(max_length=50, default="goldenpassword")
@@ -65,6 +65,7 @@ class Author(AbstractBaseUser):
         blank=True)
     followers_info = models.JSONField(default=dict, blank=True)
     objects = MyUserManager()
+    description = models.TextField(blank=True)
 
     # Authentication
     USERNAME_FIELD = "username"

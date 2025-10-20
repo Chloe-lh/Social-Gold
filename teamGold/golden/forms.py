@@ -14,9 +14,10 @@ class CustomUserForm(UserCreationForm):
 class ProfileForm(forms.ModelForm):
     class Meta:
         model = Author
-        fields = ['username', 'profileImage', 'github', 'web']
+        fields = ['username', 'profileImage', 'github', 'web', 'description']
         widgets = {
             'username': forms.TextInput(attrs={'class': 'form-input'}),
             'github': forms.URLInput(attrs={'class': 'form-input'}),
             'web': forms.URLInput(attrs={'class': 'form-input'}),
+            'description': forms.Textarea(attrs={'class': 'form-input', 'rows': 4, 'cols': 50}),
         }

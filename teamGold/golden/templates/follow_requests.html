@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% load static %}
+{% block head %}
+<link rel="stylesheet">
+<style>
+.request-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    margin-bottom: 8px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+.request-row:hover {
+    background-color: #f0f0f0;
+}
+.action-btn {
+    padding: 6px 12px;
+    margin-left: 6px;
+    background-color: gold;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+.approve-btn {
+    background-color: #4CAF50;
+    color: white;
+}
+.reject-btn {
+    background-color: #f44336;
+    color: white;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="follow-requests">
+    <h2>Follow Requests</h2>
+
+    {% if follow_requests %}
+        <ul style="list-style: none; padding: 0;">
+            {% for req in follow_requests %}
+                <li class="request-row">
+                    <span>{{ req.actor.username }} wants to follow you</span>
+                    <div>
+                        <form method="POST" style="display:inline;">
+                            {% csrf_token %}
+                            <input type="hidden" name="follow_id" value="{{ req.id }}">
+                            <input type="hidden" name="action" value="approve">
+                            <button class="action-btn approve-btn">Approve</button>
+                        </form>
+
+                        <form method="POST" style="display:inline;">
+                            {% csrf_token %}
+                            <input type="hidden" name="follow_id" value="{{ req.id }}">
+                            <input type="hidden" name="action" value="reject">
+                            <button class="action-btn reject-btn">Reject</button>
+                        </form>
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>No follow requests.</p>
+    {% endif %}
+</section>
+{% endblock %}

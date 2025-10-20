@@ -115,17 +115,20 @@
         <h1><a href="">Golden</a></h1>
         <ul class="menu">
             <li class="item"><a href="{% url 'profile' %}">Profile</a></li>
-            <li class="item"><a href="">Stream</a></li>
-            <li class="item"><a href="">Log Out</a></li>
+            <li class="item"><a href="{% url 'stream' %}">Stream</a></li>
+            <li class="item"><a href="#" id="logout-link">Log Out</a></li>
         </ul>
     </nav>
+    <form id="logout-form" method="POST" action="{% url 'logout' %}" style="display:none;">
+        {% csrf_token %}
+    </form>
     <!-- SIDE BAR -->
     <button class="side-toggle" onclick="toggleSidebar()">☰</button>
     <div class="side-nav">
         <ul>
             <li><a href="">Home</a></li>
-            <li><a href="">New Post</a></li>
-            <li><a href="">Follow Requests</a></li>
+            <li><a href="{% url 'home' %}">New Post</a></li>
+            <li><a href="{% url 'follow_requests' %}">Follow Requests</a></li>
             <li><a href="{% url 'search_authors' %}">Search</a></li>
         </ul>
     </div>
@@ -133,5 +136,12 @@
         <!-- Child templates will over ride to display page content-->
         {% block content %}{% endblock %}
     </main>
-    {% block scripts %}{% endblock %}
+    {% block scripts %}
+    <script>
+    document.getElementById('logout-link').addEventListener('click', function(e) {
+        e.preventDefault();
+        document.getElementById('logout-form').submit();
+    });
+    </script>
+    {% endblock %}
  </body>

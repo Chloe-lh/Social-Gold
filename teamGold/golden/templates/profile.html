@@ -36,7 +36,12 @@
       <strong>Date:</strong> {{ entry.published|date:"Y/m/d" }}
     </p>
     <div class="content">
-        {{ entry.content|safe }}
+      {% if entry.images.all %}
+        {% for images in entry.images.all %}
+          <img src="{{ images.image.url }}" alt="Post image" style="max-width: 200px; height: auto;">
+        {% endfor %}
+      {% endif %}
+      {{ entry.content|safe }}
     </div>
   </div>
 {% empty %}

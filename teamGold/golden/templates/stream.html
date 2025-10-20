@@ -12,7 +12,13 @@
     background-color: #fffaf5; /* subtle off-white background */
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   }
-
+  article.entry img {
+    max-width: 100%;    /* Stay within the post width */
+    height: auto;       /* Maintain aspect ratio */
+    display: block;     /* Remove inline space */
+    border-radius: 8px; /* Nice rounded corners */
+    margin-top: 0.5rem;
+  }
   article.entry + article.entry {
     margin-top: 1.5rem; /* space between posts */
   }

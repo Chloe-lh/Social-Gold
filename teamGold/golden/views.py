@@ -54,7 +54,7 @@ def index(request):
     print("USERS:")
     for obj in objects:
         print(obj['username']) 
-    return render(request, "index.html")
+    return render(request, "stream.html")
 
 def signup(request):
     # we want to log users out when they want to sign up
@@ -79,7 +79,7 @@ def signup(request):
             #if not next_page:
                 #next_page = "/golden/"
 
-            return redirect('profile')     
+            return redirect('stream')     
     else:
         form = CustomUserForm()
         # next_page = request.GET.get('next')

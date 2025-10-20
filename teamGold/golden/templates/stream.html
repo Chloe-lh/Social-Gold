@@ -3,6 +3,25 @@
 
 {% block head %}
 <link rel="stylesheet" href="{% static 'golden/css/stream.css' %}">
+<style>
+  /* Ensure each entry has a visible border */
+  article.entry {
+    border: 2px solid #d4b483; /* warm gold-like border */
+    border-radius: 10px;
+    padding: 1rem;
+    background-color: #fffaf5; /* subtle off-white background */
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  }
+
+  article.entry + article.entry {
+    margin-top: 1.5rem; /* space between posts */
+  }
+
+  .entry-body {
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -11,7 +30,7 @@
 
   <section class="space-y-4">
     {% for entry in entries %}
-      <article class="border rounded-lg p-4 bg-white shadow-sm">
+      <article class="entry">
         <header class="flex items-center justify-between mb-2">
           <div>
             <a href="#" class="font-medium hover:underline">{{ entry.author.display_name }}</a>

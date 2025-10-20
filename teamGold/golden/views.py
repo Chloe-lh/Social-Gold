@@ -22,6 +22,8 @@ from django.views.generic.edit import FormView
 from django.contrib.auth.views import LoginView
 import uuid
 
+from .models import Author, Entry
+
 # Imports for entries
 from django.contrib.auth import get_user_model
 from .decorators import require_author
@@ -99,7 +101,24 @@ class ApprovedUserBackend(ModelBackend):
 
 @login_required
 def profile_view(request):
-    return render(request, 'profile.html')
+    user = request.user
+    try:
+        author = Author.objects.get(id=user.id)
+    except Author.DoesNotExist:
+        author = None
+
+    entries = Entry.objects.filter(author=author).order_by('published')
+
+    followers_count = author.followers_set.count() if author else 0
+    following_count = author.following.count() if author else 0
+
+    context = {
+        'author': author,
+        'entries': entries,
+        'followers_count': followers_count,
+        'following_count': following_count,
+    }
+    return render(request, 'profile.html', context)
 
 @login_required
 def search_authors(request):

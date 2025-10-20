@@ -1,5 +1,5 @@
 from django import forms
-from golden.models import Entry 
+from golden.models import Entry, Comment
 
 class EntryList(forms.ModelForm):
     class Meta:
@@ -8,8 +8,4 @@ class EntryList(forms.ModelForm):
         widgets = {
             'content': forms.Textarea(attrs={'rows': 4}),
         }
-
-        
-
-
 

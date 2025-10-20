@@ -11,9 +11,9 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 # BASE GOLDEN
-from golden.models import Entry, EntryImage, Author
+from golden.models import Entry, EntryImage, Author, Comments
 from golden.entry import EntryList
-from .forms import CustomUserForm
+from .forms import CustomUserForm, CustomCommentForm
 
 # Import login authentication stuff
 from django.contrib.auth.decorators import login_required
@@ -241,4 +241,15 @@ def home(request):
     context["entries"] = Entry.objects.select_related("author").all()
 
     return render(request, "home.html", context | {'entries': entries})
+
+@login_required
+@require_author
+def list_comments(request):
+    if request=="GET":
+        form = CustomCommentForm()
+        comments = Comments.object.all().order_By('-published')
+        
+      
+
+    
 

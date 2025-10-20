@@ -1,5 +1,5 @@
 from django.contrib.auth.forms import UserCreationForm
-from .models import Author
+from .models import Author, Comments
 from django import forms
 
 class CustomUserForm(UserCreationForm):
@@ -10,3 +10,10 @@ class CustomUserForm(UserCreationForm):
     class Meta(UserCreationForm.Meta):
         model = Author
         fields = ('username', 'password1', 'password2')
+
+class CustomCommentForm(forms.ModelForm):
+
+    class Meta(forms.ModelForm.Meta):
+        model = Comments
+        fields = ('comment', 'contentType')
+

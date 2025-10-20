@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block head %}
+<link rel="stylesheet" href="{% static 'golden/css/stream.css' %}">
+{% endblock %}
+
+{% block content %}
+<main class="container mx-auto p-6">
+  <h1 class="text-2xl font-semibold mb-4">Stream</h1>
+
+  <section class="space-y-4">
+    {% for entry in entries %}
+      <article class="border rounded-lg p-4 bg-white shadow-sm">
+        <header class="flex items-center justify-between mb-2">
+          <div>
+            <a href="#" class="font-medium hover:underline">{{ entry.author.display_name }}</a>
+            <span class="text-xs text-gray-500"> • {{ entry.published|date:"Y-m-d H:i" }}</span>
+          </div>
+          <div class="text-xs text-gray-400">
+            {% if entry.visibility == "PUBLIC" %}Public
+            {% elif entry.visibility == "UNLISTED" %}Unlisted
+            {% elif entry.visibility == "FRIENDS" %}Friends
+            {% endif %}
+          </div>
+        </header>
+
+        {% if entry.title %}
+          <h2 class="text-lg font-semibold mb-1">{{ entry.title }}</h2>
+        {% endif %}
+        <div class="entry-body">{{ entry.content|safe }}</div>
+        {% for image in entry.images.all %}
+        <img src="{{ image.image.url }}" alt="Entry image" class="mt-2 rounded-lg max-w-full">
+        {% endfor %}
+
+        {% if entry.is_updated and entry.is_updated != entry.published %}
+          <footer class="mt-2 text-xs text-gray-500">Edited: {{ entry.is_updated|date:"Y-m-d H:i" }}</footer>
+        {% endif %}
+
+        <footer class="mt-2 text-sm text-gray-600 flex space-x-4">
+          <span>Likes: {{ entry.likes.count }}</span>
+          <span>Comments: {{ entry.comments.count }}</span>
+        </footer>
+      </article>
+    {% empty %}
+      <p class="text-gray-600">No posts to show.</p>
+    {% endfor %}
+  </section>
+</main>
+{% endblock %}

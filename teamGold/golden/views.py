@@ -13,7 +13,7 @@ from rest_framework.response import Response
 # BASE GOLDEN
 from golden.models import Entry, EntryImage, Author, Follow
 from golden.entry import EntryList
-from .forms import CustomUserForm
+from .forms import CustomUserForm, ProfileForm
 
 # Import login authentication stuff
 from django.contrib.auth.decorators import login_required
@@ -114,11 +114,20 @@ def profile_view(request):
     followers_count = author.followers_set.count() if author else 0
     following_count = author.following.count() if author else 0
 
+    if request.method == 'POST' and 'edit_profile' in request.POST:
+        form = ProfileForm(request.POST, request.FILES, instance=author)
+        if form.is_valid():
+            form.save()
+            return redirect('profile')
+    else:
+        form = ProfileForm(instance=author)
+
     context = {
         'author': author,
         'entries': entries,
         'followers_count': followers_count,
         'following_count': following_count,
+        'form': form,
     }
     return render(request, 'profile.html', context)
 

@@ -1,5 +1,5 @@
+{% extends 'base.html' %}
 {% csrf_token %}
-
 <!DOCTYPE html>
 
 <html lang="en">
@@ -53,6 +53,7 @@
     }
   </style>
 </head>
+{% block content %}
 <body>
   <div class="container">
     <div>
@@ -61,4 +62,5 @@
     </div>
   </div>
 </body>
+{% endblock %}
 </html>

@@ -25,8 +25,8 @@
   {% else %}
     <img class="profile-pic" src="{% static 'golden/images/default_profile.webp' %}" alt="Default Profile">
   {% endif %}
-    <button style="padding:0.5rem 1rem; border-radius:0.5rem;">Followers ({{ followers_count }}) </button>
-    <button style="padding:0.5rem 1rem; border-radius:0.5rem;">Following ({{ following_count }}) </button>
+    <button id="followers-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Followers ({{ followers_count }}) </button>
+    <button id="following-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Following ({{ following_count }}) </button>
 </div>
 <p style="font-style: italic; color: #555;">
     {{ author.description|default:"This user hasn't added a bio yet." }}
@@ -86,4 +86,13 @@ document.getElementById('edit-profile-btn').addEventListener('click', function()
     <p style="text-align:center;">You have no entries yet.</p>
 {% endfor %}
 </div>
+  <script>
+  document.getElementById('followers-btn').onclick = function() {
+      window.location.href = "{% url 'followers' %}";
+  };
+  document.getElementById('following-btn').onclick = function() {
+      window.location.href = "{% url 'following' %}";
+  };
+  </script>
+
 {% endblock %}

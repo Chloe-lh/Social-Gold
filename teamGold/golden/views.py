@@ -9,6 +9,7 @@ from django.contrib.auth.backends import ModelBackend
 # REST FRAMEWORKS 
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from rest_framework import generics
 
 # BASE GOLDEN
 from golden.models import Entry, EntryImage, Author, Follow
@@ -28,7 +29,10 @@ from .models import Author, Entry
 # Imports for entries
 from django.contrib.auth import get_user_model
 from .decorators import require_author
-
+from .models import Node
+from .serializers import NodeSerializer
+import requests
+import markdown
 
 @login_required
 def index(request):
@@ -37,12 +41,8 @@ def index(request):
     for obj in objects:
         print(obj['username']) 
     return render(request, "index.html")
-from django.shortcuts import render
-from rest_framework import generics
-from .models import Node
-from .serializers import NodeSerializer
 
-# # Create your views here.
+# Create your views here.
 def index(request):
     return render(request, "index.html")
 
@@ -109,7 +109,7 @@ def profile_view(request):
     except Author.DoesNotExist:
         author = None
 
-    entries = Entry.objects.filter(author=author).order_by('published')
+    entries = Entry.objects.all().order_by('-is_posted')
 
     followers_count = author.followers_set.count() if author else 0
     following_count = author.following.count() if author else 0
@@ -308,6 +308,9 @@ def home(request):
     entries = Entry.objects.all().order_by('-is_posted')
     context['entries'] = entries
 
+    # ===== NEW: Sync GitHub automatically =====
+    sync_github_activity(request.current_author)
+
     # FEATURE POST AN ENTRY
     if request.method == "POST" and "entry_post" in request.POST:
         entry_id = f"https://node1.com/api/entries/{uuid.uuid4()}"
@@ -407,3 +410,79 @@ def home(request):
 
     return render(request, "home.html", context | {'entries': entries})
 
+def sync_github_activity(author):
+    """
+    Fetch public GitHub events for the author and create public Entries automatically.
+    """
+    print(f"Syncing GitHub for {author.username} -> {author.github}")
+    if not author.github:
+        return  # Skip if no GitHub URL
+
+    # Extract username from full URL
+    username = author.github.rstrip('/').split('/')[-1]
+
+    api_url = f"https://api.github.com/users/{username}/events/public"
+    try:
+        response = requests.get(api_url, timeout=5)
+        if response.status_code != 200:
+            print(f"Failed to fetch GitHub events: {response.status_code}")
+            return
+        events = response.json()
+    except Exception as e:
+        print(f"Error fetching GitHub events: {e}")
+        return
+
+    for event in events:
+        event_id = event.get("id")
+        event_type = event.get("type")
+        repo_name = event.get("repo", {}).get("name", "unknown repo")
+        repo_url = f"https://github.com/{repo_name}"
+        created_at = event.get("created_at")
+
+        # Unique FQID for GitHub entry
+        entry_id = f"{author.host}/authors/{author.id}/entries/github-{event_id}"
+
+        # Avoid duplicates
+        if Entry.objects.filter(id=entry_id).exists():
+            continue
+
+        content_text = ""
+        if event_type == "PushEvent":
+            commits = event.get("payload", {}).get("commits", [])
+            messages = []
+            for c in commits:
+                sha = c.get("sha")[:7]
+                msg = c.get("message", "")
+                url = c.get("url", "").replace("api.", "").replace("repos/", "").replace("commits", "commit")
+                messages.append(f"[{sha}]({url}): {msg}")
+            content_text = f"**Pushed to [{repo_name}]({repo_url})**:\n\n" + "\n".join(messages)
+
+        elif event_type == "IssuesEvent":
+            issue = event.get("payload", {}).get("issue", {})
+            issue_url = issue.get("html_url", "")
+            content_text = f"**Issue in [{repo_name}]({repo_url})**: [{issue.get('title', '')}]({issue_url})\n\n{issue.get('body', '')}"
+
+        elif event_type == "PullRequestEvent":
+            pr = event.get("payload", {}).get("pull_request", {})
+            pr_url = pr.get("html_url", "")
+            content_text = f"**Pull Request in [{repo_name}]({repo_url})**: [{pr.get('title', '')}]({pr_url})\n\n{pr.get('body', '')}"
+
+        else:
+            content_text = f"**{event_type}** in [{repo_name}]({repo_url})"
+
+        # Convert to HTML
+        html_content = markdown.markdown(content_text)
+
+        # Create Entry
+        Entry.objects.create(
+            id=entry_id,
+            author=author,
+            title=f"{event_type} on {repo_name} (GitHub)",
+            content=html_content,
+            contentType="text/html",
+            visibility="PUBLIC",
+            source=author.github,
+            origin=author.github,
+            published=created_at,
+            is_posted=timezone.now()
+        )

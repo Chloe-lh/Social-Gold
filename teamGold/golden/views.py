@@ -421,14 +421,14 @@ def home(request):
 
 @login_required
 def stream_view(request):
-    # 1️⃣ Get the Author object for the logged-in user
+    # Get the Author object for the logged-in user
     user_author = request.user
 
-    # 2️⃣ Get all accepted follows (authors this user follows)
+    # Get all accepted follows (authors this user follows)
     follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
     followed_author_fqids = [f.object for f in follows]
 
-    # 3️⃣ Determine authors who are "friends" (mutual follows)
+    # etermine authors who are "friends" (mutual follows)
     friends_fqids = []
     for f in follows:
         try:
@@ -438,7 +438,7 @@ def stream_view(request):
         except Follow.DoesNotExist:
             continue
 
-    # 4️⃣ Query entries according to visibility rules
+    # Query entries according to visibility rules
 
     entries = Entry.objects.filter(
         Q(visibility='PUBLIC') |  # Public entries: everyone can see
@@ -446,7 +446,7 @@ def stream_view(request):
         Q(visibility='FRIENDS', author__id__in=friends_fqids)  # Friends-only: only friends
     ).order_by('-is_updated', '-published')  # Most recent first
 
-    # 5️⃣ Prepare context for the template
+    # Prepare context for the template
     context = {
         'entries': entries,
         'user_author': user_author,
@@ -454,7 +454,7 @@ def stream_view(request):
         'friends_fqids': friends_fqids
     }
 
-    # 6️⃣ Render the stream page extending base.html
+    # Render the stream page extending base.html
     return render(request, 'stream.html', context)
 
 class InboxView(APIView):

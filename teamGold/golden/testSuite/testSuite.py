@@ -38,9 +38,10 @@ Tested endpoints include:
 - /api/Comment/<id>/ which retrieves comments on entries.
 - /api/EntryImage/<id>/ which retrieves images associated with entries.
 
-Overall, each test class ensures the validity of:
+Overview of HTTP Codes for the tests, ensuring the validity of:
 1. Valid resource IDs to return a 200 OK with the correct data.
 2. Invalid resource IDs return a 404 Not Found.
+3. Request denied because lack of valid authentication credentials returning 401 Unauthorized
 
 This suite supports automated testing for RESTful API compliance and interoperability 
 with other nodes, as well as a basic model class.
@@ -200,12 +201,10 @@ class BasicAuthBehaviorTestSuite(APITestCase):
         self.apiuser.save()
         
     def test_401_then_200(self):
-        # No auth -> 401
         r1 = self.client.get(f"/api/Profile/{self.author.id}/")
         self.assertEqual(r1.status_code, 401)
         self.assertIn("WWW-Authenticate", r1)
 
-        # With basic auth -> 200
         token = b64encode(b"apiuser:pass").decode()
         self.client.credentials(HTTP_AUTHORIZATION=f"Basic {token}")
         r2 = self.client.get(f"/api/Profile/{self.author.id}/")

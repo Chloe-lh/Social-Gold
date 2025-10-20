@@ -106,6 +106,13 @@ class Comments(models.Model):
     comment = models.TextField()
     published = models.DateTimeField(auto_now_add=True)
 
+'''
+Another person create their own node by setting up their own server and running our Django project
+as a seperate instance. They get a unique url that they should add to their node info
+- the nodes interact by sending HTTP request to API end points (ei /api/authors/)
+- example: when another nodes author likes an entry, the remote node sends a API request to
+    /api/likes. The local node receives the request and adds the like to the post
+'''
 class Node(models.Model):
     """
     Represents a remote or local node / server.
@@ -119,8 +126,8 @@ class Node(models.Model):
     title = models.CharField(max_length=200, blank=True)
     description = models.TextField(blank=True)
     # this allows for HTTP Authentication
-    auth_user = models.CharField(max_length=100)
-    auth_pass = models.CharField(max_length=100)
+    auth_user = models.CharField(max_length=100, blank=True, null=True)
+    auth_pass = models.CharField(max_length=100, blank=True, null=True)
 
     # Who administrates this node (local admins)
     admins = models.ManyToManyField(

@@ -1,19 +1,17 @@
-<!DOCTYPE html>
+{% extends "base.html" %}
+{% load static %}
 
-<html lang="en">
-    <head>
-        <meta charset="utf-8"/>
-        {% load static %}
-        <meta name="home" content=<"width=device-width,initial-scale=1"/> 
-        <title>{{ title }}</title>
-    </head>
-    <body>
-        <h1> GOLDEN </h1>
-        <hr>
+{% block head %}
+    <title>{{ title }}</title>
+{% endblock %}
+    
+{% block content %}
+    <h1> GOLDEN </h1>
+    <hr>
 
-        <h3> Post your thoughts </h3>
-        <section>
-            {% if form %}
+    <h3> Post your thoughts </h3>
+    <section>
+        {% if form %}
             <form method="POST" action="{% url 'home' %}" enctype="multipart/form-data"> 
                 {% csrf_token %} 
                 {% if editing_entry %}
@@ -30,17 +28,34 @@
                     
                     <label>Upload Image:</label>
                     <input type="file" name="images" accept="image/*" multiple><br><br>
+                    <label for = "visibility"> visibility: </label>
+                    <select id="visibility" name="visibility">
+                        <option value="PUBLIC" {% if editing_entry.visibility == "PUBLIC" %}selected{% endif %}>Public</option>
+                        <option value="UNLISTED" {% if editing_entry.visibility == "UNLISTED" %}selected{% endif %}>Unlisted</option>
+                        <option value="FRIENDS" {% if editing_entry.visibility == "FRIENDS-ONLY" %}selected{% endif %}>Friends-Only</option>
+                    </select>
+
                     <button name="entry_update" value="{{ editing_entry.id }}">Save</button><br><br>    
                 {% else %}
                     <textarea name="content" rows="10" cols="50" placeholder="Enter your text here">{{entry.content}}</textarea><br><br>
                     <label>Upload Image:</label>
                     <input type="file" name="images" accept="image/*" multiple><br><br>
+                    <label for = "visibility"> visibility: </label>
+                    <select id="visibility" name="visibility">
+                        <option value="PUBLIC" {% if editing_entry.visibility == "PUBLIC" %}selected{% endif %}>Public</option>
+                        <option value="UNLISTED" {% if editing_entry.visibility == "UNLISTED" %}selected{% endif %}>Unlisted</option>
+                        <option value="FRIENDS" {% if editing_entry.visibility == "FRIENDS-ONLY" %}selected{% endif %}>Friends-Only</option>
+                    </select>
+                    
+
                     <button name="entry_post">Post</button><br><br> 
                 {% endif %}
-            {% endif %}
+            </form>
+        {% endif %}
+    
 
 
-            <hr>
+        <hr>
 
             <table>
                 <tbody>
@@ -73,4 +88,4 @@
             </table> 
             </form>
         </section>
-    </body> 
+    {% endblock %}

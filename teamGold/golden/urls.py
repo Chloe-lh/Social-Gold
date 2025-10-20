@@ -13,7 +13,11 @@ urlpatterns = [
     path('search/', views.search_authors, name='search_authors'),
     path('followers/', views.followers, name='followers'),
     path('following/', views.following, name='following'),
+    path("follow_requests/", views.follow_requests, name="follow_requests"),
+    path("friends/", views.friends, name="friends"),
     path("home/", views.home, name="home"),
+    path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
+    path('stream/', views.stream_view, name = 'stream'),
     # API end points
     # API views will be visible in /swagger/
     # Switched from <str:id> to <path:id> for file and URL flexibility

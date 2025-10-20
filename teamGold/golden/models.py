@@ -25,7 +25,7 @@ VISIBILITY_CHOICES = [
 ]
 
 FOLLOW_STATE_CHOICES = [
-    ("REQUESTING", "requesting"),
+    ("REQUESTED", "requested"),
     ("ACCEPTED", "accepted"),
     ("REJECTED", "rejected"),
 ]
@@ -52,7 +52,9 @@ class Author(AbstractBaseUser, PermissionsMixin):
     host  = models.URLField(blank=True)
     github = models.URLField(blank=True)
     web = models.URLField(blank=True)
-    profileImage = models.URLField(default="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQBkA9WO3FnL4fddebhCcTztCr6vr2METdo9w&s")
+    profileImage = models.ImageField(
+        default="profile_pics/default_profile.webp",
+        upload_to='profile_pics/')
     username = models.CharField(max_length=50, unique=True, default="goldenuser")
     password = models.CharField(max_length=50, default="goldenpassword")
     email = models.CharField(blank=True)
@@ -66,7 +68,9 @@ class Author(AbstractBaseUser, PermissionsMixin):
         related_name='followers_set', 
         blank=True)
     followers_info = models.JSONField(default=dict, blank=True)
+    friends = models.JSONField(default=dict, blank=True)
     objects = MyUserManager()
+    description = models.TextField(blank=True)
 
     # Authentication
     USERNAME_FIELD = "username"
@@ -86,6 +90,30 @@ class Author(AbstractBaseUser, PermissionsMixin):
             return cls.objects.get(username=user.username) # matching via username 
         except cls.DoesNotExist:
             return None
+
+    def update_friends(self):
+        """
+        Updates the `friends` JSONField to contain mutual followers.
+        Keys = friend's FQID, Values = info (username, etc)
+        """
+        following_ids = set(self.following.values_list('id', flat=True))
+        followers_ids = set(self.followers_info.keys())
+        mutual_ids = following_ids.intersection(followers_ids)
+
+        # Build dict with info for each friend
+        new_friends = {}
+        for friend_id in mutual_ids:
+            try:
+                friend = Author.objects.get(id=friend_id)
+                new_friends[friend_id] = {
+                    "username": friend.username,
+                    #"profileImage": friend.profileImage,
+                }
+            except Author.DoesNotExist:
+                continue
+
+        self.friends = new_friends
+        self.save(update_fields=['friends'])
 
 class Entry(models.Model):
     """

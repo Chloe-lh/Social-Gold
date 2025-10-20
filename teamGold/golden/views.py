@@ -4,6 +4,7 @@ from django.urls import reverse
 from django.conf import settings
 from django.db import transaction
 from django.http import HttpResponseForbidden
+from django.contrib.auth.backends import ModelBackend
 
 # REST FRAMEWORKS 
 from rest_framework.decorators import api_view
@@ -18,6 +19,7 @@ from .forms import CustomUserForm
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
 from django.views.generic.edit import FormView
+from django.contrib.auth.views import LoginView
 import uuid
 
 from .models import Author, Entry
@@ -25,13 +27,21 @@ from .models import Author, Entry
 # Imports for entries
 from django.contrib.auth import get_user_model
 from .decorators import require_author
-import markdown 
+
 
 def index(request):
     objects = Author.objects.values()
     print("USERS:")
     for obj in objects:
         print(obj['username']) 
+    return render(request, "index.html")
+from django.shortcuts import render
+from rest_framework import generics
+from .models import Node
+from .serializers import NodeSerializer
+
+# # Create your views here.
+def index(request):
     return render(request, "index.html")
 
 def signup(request):
@@ -63,6 +73,31 @@ def signup(request):
         # next_page = request.GET.get('next')
 
     return render(request, "signup.html", {"form": form})
+
+'''
+For displaying an error message if a user is not approved yet
+'''
+class CustomLoginView(LoginView):
+    def form_valid(self, form):
+        user = form.get_user()
+        if not getattr(user, 'is_approved'):
+            form.add_error(None, "user has not been approved yet")
+            return self.form_invalid(form)
+        else:
+            return super().form_valid(form)
+        
+
+'''
+Uses the database to authenticate if a user is approved or not
+Uses Djangos Authentication Backend and will allow user to log in if approved
+'''
+class ApprovedUserBackend(ModelBackend):
+    def user_can_authenticate(self, user):
+        is_approved = getattr(user, 'is_approved')
+        if isinstance(user, Author) and is_approved:
+            return super().user_can_authenticate(user)
+        return False # dont allow user to log in if not approved
+
 
 @login_required
 def profile_view(request):
@@ -225,3 +260,4 @@ def home(request):
     context["entries"] = Entry.objects.select_related("author").all()
 
     return render(request, "home.html", context | {'entries': entries})
+

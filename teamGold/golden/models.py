@@ -42,10 +42,12 @@ class MyUserManager(BaseUserManager):
 
     def create_superuser(self, email, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", True)
+        extra_fields.setdefault("is_admin", True)
+        extra_fields.setdefault("is_approved", True)
         extra_fields.setdefault("is_superuser", True)
         return self.create_user(email, password, **extra_fields)
 
-class Author(AbstractBaseUser):
+class Author(AbstractBaseUser, PermissionsMixin):
     id = models.URLField(primary_key=True)
     host  = models.URLField(blank=True)
     github = models.URLField(blank=True)
@@ -53,10 +55,12 @@ class Author(AbstractBaseUser):
     profileImage = models.URLField(default="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQBkA9WO3FnL4fddebhCcTztCr6vr2METdo9w&s")
     username = models.CharField(max_length=50, unique=True, default="goldenuser")
     password = models.CharField(max_length=50, default="goldenpassword")
+    email = models.CharField(blank=True)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     date_joined = models.DateTimeField(default=timezone.now)
     is_admin = models.BooleanField(default=False)
+    is_approved = models.BooleanField(default=False)
     following = models.ManyToManyField(
         'self', symmetrical=False, 
         related_name='followers_set', 
@@ -66,7 +70,7 @@ class Author(AbstractBaseUser):
 
     # Authentication
     USERNAME_FIELD = "username"
-    REQUIRED_FIELDS = []
+    REQUIRED_FIELDS = ["email"]
 
     def __str__(self):
         return self.username
@@ -177,10 +181,17 @@ class Comments(models.Model):
     comment = models.TextField()
     published = models.DateTimeField(auto_now_add=True)
 
-
+'''
+Another person create their own node by setting up their own server and running our Django project
+as a seperate instance. They get a unique url that they should add to their node info
+- the nodes interact by sending HTTP request to API end points (ei /api/authors/)
+- example: when another nodes author likes an entry, the remote node sends a API request to
+    /api/likes. The local node receives the request and adds the like to the post
+'''
 class Node(models.Model):
     """
     Represents a remote or local node / server.
+    remote node : other servers/seperate instances of app
     id: full URL of node (e.g. https://node.example)
     remote_nodes: JSON list of known node URLs (optional)
     """
@@ -189,6 +200,9 @@ class Node(models.Model):
 
     title = models.CharField(max_length=200, blank=True)
     description = models.TextField(blank=True)
+    # this allows for HTTP Authentication
+    auth_user = models.CharField(max_length=100, blank=True, null=True)
+    auth_pass = models.CharField(max_length=100, blank=True, null=True)
 
     # Who administrates this node (local admins)
     admins = models.ManyToManyField(

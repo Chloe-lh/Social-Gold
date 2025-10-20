@@ -4,13 +4,17 @@ from django.urls import reverse
 from django.conf import settings
 from django.db import transaction
 from django.http import HttpResponseForbidden
+from django.db.models import Q
 
 # REST FRAMEWORKS 
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework import status
 
 # BASE GOLDEN
-from golden.models import Entry, EntryImage, Author
+from golden import models
+from golden.models import Entry, EntryImage, Author, Comments, Like, Follow
 from golden.entry import EntryList
 from .forms import CustomUserForm
 
@@ -19,11 +23,22 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import authenticate, login, logout
 from django.views.generic.edit import FormView
 import uuid
+# view decorator
+from django.views.decorators.http import require_POST
 
 # Imports for entries
 from django.contrib.auth import get_user_model
 from .decorators import require_author
 import markdown 
+
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+import json
+from django.utils import timezone
+
+
+from golden.serializers import InboxSerializer
+
 
 def index(request):
     objects = Author.objects.values()
@@ -206,3 +221,61 @@ def home(request):
     context["entries"] = Entry.objects.select_related("author").all()
 
     return render(request, "home.html", context | {'entries': entries})
+
+
+
+@login_required
+def stream_view(request):
+    # 1️⃣ Get the Author object for the logged-in user
+    user_author = Author.objects.get(user=request.user)
+
+    # 2️⃣ Get all accepted follows (authors this user follows)
+    follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
+    followed_author_fqids = [f.object for f in follows]
+
+    # 3️⃣ Determine authors who are "friends" (mutual follows)
+    friends_fqids = []
+    for f in follows:
+        try:
+            # Check if the followed author also follows the user
+            reciprocal = Follow.objects.get(actor__id=f.object, object=user_author.id, state='ACCEPTED')
+            friends_fqids.append(f.object)
+        except Follow.DoesNotExist:
+            continue
+
+    # 4️⃣ Query entries according to visibility rules
+
+    entries = Entry.objects.filter(
+        deleted=False
+    ).filter(
+        Q(visibility='PUBLIC') |  # Public entries: everyone can see
+        Q(visibility='UNLISTED', author__id__in=followed_author_fqids) |  # Unlisted: only followers
+        Q(visibility='FRIENDS', author__id__in=friends_fqids)  # Friends-only: only friends
+    ).order_by('-is_updated', '-published')  # Most recent first
+
+    # 5️⃣ Prepare context for the template
+    context = {
+        'entries': entries,
+        'user_author': user_author,
+        'followed_author_fqids': followed_author_fqids,
+        'friends_fqids': friends_fqids
+    }
+
+    # 6️⃣ Render the stream page extending base.html
+    return render(request, 'stream.html', context)
+
+class InboxView(APIView):
+    def post(self, request, author_id):
+        try:
+            recipient = Author.objects.get(id=author_id)
+        except Author.DoesNotExist:
+            return Response({"error": "Author not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = InboxSerializer(data=request.data)
+        if serializer.is_valid():
+            created_obj = serializer.save()  # creates Follow/Like/Comment/Post
+
+            return Response({"message": f"Delivered to {recipient.display_name}'s inbox"},
+                            status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

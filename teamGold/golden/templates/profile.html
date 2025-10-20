@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% load static %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'golden/css/profile.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<!-- Profile Tabs / Info -->
+<nav class="top-nav">
+    <div class="nav-left">
+        <h1><a href="">Golden</a></h1>
+    </div>
+    <div class="nav-center">
+        <span>@{{ author.username }}</span>
+    </div>
+    <div class="nav-right">
+        <button id="edit-profile-btn" class="nav">Edit Profile</button>
+    </div>
+</nav>
+<div class="tabs">
+  {% if author.profileImage %}
+    <img class="profile-pic" src="{{ author.profileImage.url }}" alt="Profile">
+  {% else %}
+    <img class="profile-pic" src="{% static 'golden/images/default_profile.webp' %}" alt="Default Profile">
+  {% endif %}
+    <button id="followers-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Followers ({{ followers_count }}) </button>
+    <button id="following-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Following ({{ following_count }}) </button>
+    <button id="friends-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Friends ({{ friends_count }})</button>  
+</div>
+<p style="font-style: italic; color: #555;">
+    {{ author.description|default:"This user hasn't added a bio yet." }}
+</p>
+
+<!-- Edit Profile Form -->
+ <script>
+document.getElementById('edit-profile-btn').addEventListener('click', function(){
+    const form = document.getElementById('edit-profile-form');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+});
+</script>
+<div id="edit-profile-form" style="display:none; margin-top: 1rem;">
+    <form method="POST" enctype="multipart/form-data">
+        {% csrf_token %}
+        
+        {{ form.username.label }}<br>
+        {{ form.username }}<br><br>
+
+        <label for="profileImage">Profile Picture:</label><br>
+        <input type="file" name="profileImage" accept="image/*"><br><br>
+
+        <label for="description">Bio / About Me:</label><br>
+        <textarea name="description" rows="4" cols="50" placeholder="Write something about yourself...">
+            {{ user.description }}
+        </textarea>
+        <br><br>
+
+        {{ form.github.label }}<br>
+        {{ form.github }}<br><br>
+
+        {{ form.web.label }}<br>
+        {{ form.web }}<br><br>
+
+        <button type="submit" name="edit_profile">Save Profile</button>
+    </form>
+</div>
+
+<!-- Entries Section -->
+<h2 style="text-align:center;">My Entries</h2>
+{% for entry in entries %}
+<div class="entries">
+  <div class="entry">
+    <p><strong>Author:</strong>  @{{ author.username }} <br>
+      <strong>Date:</strong> {{ entry.published|date:"Y/m/d" }}
+    </p>
+    <div class="content">
+      {% if entry.images.all %}
+        {% for images in entry.images.all %}
+          <img src="{{ images.image.url }}" alt="Post image" style="max-width: 200px; height: auto;">
+        {% endfor %}
+      {% endif %}
+      {{ entry.content|safe }}
+    </div>
+  </div>
+{% empty %}
+    <p style="text-align:center;">You have no entries yet.</p>
+{% endfor %}
+</div>
+  <script>
+  document.getElementById('followers-btn').onclick = function() {
+      window.location.href = "{% url 'followers' %}";
+  };
+  document.getElementById('following-btn').onclick = function() {
+      window.location.href = "{% url 'following' %}";
+  };
+  document.getElementById('friends-btn').onclick = function() {
+      window.location.href = "{% url 'friends' %}";
+  };
+  </script>
+
+{% endblock %}

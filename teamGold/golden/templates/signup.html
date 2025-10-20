@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>Golden - Login</title>
+        <meta charset="UTF-8">
+        {% load static %}
+
+        <link rel="stylesheet" href="{% static 'golden/css/login.css' %}">
+    </head>
+
+    <body>
+        <section class="signup-section">
+            <!-- signup -->
+             <header>
+                <h2>Golden</h2>
+             </header>
+
+            {% if form.errors %}
+                {% for field, errors in form.errors.items %}
+                    {% for error in errors %}
+                        <p>{{ field }} {{ error }}</p>
+                    {% endfor %}
+                {% endfor %}
+            {% endif %}
+
+             <form name="signup" method="POST" enctype="application/x-www-form-urlencoded">
+                {% csrf_token %}
+                <input name="username" aria-label="Username" placeholder="Username">
+                <input name="password1" aria-label="Password" placeholder="Password">
+                <input name="password2" aria-label="Password" placeholder="Password">
+                <button type="submit">Sign Up</button>
+                <input type="hidden" name="next" value="{{ next }}">
+             </form>
+                <p>Already have an account?</p>
+
+                {% if next %}
+                    <a href="{% url 'login' %}?next={{ next }}">Login</a>
+                {% else %}
+                    <a href="{% url 'login' %}">Login</a>
+                {% endif %}
+            <div class="box-decor login-section">
+                <!-- element purely for aesthetics and no real semantic value -->
+            </div>
+        </section>
+    </body>
+</html>

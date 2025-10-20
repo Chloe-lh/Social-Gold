@@ -38,7 +38,7 @@ class Author(AbstractUser):
     host  = models.URLField(blank=True)
     github = models.URLField(blank=True)
     web = models.URLField(blank=True)
-    profileImage = models.URLField(blank=True)
+    profileImage = models.URLField(default="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQBkA9WO3FnL4fddebhCcTztCr6vr2METdo9w&s")
     username = models.CharField(max_length=100, unique=True, default="temp_user")
     password = models.CharField(max_length=20,  default="temp_pass")
     is_admin = models.BooleanField(default=False)

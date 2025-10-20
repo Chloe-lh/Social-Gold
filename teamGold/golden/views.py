@@ -10,8 +10,9 @@ from django.contrib.auth import authenticate, login, logout
 from django.views.generic.edit import FormView
 from .forms import CustomUserForm
 import uuid
+import markdown
 
-from .models import Author
+from .models import Author, Entry
 from django.contrib.auth import get_user_model
 
 
@@ -21,7 +22,7 @@ def index(request):
     objects = Author.objects.values()
     print("USERS:")
     for obj in objects:
-        print(obj.username)
+        print(obj['username'])
     return render(request, "index.html")
 
 def signup(request):
@@ -56,7 +57,30 @@ def signup(request):
 
 @login_required
 def profile_view(request):
-    return render(request, 'profile.html')
+    user = request.user
+    try:
+        author = Author.objects.get(id=user.id)
+    except Author.DoesNotExist:
+        author = None
+
+    entries = Entry.objects.filter(author=author).order_by('published')
+
+    for entry in entries:
+        if entry.contentType == "text/markdown":
+            entry.rendered_content = markdown.markdown(entry.content)
+        else:
+            entry.rendered_content = entry.content
+
+    followers_count = author.followers_set.count() if author else 0
+    following_count = author.following.count() if author else 0
+
+    context = {
+        'author': author,
+        'entries': entries,
+        'followers_count': followers_count,
+        'following_count': following_count,
+    }
+    return render(request, 'profile.html', context)
 
 @login_required
 def search_authors(request):

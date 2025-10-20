@@ -8,6 +8,7 @@ from django.contrib.auth.backends import ModelBackend
 from django.db.models import Q
 
 # REST FRAMEWORKS 
+import markdown
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -329,6 +330,7 @@ def home(request):
                 content=html_content,
                 visibility=request.POST.get('visibility', 'PUBLIC')
             )
+        
 
         images = request.FILES.getlist('images')
         for idx, image in enumerate(images):
@@ -420,7 +422,7 @@ def home(request):
 @login_required
 def stream_view(request):
     # 1️⃣ Get the Author object for the logged-in user
-    user_author = Author.objects.get(user=request.user)
+    user_author = request.user
 
     # 2️⃣ Get all accepted follows (authors this user follows)
     follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
@@ -439,8 +441,6 @@ def stream_view(request):
     # 4️⃣ Query entries according to visibility rules
 
     entries = Entry.objects.filter(
-        deleted=False
-    ).filter(
         Q(visibility='PUBLIC') |  # Public entries: everyone can see
         Q(visibility='UNLISTED', author__id__in=followed_author_fqids) |  # Unlisted: only followers
         Q(visibility='FRIENDS', author__id__in=friends_fqids)  # Friends-only: only friends

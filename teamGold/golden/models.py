@@ -42,10 +42,11 @@ class MyUserManager(BaseUserManager):
 
     def create_superuser(self, email, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", True)
+        extra_fields.setdefault("is_admin", True)
         extra_fields.setdefault("is_superuser", True)
         return self.create_user(email, password, **extra_fields)
 
-class Author(AbstractBaseUser):
+class Author(AbstractBaseUser, PermissionsMixin):
     id = models.URLField(primary_key=True)
     host  = models.URLField(blank=True)
     github = models.URLField(blank=True)
@@ -53,6 +54,7 @@ class Author(AbstractBaseUser):
     profileImage = models.URLField(blank=True)
     username = models.CharField(max_length=50, unique=True, default="goldenuser")
     password = models.CharField(max_length=50, default="goldenpassword")
+    email = models.CharField(blank=True)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     date_joined = models.DateTimeField(default=timezone.now)
@@ -67,7 +69,7 @@ class Author(AbstractBaseUser):
 
     # Authentication
     USERNAME_FIELD = "username"
-    REQUIRED_FIELDS = []
+    REQUIRED_FIELDS = ["email"]
 
     def __str__(self):
         return self.username

@@ -8,7 +8,7 @@ This registers all views
 '''
 urlpatterns = [
     path("", views.index, name="index"),
-    path("login/", auth_views.LoginView.as_view(template_name="login.html"), name="login"),
+    path("login/", views.CustomLoginView.as_view(template_name = "login.html"), name="login"),
     path("signup/", views.signup, name="signup"),
     path('profile/', views.profile_view, name='profile'),
     path('search/', views.search_authors, name='search_authors'),
@@ -20,6 +20,8 @@ urlpatterns = [
     path("api/Profile/<str:id>/", apiViews.GETProfileAPIView.as_view()),
     path("api/Entry/<str:id>/", apiViews.GETEntryAPIView.as_view()),
     path("api/Node/<str:id>/", apiViews.GETNodeAPIView.as_view()),
+    path("api/Profile/<str:id>/", apiViews.GETProfileAPIView.as_view()),
+    path("api/Profile/<str:id>/", apiViews.GETProfileAPIView.as_view()),
 ]
     
 

@@ -27,13 +27,20 @@ schema_view = get_schema_view(
         default_version='v1',
         description="Golden social networking API",
     ),
-    public=False,
-    permission_classes=[permissions.IsAuthenticated]
+    public=True,
+    permission_classes=[permissions.AllowAny] #can change permission to only allow admin user
 )
 
+# Image Handelling
+from django.conf import settings
+from django.conf.urls.static import static
+
 urlpatterns = [
-    path("", include("golden.urls")),
+    #path("", include("golden.urls")),
     path("golden/", include("golden.urls")),
     path('admin/', admin.site.urls),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

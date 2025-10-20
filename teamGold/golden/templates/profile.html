@@ -16,15 +16,42 @@
         <span>@{{ author.username }}</span>
     </div>
     <div class="nav-right">
-        <button class="nav">Edit Profile</button>
+        <button id="edit-profile-btn" class="nav">Edit Profile</button>
     </div>
 </nav>
 <div class="tabs">
   <img class="profile-pic"
-      src=" {{ author.profileImage }} "  
+      src=" {{ author.profileImage.url }} "  
       alt="Profile">
     <button style="padding:0.5rem 1rem; border-radius:0.5rem;">Followers ({{ followers_count }}) </button>
     <button style="padding:0.5rem 1rem; border-radius:0.5rem;">Following ({{ following_count }}) </button>
+</div>
+
+<!-- Edit Profile Form -->
+ <script>
+document.getElementById('edit-profile-btn').addEventListener('click', function(){
+    const form = document.getElementById('edit-profile-form');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+});
+</script>
+<div id="edit-profile-form" style="display:none; margin-top: 1rem;">
+    <form method="POST" enctype="multipart/form-data">
+        {% csrf_token %}
+        
+        {{ form.username.label }}<br>
+        {{ form.username }}<br><br>
+
+        <label for="profileImage">Profile Picture:</label><br>
+        <input type="file" name="profileImage" accept="image/*"><br><br>
+
+        {{ form.github.label }}<br>
+        {{ form.github }}<br><br>
+
+        {{ form.web.label }}<br>
+        {{ form.web }}<br><br>
+
+        <button type="submit" name="edit_profile">Save Profile</button>
+    </form>
 </div>
 
 <!-- Entries Section -->

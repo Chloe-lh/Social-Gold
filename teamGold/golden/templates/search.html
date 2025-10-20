@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 
 {% load static %}
+
 {% block head %}
 <link rel="stylesheet">
 <style>
-/* Responsive search bar */
 .search-bar {
     width: 100%;
     max-width: 100%;
@@ -13,8 +13,6 @@
     box-sizing: border-box;
     margin-bottom: 20px;
 }
-
-/* Clickable rows */
 .author-row {
     display: flex;
     justify-content: space-between;
@@ -26,20 +24,17 @@
     transition: background-color 0.2s;
     cursor: pointer;
 }
-
 .author-row:hover {
     background-color: #f0f0f0;
 }
-
 .follow-btn {
     padding: 6px 12px;
-    background-color: gold;
-    border: none;
+    border: 2px solid #000; 
+    background: #E7B393;
     border-radius: 4px;
     cursor: pointer;
     font-weight: bold;
 }
-
 .follow-btn:hover {
     background-color: darkgoldenrod;
 }
@@ -54,31 +49,49 @@
 
     <form method="GET" action="{% url 'search_authors' %}" style="display: flex; width: 100%; gap: 10px; margin-bottom: 20px; height: 48px;">
         <input type="text" name="q" class="search-bar" placeholder="Search by username" value="{{ query }}" 
-            style="flex: 1; padding: 0 20px; font-size: 1rem; box-sizing: border-box; height: 100%;">
+               style="flex: 1; padding: 0 20px; font-size: 1rem; box-sizing: border-box; height: 100%;">
         <button type="submit" 
-                style="flex-shrink: 0; padding: 0 20px; font-size: 1rem;  border: 2px solid #000; background: #E7B393; border-radius: 4px; cursor: pointer; height: 100%;">
+                style="flex-shrink: 0; padding: 0 20px; font-size: 1rem; border: 2px solid #000; background: #E7B393; border-radius: 4px; cursor: pointer; height: 100%;">
             Search
         </button>
     </form>
 
     <div class="author-list">
         {% if authors %}
-            <ul style="list-style: none; padding: 0; ">
+            <ul style="list-style: none; padding: 0;">
                 {% for author in authors %}
-                    <li class="author-row">
-                        <span>
-                            {{ author.username }}
-                        </span>
-                        <button class="follow-btn" onclick="btnFunctionality(this)" style="border: 2px solid #000; background: #E7B393;">
+                    {% if author != request.user %}
+                        <li class="author-row">
+                            <span>{{ author.username }}</span>
+
                             {% if page_type == 'followers' %}
-                                Unfollow
+                                <form method="POST" action="{% url 'followers' %}" style="display:inline;">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="author_id" value="{{ author.id }}">
+                                    <button class="follow-btn">Remove</button>
+                                </form>
                             {% elif page_type == 'following' %}
-                                Remove
+                                <form method="POST" action="{% url 'following'%}" style="display:inline;">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="author_id" value="{{ author.id }}">
+                                    <button class="follow-btn">Unfollow</button>
+                                </form>
                             {% else %}
-                                Follow
+                                <form method="POST" action="{% url 'search_authors'%}" style="display:inline;">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="author_id" value="{{ author.id }}">
+                                    {% if author.follow_state == "REQUESTED" %}
+                                        <button class="follow-btn" disabled>Requested</button>
+                                    {% elif author.follow_state == "ACCEPTED" %}
+                                        <button class="follow-btn" disabled>Following</button>
+                                    {% else %}
+                                        <button class="follow-btn">Follow</button>
+                                    {% endif %}
+                                </form>
                             {% endif %}
-                        </button>
-                    </li>
+
+                        </li>
+                    {% endif %}
                 {% endfor %}
             </ul>
         {% else %}
@@ -86,26 +99,4 @@
         {% endif %}
     </div>
 </section>
-{% endblock %}
-
-{% block scripts %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    window.btnFunctinality = function(button) {
-        if(button.textContent === 'Follow'){
-            button.textContent = "Requested";
-            button.disabled = true;
-            button.style.border = "2px solid gray";
-        } else if(button.textContent === 'Unfollow'){
-            button.textContent = "Unfollowed";
-            button.disabled = true;
-            button.style.border = "2px solid gray";
-        } else if(button.textContent === 'Remove'){
-            button.textContent = "Removed";
-            button.disabled = true;
-            button.style.border = "2px solid gray";
-        }       
-    };
-});
-</script>
 {% endblock %}

@@ -28,6 +28,7 @@ from .models import Author, Entry
 # Imports for entries
 from django.contrib.auth import get_user_model
 from .decorators import require_author
+import markdown
 
 
 @login_required
@@ -41,10 +42,6 @@ from django.shortcuts import render
 from rest_framework import generics
 from .models import Node
 from .serializers import NodeSerializer
-
-# # Create your views here.
-def index(request):
-    return render(request, "index.html")
 
 def signup(request):
     # we want to log users out when they want to sign up
@@ -69,7 +66,7 @@ def signup(request):
             #if not next_page:
                 #next_page = "/golden/"
 
-            return redirect('home')     
+            return redirect('profile')     
     else:
         form = CustomUserForm()
         # next_page = request.GET.get('next')
@@ -113,6 +110,7 @@ def profile_view(request):
 
     followers_count = author.followers_set.count() if author else 0
     following_count = author.following.count() if author else 0
+    friends_count = len(author.friends) if author else 0
 
     if request.method == 'POST' and 'edit_profile' in request.POST:
         form = ProfileForm(request.POST, request.FILES, instance=author)
@@ -127,6 +125,7 @@ def profile_view(request):
         'entries': entries,
         'followers_count': followers_count,
         'following_count': following_count,
+        'friends_count': friends_count,
         'form': form,
     }
     return render(request, 'profile.html', context)
@@ -202,6 +201,10 @@ def followers(request):
         # Delete Follow object if exists
         Follow.objects.filter(actor=follower, object=actor.id).delete()
 
+        # Update friends
+        actor.update_friends()
+        follower.update_friends()
+
         return redirect(request.META.get('HTTP_REFERER', 'followers'))
 
     # GET request: show followers
@@ -236,7 +239,7 @@ def following(request):
         # Remove target from actor.following (ManyToMany)
         if target_author in actor.following.all():
             actor.following.remove(target_author)
-            actor.save(update_fields=["following"])
+            #actor.save(update_fields=["following"])
 
         if hasattr(target_author, "followers_info") and isinstance(target_author.followers_info, dict):
             # Convert the actor’s ID (FQID) to string key if needed
@@ -245,6 +248,10 @@ def following(request):
             if actor_id_str in target_author.followers_info:
                 del target_author.followers_info[actor_id_str]
                 target_author.save(update_fields=["followers_info"])
+
+        # Update friends
+        actor.update_friends()
+        target_author.update_friends()
 
         return redirect(request.META.get('HTTP_REFERER', 'following'))
 
@@ -280,6 +287,10 @@ def follow_requests(request):
             actor.save()
             follower_author.following.add(actor)
             follower_author.save()
+
+            # Update friends
+            actor.update_friends()
+            follower_author.update_friends()
         elif action == "reject":
             follow_request.state = "REJECTED"
             follow_request.save()
@@ -291,6 +302,25 @@ def follow_requests(request):
 
     return render(request, "follow_requests.html", {
         "follow_requests": follow_requests
+    })
+
+@login_required
+def friends(request):
+    actor = Author.from_user(request.user)
+
+    # Friends are mutual connections: actor is following them AND they are following actor
+    friends_ids = actor.friends.keys()
+    authors = Author.objects.filter(id__in=friends_ids)
+
+    # Optional: filter by search query
+    query = request.GET.get('q', '')
+    if query:
+        authors = authors.filter(username__icontains=query)
+
+    return render(request, "search.html", {
+        "authors": authors,
+        "query": query,
+        "page_type": "friends",  # Used in template to hide buttons
     })
 
 @login_required

@@ -462,7 +462,7 @@ class VisibilityTestSuite(AuthenticatedAPITestCase):
         e.save()
         self.assertGreaterEqual(e.is_updated, old_updated)
 
-# Following GET Entries are legacy
+# The Following are GET Classes for each model (legacy)
 class GETProfileAPITests(AuthenticatedAPITestCase):
     def setUp(self):
         super().setUp()

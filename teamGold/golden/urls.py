@@ -1,6 +1,6 @@
 from django.urls import path
-from . import views
-from . import apiViews
+from . import views, apiViews
+from django.contrib.auth import views as auth_views
 
 '''
 These URL Patterns registers all views 
@@ -28,7 +28,6 @@ urlpatterns = [
     path("api/Like/<path:id>/", apiViews.GETLikeAPIView.as_view(), name="get-like"),
     path("api/Comment/<path:id>/", apiViews.GETCommentAPIView.as_view(), name="get-comment"),
     path("api/EntryImage/<int:id>/", apiViews.GETEntryImageAPIView.as_view(), name="get-entry-image")
-
 ]
     
 

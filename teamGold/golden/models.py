@@ -52,7 +52,9 @@ class Author(AbstractBaseUser, PermissionsMixin):
     host  = models.URLField(blank=True)
     github = models.URLField(blank=True)
     web = models.URLField(blank=True)
-    profileImage = models.URLField(default="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQBkA9WO3FnL4fddebhCcTztCr6vr2METdo9w&s")
+    profileImage = models.ImageField(
+        default="profile_pics/default_profile.webp",
+        upload_to='profile_pics/')
     username = models.CharField(max_length=50, unique=True, default="goldenuser")
     password = models.CharField(max_length=50, default="goldenpassword")
     email = models.CharField(blank=True)
@@ -68,6 +70,7 @@ class Author(AbstractBaseUser, PermissionsMixin):
     followers_info = models.JSONField(default=dict, blank=True)
     friends = models.JSONField(default=dict, blank=True)
     objects = MyUserManager()
+    description = models.TextField(blank=True)
 
     # Authentication
     USERNAME_FIELD = "username"

@@ -14,8 +14,12 @@
             <header>
                 <h2>Golden</h2>
             </header>
-            {% if form.errors %}
-            <p>Your username and password didn't match. Please try again.</p>
+            <!-- will provide correct error when log in is pushed-->
+            {% if form.errors and request.method == "POST" %}
+                <div class="alert">
+                    {{form.non_field_errors}}
+                </div>
+            <!-- <p>Your username and password didn't match. Please try again.</p> -->
             {% endif %}
 
             <form name="login" method="POST" enctype="application/x-www-form-urlencoded">

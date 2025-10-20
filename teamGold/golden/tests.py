@@ -61,6 +61,14 @@ class ModelTests(TestCase):
             published=timezone.now()
         )
 
+    def test_author_unaccepted(self):
+        self.assertEqual(self.author1.is_approved, False)
+
+    def test_author_accepted(self):
+        self.author2.is_approved = True
+        self.author1.save()
+        self.assertEqual(self.author2.is_approved, True)
+
     def test_author_creation(self):
         self.assertEqual(self.author1.userName, "alice")
         self.assertTrue(self.author1.id.startswith("http"))

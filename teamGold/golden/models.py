@@ -25,7 +25,7 @@ VISIBILITY_CHOICES = [
 ]
 
 FOLLOW_STATE_CHOICES = [
-    ("REQUESTING", "requesting"),
+    ("REQUESTED", "requested"),
     ("ACCEPTED", "accepted"),
     ("REJECTED", "rejected"),
 ]

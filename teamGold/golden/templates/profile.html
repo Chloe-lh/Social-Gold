@@ -19,13 +19,14 @@
         <button class="nav">Edit Profile</button>
     </div>
 </nav>
-<div class="tabs">
-  <img class="profile-pic"
-      src=" {{ author.profileImage }} "  
-      alt="Profile">
-    <button style="padding:0.5rem 1rem; border-radius:0.5rem;">Followers ({{ followers_count }}) </button>
-    <button style="padding:0.5rem 1rem; border-radius:0.5rem;">Following ({{ following_count }}) </button>
-</div>
+  <div class="tabs">
+    <img class="profile-pic" 
+        src=" {{ author.profileImage }} "  
+        alt="Profile">
+      <button id="followers-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Followers</button>
+      <button id="following-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Following</button>
+
+  </div>
 
 <!-- Entries Section -->
 <h2 style="text-align:center;">My Entries</h2>
@@ -48,4 +49,13 @@
     <p style="text-align:center;">You have no entries yet.</p>
 {% endfor %}
 </div>
+  <script>
+  document.getElementById('followers-btn').onclick = function() {
+      window.location.href = "{% url 'followers' %}";
+  };
+  document.getElementById('following-btn').onclick = function() {
+      window.location.href = "{% url 'following' %}";
+  };
+  </script>
+
 {% endblock %}

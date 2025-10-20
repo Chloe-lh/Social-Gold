@@ -14,7 +14,9 @@ urlpatterns = [
     path('search/', views.search_authors, name='search_authors'),
     path('followers/', views.followers, name='followers'),
     path('following/', views.following, name='following'),
+    path("follow_requests/", views.follow_requests, name="follow_requests"),
     path("home/", views.home, name="home"),
+    path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
     # API end points
     # API views will be visible in /swagger/
     path("api/Profile/<str:id>/", apiViews.GETProfileAPIView.as_view()),

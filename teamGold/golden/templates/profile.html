@@ -33,24 +33,11 @@
 <div class="entries">
   <div class="entry">
     <p><strong>Author:</strong>  @{{ author.username }} <br>
-      <strong>Date:</strong> {{ entry.created_at|date:"Y/m/d" }}
+      <strong>Date:</strong> {{ entry.published|date:"Y/m/d" }}
     </p>
-
-    <!-- Check content type -->
-    {% if entry.contentType == "text/plain" %}
-        <p>{{ entry.rendered_content }}</p>
-
-    {% elif entry.contentType == "text/markdown" %}
-        <div class="markdown-content">
-            {{ entry.rendered_content|safe }}
-        </div>
-
-    {% elif "image" in entry.contentType %}
-        <img src="{{ entry.rendered_content }}" alt="Entry Image" style="max-width:100%;">
-
-    {% else %}
-        <p>{{ entry.rendered_content }}</p>
-    {% endif %}
+    <div class="content">
+        {{ entry.content|safe }}
+    </div>
   </div>
 {% empty %}
     <p style="text-align:center;">You have no entries yet.</p>

@@ -28,11 +28,26 @@
                     
                     <label>Upload Image:</label>
                     <input type="file" name="images" accept="image/*" multiple><br><br>
+                    <label for = "visibility"> visibility: </label>
+                    <select id="visibility" name="visibility">
+                        <option value="PUBLIC" {% if editing_entry.visibility == "PUBLIC" %}selected{% endif %}>Public</option>
+                        <option value="UNLISTED" {% if editing_entry.visibility == "UNLISTED" %}selected{% endif %}>Unlisted</option>
+                        <option value="FRIENDS" {% if editing_entry.visibility == "FRIENDS-ONLY" %}selected{% endif %}>Friends-Only</option>
+                    </select>
+
                     <button name="entry_update" value="{{ editing_entry.id }}">Save</button><br><br>    
                 {% else %}
                     <textarea name="content" rows="10" cols="50" placeholder="Enter your text here">{{entry.content}}</textarea><br><br>
                     <label>Upload Image:</label>
                     <input type="file" name="images" accept="image/*" multiple><br><br>
+                    <label for = "visibility"> visibility: </label>
+                    <select id="visibility" name="visibility">
+                        <option value="PUBLIC" {% if editing_entry.visibility == "PUBLIC" %}selected{% endif %}>Public</option>
+                        <option value="UNLISTED" {% if editing_entry.visibility == "UNLISTED" %}selected{% endif %}>Unlisted</option>
+                        <option value="FRIENDS" {% if editing_entry.visibility == "FRIENDS-ONLY" %}selected{% endif %}>Friends-Only</option>
+                    </select>
+                    
+
                     <button name="entry_post">Post</button><br><br> 
                 {% endif %}
             </form>

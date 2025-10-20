@@ -15,6 +15,7 @@ urlpatterns = [
     path('followers/', views.followers, name='followers'),
     path('following/', views.following, name='following'),
     path("follow_requests/", views.follow_requests, name="follow_requests"),
+    path("friends/", views.friends, name="friends"),
     path("home/", views.home, name="home"),
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
     # API end points

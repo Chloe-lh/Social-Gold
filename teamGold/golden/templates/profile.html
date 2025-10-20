@@ -25,7 +25,8 @@
         alt="Profile">
       <button id="followers-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Followers ({{ followers_count }}) </button>
       <button id="following-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Following ({{ following_count }})</button>
-  </div>
+      <button id="friends-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Friends ({{ friends_count }})</button>  
+    </div>
 
 <!-- Entries Section -->
 <h2 style="text-align:center;">My Entries</h2>
@@ -54,6 +55,9 @@
   };
   document.getElementById('following-btn').onclick = function() {
       window.location.href = "{% url 'following' %}";
+  };
+  document.getElementById('friends-btn').onclick = function() {
+      window.location.href = "{% url 'friends' %}";
   };
   </script>
 

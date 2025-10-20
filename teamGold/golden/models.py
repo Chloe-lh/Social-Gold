@@ -66,6 +66,7 @@ class Author(AbstractBaseUser, PermissionsMixin):
         related_name='followers_set', 
         blank=True)
     followers_info = models.JSONField(default=dict, blank=True)
+    friends = models.JSONField(default=dict, blank=True)
     objects = MyUserManager()
 
     # Authentication
@@ -86,6 +87,30 @@ class Author(AbstractBaseUser, PermissionsMixin):
             return cls.objects.get(username=user.username) # matching via username 
         except cls.DoesNotExist:
             return None
+
+    def update_friends(self):
+        """
+        Updates the `friends` JSONField to contain mutual followers.
+        Keys = friend's FQID, Values = info (username, etc)
+        """
+        following_ids = set(self.following.values_list('id', flat=True))
+        followers_ids = set(self.followers_info.keys())
+        mutual_ids = following_ids.intersection(followers_ids)
+
+        # Build dict with info for each friend
+        new_friends = {}
+        for friend_id in mutual_ids:
+            try:
+                friend = Author.objects.get(id=friend_id)
+                new_friends[friend_id] = {
+                    "username": friend.username,
+                    #"profileImage": friend.profileImage,
+                }
+            except Author.DoesNotExist:
+                continue
+
+        self.friends = new_friends
+        self.save(update_fields=['friends'])
 
 class Entry(models.Model):
     """

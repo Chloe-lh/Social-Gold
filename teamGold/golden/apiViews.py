@@ -40,3 +40,4 @@ class GETNodeAPIView(generics.RetrieveAPIView):
     queryset = Node.objects.all()
     serializer_class = NodeSerializer
     lookup_field = 'id'
+

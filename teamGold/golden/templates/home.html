@@ -62,7 +62,6 @@
                 {% for entry in entries %}
                     <tr>
                         <br><strong>{{ entry.author}}</strong> <spacer>
-                        
                         {% if request.user == entry.author %}
                             <form method="POST" action="{% url 'home' %}" style="display: inline;">
                                 {% csrf_token %}
@@ -80,7 +79,7 @@
                             {% endfor %}
                         {% endif %}
                         {{ entry.content | safe }} 
-                        
+                        {% include "commentModal.html with entry=entry%}
                         <br><hr>
                     </tr>
                 {% endfor %}

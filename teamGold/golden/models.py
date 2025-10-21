@@ -206,7 +206,6 @@ class Comments(models.Model):
     )
     contentType = models.CharField(max_length=100, default="text/markdown")
     reply_to = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='replies')
-    comment = models.TextField()
     published = models.DateTimeField(auto_now_add=True)
 
 '''

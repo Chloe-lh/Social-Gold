@@ -22,9 +22,8 @@ class ProfileForm(forms.ModelForm):
             'description': forms.Textarea(attrs={'class': 'form-input', 'rows': 4, 'cols': 50}),
         }
 
-class CustomCommentForm(forms.ModelForm):
-
-    class Meta(forms.ModelForm.Meta):
+class CommentForm(forms.ModelForm):
+    class Meta:
         model = Comments
-        fields = ('comment', 'contentType')
+        fields = ['contentType']
 

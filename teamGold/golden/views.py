@@ -16,9 +16,9 @@ from rest_framework import status
 
 # BASE GOLDEN
 from golden import models
-from golden.models import Entry, EntryImage, Author, Follow, Comments, Like, Follow
+from golden.models import Entry, EntryImage, Author, Comments, Like, Follow
 from golden.entry import EntryList
-from .forms import CustomUserForm, CustomCommentForm, ProfileForm
+from .forms import CustomUserForm, CommentForm, ProfileForm
 
 # Import login authentication stuff
 from django.contrib.auth.decorators import login_required
@@ -28,7 +28,7 @@ from django.utils import timezone
 from django.contrib.auth.views import LoginView
 import uuid
 
-from .models import Author, Entry
+from .models import Author, Entry, Comments
 # view decorator
 from django.views.decorators.http import require_POST
 
@@ -455,18 +455,13 @@ def home(request):
     return render(request, "home.html", context | {'entries': entries})
 
 @login_required
-@require_author
-def list_comments(request):
-    if request=="GET":
-        form = CustomCommentForm()
-        comments = Comments.object.all().order_By('-published')
-        
-      
-
-    
-
-
-
+def entry_comments(request, entry_id):
+    entry = get_object_or_404(entry_id)
+    comments = Comments.object.get(entry_id)
+    return render(request,  "home.html", {
+        "entry": entry,
+        "comments": comments,
+    })
 
 
 @login_required
@@ -507,18 +502,3 @@ def stream_view(request):
     # Render the stream page extending base.html
     return render(request, 'stream.html', context)
 
-class InboxView(APIView):
-    def post(self, request, author_id):
-        try:
-            recipient = Author.objects.get(id=author_id)
-        except Author.DoesNotExist:
-            return Response({"error": "Author not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = InboxSerializer(data=request.data)
-        if serializer.is_valid():
-            created_obj = serializer.save()  # creates Follow/Like/Comment/Post
-
-            return Response({"message": f"Delivered to {recipient.display_name}'s inbox"},
-                            status=status.HTTP_201_CREATED)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

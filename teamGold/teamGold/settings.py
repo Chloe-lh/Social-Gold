@@ -74,8 +74,16 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'teamGold.wsgi.application'
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.BasicAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+}
 
+WSGI_APPLICATION = 'teamGold.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
@@ -86,7 +94,6 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -140,7 +147,7 @@ AUTH_USER_MODEL = "golden.Author"
 LOGIN_URL = "login"
 
 # Sets the default redirect page after login
-LOGIN_REDIRECT_URL = '/golden/profile/'          # TODO: Change the link to homepage after it's done
+LOGIN_REDIRECT_URL = '/golden/stream/'          # TODO: Change the link to homepage after it's done
 
 # In production, each node (server) will have its own SITE_URL value
 SITE_URL = os.environ.get("SITE_URL", "http://127.0.0.1:8000")          

@@ -1,6 +1,6 @@
 from rest_framework import generics
 from rest_framework import serializers
-from .models import Node, Author, Entry, Like, Comments, Follow
+from .models import Node, Author, Entry, Like, Comments, Follow, EntryImage
 
 '''
 Serializers convert JSON data in order to update the Models
@@ -10,9 +10,9 @@ in a HTTP request and vice versa
 '''
 
 class NodeSerializer(serializers.ModelSerializer):
-    class Meta: # meta data
+    class Meta:
         model = Node
-        fields = '__all__'  # include all fields from model
+        fields = '__all__' 
 
 class AuthorSerializer(serializers.ModelSerializer):
     class Meta:
@@ -39,7 +39,10 @@ class FollowSerializer(serializers.ModelSerializer):
         model = Follow
         fields = '__all__'
 
-
+class EntryImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EntryImage
+        fields = '__all__'
 
 class InboxSerializer(serializers.Serializer):
     type = serializers.CharField()

@@ -14,9 +14,9 @@
             {% csrf_token %}
             {% for comment in comments %}
             <div id="comment_container">
-                <p>{% comment.author %}</p><br>
-                <p>{% comment.published %}</p><br>
-                <p>{% comment.comment %}</p><br>
+                <p>{{ comment.author }}</p><br>
+                <p>{{ comment.published }}</p><br>
+                <p>{{ comment.comment }}</p><br>
             </div>
             {% endfor %}
         </section>

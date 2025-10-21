@@ -340,6 +340,24 @@ def friends(request):
     })
 
 @login_required
+def add_comment(request):
+    entry = get_object_or_404(Entry, id=id)
+    if request.method == "POST": # user clicks add comment button on entry
+        form = CommentForm(request.POST)
+        if form.is_valid:
+            comment = form.save(commit=False) # dont save unless user presses add comment
+            comment.author = request.user
+            comment.entry = entry
+            comment.published = timezone.now()
+            comment.save()
+            return redirect('home')
+    return redirect('home')
+
+
+
+
+
+@login_required
 @require_author 
 def home(request):
     """
@@ -453,15 +471,6 @@ def home(request):
     context["entries"] = Entry.objects.select_related("author").all()
 
     return render(request, "home.html", context | {'entries': entries})
-
-@login_required
-def entry_comments(request, entry_id):
-    entry = get_object_or_404(entry_id)
-    comments = Comments.object.get(entry_id)
-    return render(request,  "home.html", {
-        "entry": entry,
-        "comments": comments,
-    })
 
 
 @login_required

@@ -84,39 +84,7 @@
                     </tr>
                 {% endfor %}
                 </tbody>
+                {% include "comments.html" %}
             </table> 
         </section>
-             <!-- Comment Modal -->
-    <div id="commentModal" class="modal" style="display:none;">
-      <div class="modal-content">
-        <span class="close">&times;</span>
-        <form id="commentForm" method="post" action="{% url 'add_comment' %}">
-          {% csrf_token %}
-          <input type="hidden" name="entry_id" id="modalEntryId">
-          {{ comment_form.as_p }}
-          <button type="submit">Add Comment</button>
-        </form>
-      </div>
-    </div>
-<script>
-document.addEventListener("DOMContentLoaded", function() {
-  document.querySelectorAll('.comment-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-      document.getElementById('commentModal').style.display = 'block';
-      document.getElementById('modalEntryId').value = this.dataset.entryId;
-    });
-  });
-  var closeBtn = document.querySelector('.close');
-  if (closeBtn) {
-    closeBtn.onclick = function() {
-      document.getElementById('commentModal').style.display = 'none';
-    };
-  }
-  window.onclick = function(event) {
-    if (event.target == document.getElementById('commentModal')) {
-      document.getElementById('commentModal').style.display = 'none';
-    }
-  };
-});
-</script>
     {% endblock %}

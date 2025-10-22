@@ -19,6 +19,7 @@ from golden import models
 from golden.models import Entry, EntryImage, Author, Comments, Like, Follow
 from golden.entry import EntryList
 from .forms import CustomUserForm, CommentForm, ProfileForm
+from golden.serializers import CommentSerializer
 
 # Import login authentication stuff
 from django.contrib.auth.decorators import login_required
@@ -37,11 +38,11 @@ from django.contrib.auth import get_user_model
 from .decorators import require_author
 import markdown
 
-
 from django.views.decorators.csrf import csrf_exempt
+#imports for AJAX
 from django.http import JsonResponse
 import json
-from django.utils import timezone
+from django.core.serializers.json import DjangoJSONEncoder
 
 
 from golden.serializers import InboxSerializer
@@ -341,21 +342,21 @@ def friends(request):
 
 @login_required
 def add_comment(request):
-    entry = get_object_or_404(Entry, id=id)
-    if request.method == "POST": # user clicks add comment button on entry
+    if request.method == "POST": # user clicks add comment button in modal
         form = CommentForm(request.POST)
-        if form.is_valid:
+        # get entry id from html
+        entry_id = request.POST.get('entry_id')
+        entry = get_object_or_404(Entry, id=entry_id)
+        if form.is_valid():
             comment = form.save(commit=False) # dont save unless user presses add comment
             comment.author = request.user
             comment.entry = entry
             comment.published = timezone.now()
             comment.save()
-            return redirect('home')
-    return redirect('home')
-
-
-
-
+            return JsonResponse({'success': True})
+        else:
+            return JsonResponse({'success': False})
+    return JsonResponse({'success':True})
 
 @login_required
 @require_author 
@@ -371,6 +372,12 @@ def home(request):
     editing_entry = None # because by default, users are not in editing mode 
     entries = Entry.objects.all().order_by('-is_posted')
     context['entries'] = entries
+
+    # serialize comments for each entry
+    entry_comments = {}
+    for entry in entries:
+        serialized_comments = CommentSerializer(entry.comments.all(), many=True).data
+        entry_comments[entry.id] = serialized_comments
 
     # FEATURE POST AN ENTRY
     if request.method == "POST" and "entry_post" in request.POST:
@@ -453,6 +460,7 @@ def home(request):
         context['form'] = EntryList()  
         context['editing_entry'] = None 
         context['entries'] = Entry.objects.select_related("author").all()
+        context['comment_form'] = CommentForm()
         return render(request, "home.html", context | {'entries': entries})
 
     # FEATURE EDIT BUTTON CLICKED 
@@ -468,7 +476,8 @@ def home(request):
 
     context['form'] = form 
     context["editing_entry"] = editing_entry
-    context["entries"] = Entry.objects.select_related("author").all()
+    # context["entries"] = Entry.objects.select_related("author").all()
+    context["entry_comments_json"] = json.dumps(entry_comments)
 
     return render(request, "home.html", context | {'entries': entries})
 
@@ -500,12 +509,20 @@ def stream_view(request):
         Q(visibility='FRIENDS', author__id__in=friends_fqids)  # Friends-only: only friends
     ).order_by('-is_updated', '-published')  # Most recent first
 
+    # serialize comments for each entry
+    entry_comments = {}
+    for entry in entries:
+        serialized_comments = CommentSerializer(entry.comments.all(), many=True).data
+        entry_comments[entry.id] = serialized_comments
+
     # Prepare context for the template
     context = {
         'entries': entries,
         'user_author': user_author,
         'followed_author_fqids': followed_author_fqids,
-        'friends_fqids': friends_fqids
+        'friends_fqids': friends_fqids,
+        'comment_form' : CommentForm(),
+        'entry_comments_json': json.dumps(entry_comments),
     }
 
     # Render the stream page extending base.html

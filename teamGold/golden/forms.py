@@ -23,7 +23,8 @@ class ProfileForm(forms.ModelForm):
         }
 
 class CommentForm(forms.ModelForm):
+    comment = forms.CharField(widget=forms.TextInput)
     class Meta:
         model = Comments
-        fields = ['contentType']
+        fields = ['comment']
 

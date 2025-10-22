@@ -1,0 +1,13 @@
+<!-- Comment modal that shows when the user selects the comment button-->
+<dialog id="commentModal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <button class="close-btn">close</button>
+    <section id="comment-list"></section>
+    <form id="commentForm" method="post" action="{% url 'add_comment' %}">
+      {% csrf_token %}
+      <input type="hidden" name="entry_id" id="modalEntryId">
+      {{ comment_form.as_p }}
+      <button type="submit" class="submit-btn">Add Comment</button>
+    </form>
+  </div>
+</dialog>

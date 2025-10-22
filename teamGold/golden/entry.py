@@ -8,4 +8,3 @@ class EntryList(forms.ModelForm):
         widgets = {
             'content': forms.Textarea(attrs={'rows': 4}),
         }
-

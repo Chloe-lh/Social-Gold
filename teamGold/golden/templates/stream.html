@@ -1,7 +1,5 @@
 {% extends "base.html" %}
 {% load static %}
-
-{% block head %}
 <link rel="stylesheet" href="{% static 'golden/css/stream.css' %}">
 <style>
   /* Ensure each entry has a visible border */
@@ -28,28 +26,6 @@
     margin-bottom: 0.5rem;
   }
 </style>
-<script>
-document.addEventListener("DOMContentLoaded", function() {
-  document.querySelectorAll('.comment-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-      document.getElementById('commentModal').style.display = 'block';
-      document.getElementById('modalEntryId').value = this.dataset.entryId;
-    });
-  });
-  var closeBtn = document.querySelector('.close');
-  if (closeBtn) {
-    closeBtn.onclick = function() {
-      document.getElementById('commentModal').style.display = 'none';
-    };
-  }
-  window.onclick = function(event) {
-    if (event.target == document.getElementById('commentModal')) {
-      document.getElementById('commentModal').style.display = 'none';
-    }
-  };
-});
-</script>
-{% endblock %}
 
 {% block content %}
 <main class="container mx-auto p-6">
@@ -77,9 +53,6 @@ document.addEventListener("DOMContentLoaded", function() {
         <div class="entry-body">{{ entry.content|safe }}</div>
         {% for image in entry.images.all %}
         <img src="{{ image.image.url }}" alt="Entry image" class="mt-2 rounded-lg max-w-full">
-        <button class="comment-btn" data-entry-id="{{ entry.id }}">Comment
-          <i class="fa-solid fa-comment"></i>
-        </button>
         {% endfor %}
 
         {% if entry.is_updated and entry.is_updated != entry.published %}
@@ -89,24 +62,21 @@ document.addEventListener("DOMContentLoaded", function() {
         <footer class="mt-2 text-sm text-gray-600 flex space-x-4">
           <span>Likes: {{ entry.likes.count }}</span>
           <span>Comments: {{ entry.comments.count }}</span>
-          <button class="comment-btn" data-entry-id="{{ entry.id }}">Add Comment</button>
+            <button class="comment-btn" data-entry-id="{{ entry.id }}">Add Comment</button>
         </footer>
       </article>
     {% empty %}
       <p class="text-gray-600">No posts to show.</p>
     {% endfor %}
-        <!-- Comment Modal -->
-    <div id="commentModal" class="modal" style="display:none;">
-      <div class="modal-content">
-        <span class="close">&times;</span>
-        <form id="commentForm" method="post" action="{% url 'add_comment' %}">
-          {% csrf_token %}
-          <input type="hidden" name="entry_id" id="modalEntryId">
-          {{ comment_form.as_p }}
-          <button type="submit">Add Comment</button>
-        </form>
-      </div>
-    </div>
+       <!-- for comments -->
+        {% include "comments.html" %}
+        <script id="entry-comments" type="application/json">
+          {{ entry_comments_json|json_script:"entry-comments" }}
+        </script>
+        <script src="{% static 'golden/js/comments.js' %}"></script>
+
+
   </section>
 </main>
 {% endblock %}
+

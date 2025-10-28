@@ -1,3 +1,22 @@
+@font-face { font-family: 'BlackMango'; src: url(golden\static\golden\css\fonts\BlackMango-Black.ttf) format('opentype'); }
+@font-face { font-family: 'Montserrat-Bold'; src: url(C:\Users\Kennj\OneDrive\Documents\GitHub\f25-project-gold\teamGold\golden\static\golden\css\fonts\Montserrat-Bold.ttf) format('opentype'); }
+@font-face { font-family: 'Montserrat-Medium'; src: url(golden\static\golden\css\fonts\Montserrat-Medium.ttf) format('opentype'); }
+
+:root {
+
+    /* Colour Pallet */
+    --colour-background: #1D1D1D; 
+    --colour-off-background: #2C2C2C; 
+    --colour-contrast: #DDDBD2;
+    --colour-off-contrast: #A5A491;
+    --colour-yellow: #F2B43B;
+    --colour-purple: #753997; 
+    --colour-blue: #006BA6; 
+    --colour-red: #FC5D47;
+
+}
+
+
 html {
     background: linear-gradient(to bottom, #F08A4B 0%, #F08A4B 55%, #FFF9E9 55%, #FFF9E9 100%);
     background-repeat: no-repeat;
@@ -42,9 +61,10 @@ section {
 
 h2 {
     -webkit-text-stroke: 0.7px black;
-    font-size: 50px;
-    color: #F3CA40;
+    font-size: 100px;
+    color: var(--colour-yellow);
     margin: 0;
+    font-family: 'BlackMango';
 }
 
 input {

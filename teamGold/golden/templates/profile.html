@@ -19,19 +19,33 @@
         <button id="edit-profile-btn" class="nav">Edit Profile</button>
     </div>
 </nav>
-<div class="tabs">
+
+
+<h1>{{ author.username }}</h1>
+<button id="edit-profile-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Edit Profile</button>
+<button id="stream-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Unknown</button>
+<button id="home-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Home</button>
+<button id="profile-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Profile</button>
+
+<p style="font-style: italic; color: #555;">
+    {{ author.description|default:"This user hasn't added a bio yet." }}
+</p>
+
   {% if author.profileImage %}
     <img class="profile-pic" src="{{ author.profileImage.url }}" alt="Profile">
   {% else %}
     <img class="profile-pic" src="{% static 'golden/images/default_profile.webp' %}" alt="Default Profile">
   {% endif %}
+
+<section class="tabs">
+
     <button id="followers-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Followers ({{ followers_count }}) </button>
     <button id="following-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Following ({{ following_count }}) </button>
-    <button id="friends-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Friends ({{ friends_count }})</button>  
-</div>
-<p style="font-style: italic; color: #555;">
-    {{ author.description|default:"This user hasn't added a bio yet." }}
-</p>
+    <button id="requests-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Requests ({{ requests_count }})</button>  
+
+</section>
+
+
 
 <!-- Edit Profile Form -->
  <script>

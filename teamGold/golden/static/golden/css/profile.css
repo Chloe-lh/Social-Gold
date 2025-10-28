@@ -1,6 +1,6 @@
-@font-face { font-family: 'BlackMango'; src: url(golden\static\golden\css\fonts\BlackMango-Black.ttf) format('opentype'); }
-@font-face { font-family: 'Montserrat-Bold'; src: url(C:\Users\Kennj\OneDrive\Documents\GitHub\f25-project-gold\teamGold\golden\static\golden\css\fonts\Montserrat-Bold.ttf) format('opentype'); }
-@font-face { font-family: 'Montserrat-Medium'; src: url(golden\static\golden\css\fonts\Montserrat-Medium.ttf) format('opentype'); }
+@font-face { font-family: 'BlackMango'; src: url(golden\static\golden\css\fonts\BlackMango-Black.ttf) format('truetype'); }
+@font-face { font-family: 'Montserrat-Bold'; src: url(golden\static\golden\css\fonts\Montserrat-Bold.ttf) format('truetype'); }
+@font-face { font-family: 'Montserrat-Medium'; src: url(golden\static\golden\css\fonts\Montserrat-Medium.ttf) format('truetype'); }
 
 :root {
 
@@ -56,10 +56,11 @@
     height: 40px;
 }
 
-header h1 {
+h1 {
     margin: 0;
-    font-family: 'Chewy', cursive;
-    color: var(--colour-blue);
+    font-size: 3.5rem;
+    font-family: 'Montserrat-Medium';
+    color: var(--colour-yellow);
 
 }
 .tabs {
@@ -72,19 +73,37 @@ header h1 {
     height: 120px;
     border-radius: 50%;
 }
-.tabs button {
-    width: 200px;
-    height: 60px;
-    font-size: 1.2rem;
-    border: 2px solid #000;
-    background: #E7B393;
+
+.profile-pic:hover {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+
 }
+
+.tabs button {
+    width: 100%;
+    height: 50px;
+    font-size: 1.5rem;
+    border-radius: 0%;
+    border: none;
+    background: var(--colour-off-background);
+    font-family: "BlackMango";
+    color: var(--colour-contrast);
+}
+
+.tabs button:hover {
+    box-shadow: 1px 1px 20px var(--colour-yellow);
+
+}
+
 .entries {
     display: grid;
     gap: 1.5rem;
     margin-top: 2rem;
     margin-bottom: 2rem;
 }
+
 .entry {
     border: 2px solid #4a5c7a;
     border-radius: 10px;
@@ -92,6 +111,7 @@ header h1 {
     background: #FFF9E9;
     min-height: 0;
 }
+
 #edit-profile-form {
     border: 2px solid #4a5c7a;
     border-radius: 10px;
@@ -99,12 +119,14 @@ header h1 {
     background: #FFF9E9;
     max-width: 400px;
 }
+
 #edit-profile-form input {
     width: 100%;
     margin-bottom: 0.5rem;
 }
+
 #edit-profile-form button {
-    background: #577590;
+    background: #235e92;
     color: white;
     padding: 0.5rem 1rem;
     border-radius: 0.5rem;

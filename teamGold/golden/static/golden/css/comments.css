@@ -1,0 +1,17 @@
+#comment-modal{
+    z-index: 3;
+    box-shadow: 0 0 3rem rgb(136, 135, 116);
+    border-radius: 25px;
+    background-color: #2C2C2C;
+    color: #DDDBD2;
+}
+.single-comment{
+    padding: 0.5rem 0;
+    border-bottom: 3px solid #A5A491;
+}
+.single-comment:last-child{
+    border-bottom: none;
+}
+/* .entry{
+    border: 3px solid red;
+} */

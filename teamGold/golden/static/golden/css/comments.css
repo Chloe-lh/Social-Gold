@@ -4,6 +4,8 @@
     border-radius: 25px;
     background-color: #2C2C2C;
     color: #DDDBD2;
+    max-width: 600px;
+
 }
 .single-comment{
     padding: 0.5rem 0;

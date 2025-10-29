@@ -22,7 +22,7 @@ document.addEventListener("DOMContentLoaded", function(){
                     // uses fields from Comment Serializer
                     commentList.innerHTML += `
                         <div class="single-comment">
-                            <strong>${c.author_username}</strong> <span>${c.published}</span>
+                            <strong>${c.author_username}</strong> <span>${new Date(c.published).toLocaleString()}</span>
                             <p>${c.content}</p>
                         </div>
                     `;
@@ -63,7 +63,8 @@ document.addEventListener("DOMContentLoaded", function(){
         .then(response => response.json())
         .then(data => {
             if(data.success){
-                modal.close()
+                window.location.reload();
+                modal.close();
             }else{
                 alert(data.error || "Failed to add comment");
             }

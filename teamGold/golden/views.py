@@ -339,7 +339,7 @@ def friends(request):
 function based Django view
     - handles form submission from Django Template 
     1. user will submit a comment via the form 
-    2. view will process form, and save comment to 
+    2. view will process form, and save comment to db
 
 '''
 @login_required
@@ -375,12 +375,6 @@ def home(request):
     editing_entry = None # because by default, users are not in editing mode 
     entries = Entry.objects.all().order_by('-is_posted')
     context['entries'] = entries
-
-    # serialize comments for each entry
-    entry_comments = {}
-    for entry in entries:
-        serialized_comments = CommentSerializer(entry.comment.all(), many=True).data
-        entry_comments[entry.id] = serialized_comments
 
     # FEATURE POST AN ENTRY
     if request.method == "POST" and "entry_post" in request.POST:
@@ -480,7 +474,7 @@ def home(request):
     context['form'] = form 
     context["editing_entry"] = editing_entry
     # context["entries"] = Entry.objects.select_related("author").all()
-    context["entry_comments_json"] = json.dumps(entry_comments)
+ 
 
     return render(request, "home.html", context | {'entries': entries})
 

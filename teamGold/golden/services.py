@@ -1,5 +1,5 @@
+from django.conf import settings
 import requests
-
 '''
 helper function for remote nodes
 sends a POST request with with HTTP Authentication
@@ -20,3 +20,10 @@ def get_remote_author_profile(remote_node_url, author_id):
     if response.status_code == 200:
         return response.json()
     return None
+
+'''
+checks if a node is remote by checking if its URL (id) is different from 
+local nodes URL
+'''
+def is_remote_node(node):
+    return node.id != settings.LOCAL_NODE_URL

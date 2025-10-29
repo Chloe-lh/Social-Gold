@@ -12,14 +12,15 @@ import markdown
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import status
+from rest_framework import status, generics
+
 
 # BASE GOLDEN
 from golden import models
-from golden.models import Entry, EntryImage, Author, Comments, Like, Follow
+from golden.models import Entry, EntryImage, Author, Comment, Like, Follow
 from golden.entry import EntryList
 from .forms import CustomUserForm, CommentForm, ProfileForm
-from golden.serializers import CommentSerializer
+from golden.serializers import CommentSerializer, InboxSerializer
 
 # Import login authentication stuff
 from django.contrib.auth.decorators import login_required
@@ -29,7 +30,6 @@ from django.utils import timezone
 from django.contrib.auth.views import LoginView
 import uuid
 
-from .models import Author, Entry, Comments
 # view decorator
 from django.views.decorators.http import require_POST
 
@@ -38,14 +38,12 @@ from django.contrib.auth import get_user_model
 from .decorators import require_author
 import markdown
 
+#secuirity
 from django.views.decorators.csrf import csrf_exempt
+
 #imports for AJAX
 from django.http import JsonResponse
 import json
-from django.core.serializers.json import DjangoJSONEncoder
-
-
-from golden.serializers import InboxSerializer
 
 
 @login_required
@@ -55,10 +53,7 @@ def index(request):
     for obj in objects:
         print(obj['username']) 
     return render(request, "index.html")
-from django.shortcuts import render
-from rest_framework import generics
-from .models import Node
-from .serializers import NodeSerializer
+
 
 def signup(request):
     # we want to log users out when they want to sign up
@@ -340,17 +335,25 @@ def friends(request):
         "page_type": "friends",  # Used in template to hide buttons
     })
 
+'''
+function based Django view
+    - handles form submission from Django Template 
+    1. user will submit a comment via the form 
+    2. view will process form, and save comment to 
+
+'''
 @login_required
 def add_comment(request):
     if request.method == "POST": # user clicks add comment button in modal
         form = CommentForm(request.POST)
         # get entry id from html
         entry_id = request.POST.get('entry_id')
-        entry = get_object_or_404(Entry, id=entry_id)
         if form.is_valid():
             comment = form.save(commit=False) # dont save unless user presses add comment
-            comment.author = request.user
-            comment.entry = entry
+            # create a unique id/URL for each comment
+            comment.id = f"{settings.SITE_URL}/api/Comment/{uuid.uuid4()}"
+            comment.author = Author.objects.get(id=request.user.id)
+            comment.entry = get_object_or_404(Entry, id=entry_id)
             comment.published = timezone.now()
             comment.save()
             return JsonResponse({'success': True})
@@ -376,7 +379,7 @@ def home(request):
     # serialize comments for each entry
     entry_comments = {}
     for entry in entries:
-        serialized_comments = CommentSerializer(entry.comments.all(), many=True).data
+        serialized_comments = CommentSerializer(entry.comment.all(), many=True).data
         entry_comments[entry.id] = serialized_comments
 
     # FEATURE POST AN ENTRY
@@ -487,6 +490,9 @@ def stream_view(request):
     # Get the Author object for the logged-in user
     user_author = request.user
 
+    # only a local node uses stream_view
+    remote_node = False
+
     # Get all accepted follows (authors this user follows)
     follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
     followed_author_fqids = [f.object for f in follows]
@@ -512,7 +518,12 @@ def stream_view(request):
     # serialize comments for each entry
     entry_comments = {}
     for entry in entries:
-        serialized_comments = CommentSerializer(entry.comments.all(), many=True).data
+        if entry.visibility == 'FRIENDS':
+            allowed = set(friends_fqids + [str(user_author.id)])
+            filtered_comments = entry.comments.filter(author__id__in=allowed)
+        else:
+            filtered_comments = entry.comment.all()
+        serialized_comments = CommentSerializer(filtered_comments, many=True).data
         entry_comments[entry.id] = serialized_comments
 
     # Prepare context for the template
@@ -523,6 +534,7 @@ def stream_view(request):
         'friends_fqids': friends_fqids,
         'comment_form' : CommentForm(),
         'entry_comments_json': json.dumps(entry_comments),
+        'remote_node':remote_node,
     }
 
     # Render the stream page extending base.html

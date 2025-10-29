@@ -1,9 +1,16 @@
+{% load static %}
+<link rel="stylesheet" href="{% static 'golden/css/comments.css' %}">
 <!-- Comment modal that shows when the user selects the comment button-->
-<dialog id="commentModal" class="modal" style="display:none;">
-  <div class="modal-content">
+<dialog id="comment-modal" class="modal">
+  <div class="modal-content" style="max-height:400px; overflow-y:auto;">
     <button class="close-btn">close</button>
     <section id="comment-list"></section>
-    <form id="commentForm" method="post" action="{% url 'add_comment' %}">
+    <!-- uses add_comment if local, use api endpoint if remote -->
+     <!-- Determined dynamically in code -->
+    <form id="commentForm" method="post"
+      action="{% if remote_node %}/api/Comment/{{ entry.id }}{% else %}{% url 'add_comment' %}{% endif %}">
+    <!-- if remote node -> route to CommentAPIView-->
+    <!-- if local node -> route to -->
       {% csrf_token %}
       <input type="hidden" name="entry_id" id="modalEntryId">
       {{ comment_form.as_p }}

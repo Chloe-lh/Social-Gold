@@ -24,4 +24,28 @@ Make a distributed social network!
 
 The authors claiming copyright, if they wish to be known, can list their names here...
 
-* 
+---
+
+## API Access Information
+### Service Details
+| Setting | Value |
+|----------------|-----------------------------|
+| **Hostname** | `localhost` |
+| **Port** | `8000` |
+| **Protocol** | `http` / `https` |
+| **Base URL** | `http://localhost:8000/` |
+| **URL Prefix** | `/api/` |
+
+### Golden's Available Endpoints
+- GET /api/Profile/<id>/
+- GET /api/Entry/<id>/
+- GET /api/Node/<id>/
+- GET /api/Follow/<id>/
+- GET /api/Like/<id>/
+- GET /api/Comment/<id>/
+- GET /api/EntryImage/<id>/
+> **Note:** <id> in most endpoints accepts a full path (<path:id>), which allows slashes/URLs. EntryImage requires an integer.
+
+### Authentication (HTTP Basic Auth)
+Scheme: HTTP Basic Auth
+

@@ -1,6 +1,7 @@
 from django.contrib.auth.forms import UserCreationForm
-from .models import Author, Comments
+from .models import Author, Comment
 from django import forms
+
 
 class CustomUserForm(UserCreationForm):
     username = forms.CharField(max_length=100, required=True)
@@ -21,10 +22,12 @@ class ProfileForm(forms.ModelForm):
             'web': forms.URLInput(attrs={'class': 'form-input'}),
             'description': forms.Textarea(attrs={'class': 'form-input', 'rows': 4, 'cols': 50}),
         }
+'''
 
+'''
 class CommentForm(forms.ModelForm):
-    comment = forms.CharField(widget=forms.TextInput)
+    content = forms.CharField(widget=forms.TextInput)
     class Meta:
-        model = Comments
-        fields = ['comment']
+        model = Comment
+        fields = ['content']
 

@@ -1,0 +1,39 @@
+/* Ensure each entry has a visible border */
+.entry {
+  border: 3px solid #d4b483; /* warm gold-like border */
+  border-radius: 10px;
+  padding: 1rem;
+  background-color: #ffffff; /* subtle off-white background */
+  color: #161616;
+  box-shadow: 0 4px 5px rgba(0, 0, 0, 0.1);
+}
+article.entry img {
+  max-width: 100%;    /* Stay within the post width */
+  height: auto;       /* Maintain aspect ratio */
+  display: block;     /* Remove inline space */
+  border-radius: 8px; /* Nice rounded corners */
+  margin-top: 0.5rem;
+}
+article.entry + article.entry {
+  margin-top: 1.5rem; /* space between posts */
+}
+
+.entry-body {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.comment-btn {
+  padding: 2px 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.comment-btn img {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* Frame */
+

@@ -1,8 +1,8 @@
 from django.contrib import admin
 from .models import Author, Node
-from golden.models import Author, Entry, Comments, Node
+from golden.models import Author, Entry, Comment, Node
 
-models_class = [Author, Entry, Comments, Node]
+models_class = [Author, Entry, Comment, Node]
 
 for model in models_class:
     if model is not Author:

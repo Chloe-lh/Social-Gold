@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth.hashers import make_password
 from django.utils import timezone
-from golden.models import Author, Entry, Comments, Like, Follow, Node, EntryImage
+from golden.models import Author, Entry, Comment, Like, Follow, Node, EntryImage
 import uuid
 from datetime import datetime
 
@@ -33,7 +33,7 @@ as JSON data for other API nodes
         - ei. sending a notification
 '''
  
-class GETProfileAPIView(APIView):
+class ProfileAPIView(APIView):
     authentication_classes = [BasicAuthentication]
     permission_classes = [IsAuthenticated]
 
@@ -43,9 +43,12 @@ class GETProfileAPIView(APIView):
         except Author.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(AuthorSerializer(obj).data, status=status.HTTP_200_OK)
+    
+    def post(self, request, id):
+        pass
 
 
-class GETEntryAPIView(APIView):
+class EntryAPIView(APIView):
     authentication_classes = [BasicAuthentication]
     permission_classes = [IsAuthenticated]
 
@@ -55,9 +58,12 @@ class GETEntryAPIView(APIView):
         except Entry.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(EntrySerializer(obj).data, status=status.HTTP_200_OK)
+    
+    def post(self, request, id):
+        pass
 
 
-class GETNodeAPIView(APIView):
+class NodeAPIView(APIView):
     authentication_classes = [BasicAuthentication]
     permission_classes = [IsAuthenticated]
 
@@ -67,9 +73,12 @@ class GETNodeAPIView(APIView):
         except Node.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(NodeSerializer(obj).data, status=status.HTTP_200_OK)
+    
+    def post(self,request,id):
+        pass
 
 
-class GETFollowAPIView(APIView):
+class FollowAPIView(APIView):
     authentication_classes = [BasicAuthentication]
     permission_classes = [IsAuthenticated]
 
@@ -79,9 +88,12 @@ class GETFollowAPIView(APIView):
         except Follow.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(FollowSerializer(obj).data, status=status.HTTP_200_OK)
+    
+    def post(self, request, id):
+        pass 
 
 
-class GETLikeAPIView(APIView):
+class LikeAPIView(APIView):
     authentication_classes = [BasicAuthentication]
     permission_classes = [IsAuthenticated]
 
@@ -91,21 +103,39 @@ class GETLikeAPIView(APIView):
         except Like.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(LikeSerializer(obj).data, status=status.HTTP_200_OK)
+    
+    def post(self, request, id):
+        pass
 
 
-class GETCommentAPIView(APIView):
+
+class CommentAPIView(APIView):
     authentication_classes = [BasicAuthentication]
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, id):
+    # get ALL comments for a given entry
+    def get(self, request, entry_id):
+        comments = Comment.objects.filter(entry_id=entry_id).order_by('-published')
+        serializer = CommentSerializer(comments, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    # add new comment to a given entry
+    def post(self, request, entry_id):
         try:
-            obj = Comments.objects.get(pk=id) 
-        except Comments.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        return Response(CommentSerializer(obj).data, status=status.HTTP_200_OK)
+            entry = Entry.objects.get(pk=entry_id)
+        except Entry.DoesNotExist:
+            return Response({'error': 'Entry not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = CommentSerializer(data=request.data)
+        # ensures only safe data is saved
+        # checks all required fields
+        if serializer.is_valid():
+            # add comment to comments
+            serializer.save(entry=entry, author=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
-class GETEntryImageAPIView(APIView):
+class EntryImageAPIView(APIView):
     authentication_classes = [BasicAuthentication]
     permission_classes = [IsAuthenticated]
 
@@ -115,3 +145,6 @@ class GETEntryImageAPIView(APIView):
         except EntryImage.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(EntryImageSerializer(obj).data, status=status.HTTP_200_OK)
+    
+    def post(self, request, id):
+        pass

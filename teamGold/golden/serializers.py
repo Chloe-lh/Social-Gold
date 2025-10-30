@@ -1,6 +1,6 @@
 from rest_framework import generics
 from rest_framework import serializers
-from .models import Node, Author, Entry, Like, Comments, Follow, EntryImage
+from .models import Node, Author, Entry, Like, Comment, Follow, EntryImage
 
 '''
 Serializers convert JSON data in order to update the Models
@@ -30,9 +30,11 @@ class LikeSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class CommentSerializer(serializers.ModelSerializer):
+    author_username = serializers.CharField(source='author.username', read_only=True)
     class Meta:
-        model = Comments
-        fields = '__all__'
+        model = Comment
+        # only include fields that will be displayed
+        fields = ['author_username', 'content', 'published']
 
 class FollowSerializer(serializers.ModelSerializer):
     class Meta:
@@ -58,7 +60,7 @@ class InboxSerializer(serializers.Serializer):
         elif type_ == "Like":
             return Like.objects.create(**obj_data)
         elif type_ == "comment":
-            return Comments.objects.create(**obj_data)
+            return Comment.objects.create(**obj_data)
         elif type_ == "entry":
             return Entry.objects.create(**obj_data)
         else:

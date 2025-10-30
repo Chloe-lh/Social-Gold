@@ -1,37 +1,8 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block head %}
-<link rel="stylesheet" href="{% static 'golden/css/stream.css' %}">
-<style>
-  /* Ensure each entry has a visible border */
-  article.entry {
-    border: 2px solid #d4b483; /* warm gold-like border */
-    border-radius: 10px;
-    padding: 1rem;
-    background-color: #fffaf5; /* subtle off-white background */
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-  }
-  article.entry img {
-    max-width: 100%;    /* Stay within the post width */
-    height: auto;       /* Maintain aspect ratio */
-    display: block;     /* Remove inline space */
-    border-radius: 8px; /* Nice rounded corners */
-    margin-top: 0.5rem;
-  }
-  article.entry + article.entry {
-    margin-top: 1.5rem; /* space between posts */
-  }
-
-  .entry-body {
-    margin-top: 0.5rem;
-    margin-bottom: 0.5rem;
-  }
-</style>
-{% endblock %}
-
 {% block content %}
-<main class="container mx-auto p-6">
+<div class="container mx-auto p-6">
   <h1 class="text-2xl font-semibold mb-4">Stream</h1>
 
   <section class="space-y-4">
@@ -64,12 +35,25 @@
 
         <footer class="mt-2 text-sm text-gray-600 flex space-x-4">
           <span>Likes: {{ entry.likes.count }}</span>
-          <span>Comments: {{ entry.comments.count }}</span>
+            <button class="comment-btn" data-entry-id="{{ entry.id }}">
+                <img src="{% static 'golden/icons/comment-icon.png' %}">
+              </button>
+            <span>{{ entry.comment.count }} Comments</span>
         </footer>
       </article>
     {% empty %}
       <p class="text-gray-600">No posts to show.</p>
     {% endfor %}
+       <!-- for comments -->
+        {% include "comments.html" %}
+        <!-- enbed JSON data from view in template to pass to js as js object-->
+        <script id="entry-comments" type="application/json">
+          {{ entry_comments_json|safe }}
+        </script>
+        <script src="{% static 'golden/js/comments.js' %}"></script>
+
+
   </section>
-</main>
+</div>
 {% endblock %}
+

@@ -18,16 +18,17 @@ urlpatterns = [
     path("home/", views.home, name="home"),
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
     path('stream/', views.stream_view, name = 'stream'),
+    path('add_comment/', views.add_comment, name = "add_comment"),
     # API end points
     # API views will be visible in /swagger/
     # Switched from <str:id> to <path:id> for file and URL flexibility
-    path("api/Profile/<path:id>/", apiViews.GETProfileAPIView.as_view(), name="get-profile"),
-    path("api/Entry/<path:id>/", apiViews.GETEntryAPIView.as_view(), name="get-entry"),
-    path("api/Node/<path:id>/", apiViews.GETNodeAPIView.as_view(), name="get-node"),
-    path("api/Follow/<path:id>/", apiViews.GETFollowAPIView.as_view(), name="get-follow"),
-    path("api/Like/<path:id>/", apiViews.GETLikeAPIView.as_view(), name="get-like"),
-    path("api/Comment/<path:id>/", apiViews.GETCommentAPIView.as_view(), name="get-comment"),
-    path("api/EntryImage/<int:id>/", apiViews.GETEntryImageAPIView.as_view(), name="get-entry-image")
+    path("api/Profile/<path:id>/", apiViews.ProfileAPIView.as_view(), name="get-profile"),
+    path("api/Entry/<path:id>/", apiViews.EntryAPIView.as_view(), name="get-entry"),
+    path("api/Node/<path:id>/", apiViews.NodeAPIView.as_view(), name="get-node"),
+    path("api/Follow/<path:id>/", apiViews.FollowAPIView.as_view(), name="get-follow"),
+    path("api/Like/<path:id>/", apiViews.LikeAPIView.as_view(), name="get-like"),
+    path("api/Comment/<path:id>/", apiViews.CommentAPIView.as_view(), name="get-comment"),
+    path("api/EntryImage/<int:id>/", apiViews.EntryImageAPIView.as_view(), name="get-entry-image")
 ]
     
 

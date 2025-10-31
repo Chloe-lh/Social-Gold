@@ -271,3 +271,6 @@ dist
 
 *.min.js
 *.min.js.map
+
+# migrations
+/migrations

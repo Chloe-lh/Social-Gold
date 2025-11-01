@@ -16,9 +16,6 @@
 
 }
 
-
-
-
 /* Ensure each entry has a visible border */
 .entry {
   border: 3px solid #d4b483; /* warm gold-like border */
@@ -28,6 +25,7 @@
   color: #161616;
   box-shadow: 0 4px 5px rgba(0, 0, 0, 0.1);
 }
+
 article.entry img {
   max-width: 100%;    /* Stay within the post width */
   height: auto;       /* Maintain aspect ratio */
@@ -35,6 +33,7 @@ article.entry img {
   border-radius: 8px; /* Nice rounded corners */
   margin-top: 0.5rem;
 }
+
 article.entry + article.entry {
   margin-top: 1.5rem; /* space between posts */
 }
@@ -56,7 +55,7 @@ article.entry + article.entry {
     vertical-align: middle;
 }
 
-/* Frame */
+
 
 
 

@@ -123,20 +123,6 @@ h1 {
   overflow: hidden;
 }
 
-.profile-pic {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  border: 2px solid var(--colour-yellow);
-  margin-bottom: 1rem;
-  transition: all 0.3s ease;
-}
-
-.profile-pic:hover {
-  width: 150px;
-  height: 150px;
-}
-
 .sidebar-info p {
   margin: 0.5rem 0;
   color: var(--text-light);

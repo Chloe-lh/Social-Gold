@@ -25,7 +25,7 @@ to inherit these properties
     <!-- Side Nav -->
     <button class="side-toggle" onclick="toggleSidebar()">☰</button>
     <section class="side-nav">
-    <h1><a href="">Golden</a></h1>
+    <h1>Golden</h1>
         {% if request.user.is_authenticated and request.user.profileImage %}
             <img class="profile-pic" src="{{ request.user.profileImage.url }}" alt="Profile">
         {% else %}
@@ -37,12 +37,27 @@ to inherit these properties
         </ul>
     </section>
 
-    <!-- Top Nav -->
+    <!-- Top Base Nav -->
     <nav class="top-nav">
         <ul class="menu">
-            <li class="item"><a href="{% url 'new_post' %}">New Post</a></li>
-            <li class="item"><a href="{% url 'profile' %}">Profile</a></li>
-            <li class="item"><a href="{% url 'stream' %}">Stream</a></li>
+            <li class="item">
+                <a href="{% url 'new_post' %}" class="icon-btn" aria-label="Add Post"> 
+                    <img src="{% static 'golden/icons/add-post-icon.png' %}"/>
+                    <span class="sr-only">New Post</span>
+                </a>
+            </li>
+            <li class="item">
+                <a href="{% url 'stream' %}" class="icon-btn" aria-label="Stream"> 
+                    <img src="{% static 'golden/icons/home-icon.png' %}"/>
+                    <span class="sr-only">Stream</span>
+                </a>
+            </li>
+            <li class="item">
+                <a href="{% url 'profile' %}" class="icon-btn" aria-label="Profile"> 
+                    <img src="{% static 'golden/icons/user-icon.png' %}"/>
+                    <span class="sr-only">Profile</span>
+                </a>
+            </li>
         </ul>
     </nav>
 
@@ -50,12 +65,9 @@ to inherit these properties
         {% csrf_token %}
     </form>
 
-    
-
     <!-- Child templates will over ride to display page content-->
     <main class="content">{% block content %}{% endblock %} </main>
- </body>
-
+</body>
 
 <script>
 

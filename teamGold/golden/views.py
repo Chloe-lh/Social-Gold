@@ -36,12 +36,15 @@ from django.contrib.auth import get_user_model
 from .decorators import require_author
 import markdown
 
-#secuirity
+# Security 
 from django.views.decorators.csrf import csrf_exempt
 
 #imports for AJAX
 from django.http import JsonResponse
 import json
+
+# Website Fun!
+import random
 
 
 @login_required
@@ -384,11 +387,25 @@ def new_post(request):
     if request.current_author is None:
         return redirect('signup')
     
+    headings = [
+        "Post your thoughts",
+        "What’s on your mind?",
+        "How are we feeling?",
+        "Got something to share?",
+        "Drop today’s entry",
+        "Even the smallest wins are worth sharing",
+        "Anything you want to talk about?",
+        "What's up?"
+    ]
+    entry_heading = random.choice(headings)
+
+    
     context = {}
     form = EntryList()
     editing_entry = None # because by default, users are not in editing mode 
     entries = Entry.objects.all().order_by('-is_posted')
     context['entries'] = entries
+    context['entry_heading'] = entry_heading
 
     # FEATURE POST AN ENTRY
     if request.method == "POST" and "entry_post" in request.POST:
@@ -472,6 +489,7 @@ def new_post(request):
         context['editing_entry'] = None 
         context['entries'] = Entry.objects.select_related("author").all()
         context['comment_form'] = CommentForm()
+        
         return render(request, "new_post.html", context | {'entries': entries})
 
     # FEATURE EDIT BUTTON CLICKED 

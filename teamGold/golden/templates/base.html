@@ -1,151 +1,72 @@
-<!-- This file contains the header and side nav bar for most of the pages on our site
- to add it, place {% extends 'base.html'} at the top of your file
-  -->
- <!doctype html>
- {% load static %}
- <head>
+<!--
+Base.html is the standardized template for GOLDEN. 
+If you are adding another html file, ensure that 
+{% extends 'base.html'} is the top of that file
+to inherit these properties 
+-->
+
+<!DOCTYPE HTML> 
+{% load static %}
+
+<head>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <link rel="stylesheet" href="{% static 'golden/css/stream.css' %}">
     <link rel="icon" type="image/x-icon" href="{% static 'golden/favicon.ico' %}">
     <meta charset="utf-8">
 
-    <style>
-        body{
-            padding-top: 10px;
-            margin:0px;
-            background: #1D1D1D;
-            font-family:'Arial';
-        }
-        .top-nav{
-            display:flex;
-            background-color: transparent;
-            width:100%;
-            height: 70px;
-            margin: 0 auto;
-            padding: 0px 20px;
-            position:fixed;
-            justify-content: space-between;
-            align-items: center;
-            top:0;
-            left:0;
-            right:0;
-            z-index:2; 
-            box-sizing: border-box; /* Important: ensures padding doesn't overflow width */
-        }
-        .top-nav a,
-        .menu a,
-        .side-nav a,
-        .item a {
-            text-decoration: none;
-            color:#A5A491;
-        }
-        .menu{
-            display: flex;
-            list-style-type:none;
-            margin:0;
-            padding:20px;
-        }
-        .item{
-            font-size: 18px;
-            margin: 0 15px;
-        }
-        .side-nav{
-            height:100%;
-            width: 150px;
-            position: fixed;
-            z-index:1;
-            left:0;
-            top:70px;
-            background: #2C2C2C;
-            overflow-x:hidden;
-            transition: left 0.3s;
-        } 
-        .side-nav ul{
-            padding: 32px 8px 32px 32px;
-            font-size: 20px;
-            margin:0;
-            list-style-type: none;
-        }
-        .side-nav ul li{
-            margin-top: 20px;
-            margin-bottom: 50px;
-        }
-        .side-toggle{
-            display: none;
-            position: fixed;
-            z-index:3;
-            border: none;
-            border-radius: 75px;
-            font-size: 18px;
-            background:#F08A4B;
-            padding: 10px;
-            top: 55px;
-        }
-        .content{
-            margin-left: 200px;
-            margin-top: 100px;
-            margin-right: 50px;
-        }
-        /*
-        when viewed on a smaller screen, the side nav is not visible
-        to open the side bar press a button
-        */
-        @media (max-width:700px){
-            .side-nav{
-                left: -170px;
-            }
-            .side-nav.open{
-                left:0;
-            }
-            .side-toggle{
-                display:block;
-            }
-            .content{
-                margin-left:0;
-            }
-        }
-    </style>
-    <script>
-        function toggleSidebar(){
-            document.querySelector('.side-nav').classList.toggle('open');
-        }
-    </script>
+    <link rel="stylesheet" href="{% static 'golden/css/base.css' %}">
+
     {% block head %}{% endblock %}
- </head>
- <body>
-    <!-- We need to place urls as we go -->
-    <!-- TOP HEADER -->
-    <nav class="top-nav">
-        <h1><a href="">Golden</a></h1>
+        
+</head>
+
+<body>
+    
+    <!-- Side Nav -->
+    <button class="side-toggle" onclick="toggleSidebar()">☰</button>
+    <section class="side-nav">
+    <h1><a href="">Golden</a></h1>
+        {% if request.user.is_authenticated and request.user.profileImage %}
+            <img class="profile-pic" src="{{ request.user.profileImage.url }}" alt="Profile">
+        {% else %}
+            <img class="profile-pic" src="{% static 'golden/images/default_profile.webp' %}" alt="Default Profile">
+        {% endif %}
+
         <ul class="menu">
-            <li class="item"><a href="{% url 'profile' %}">Profile</a></li>
-            <li class="item"><a href="{% url 'stream' %}">Stream</a></li>
             <li class="item"><a href="#" id="logout-link">Log Out</a></li>
         </ul>
+    </section>
+
+    <!-- Top Nav -->
+    <nav class="top-nav">
+        <ul class="menu">
+            <li class="item"><a href="{% url 'new_post' %}">New Post</a></li>
+            <li class="item"><a href="{% url 'profile' %}">Profile</a></li>
+            <li class="item"><a href="{% url 'stream' %}">Stream</a></li>
+        </ul>
     </nav>
+
     <form id="logout-form" method="POST" action="{% url 'logout' %}" style="display:none;">
         {% csrf_token %}
     </form>
-    <!-- SIDE BAR -->
-    <button class="side-toggle" onclick="toggleSidebar()">☰</button>
-    <div class="side-nav">
-        <ul>
-            <li><a href="{% url 'stream' %}">Home</a></li>
-            <li><a href="{% url 'home' %}">New Post</a></li>
-            <li><a href="{% url 'follow_requests' %}">Follow Requests</a></li>
-            <li><a href="{% url 'search_authors' %}">Search</a></li>
-        </ul>
-    </div>
-    <main class="content">
-        <!-- Child templates will over ride to display page content-->
-        {% block content %}{% endblock %}
-    </main>
-    {% block scripts %}
-    <script>
+
+    
+
+    <!-- Child templates will over ride to display page content-->
+    <main class="content">{% block content %}{% endblock %} </main>
+ </body>
+
+
+<script>
+
+    // Toggle the Side Nav-Bar
+    function toggleSidebar(){
+        document.querySelector('.side-nav').classList.toggle('open');
+    }
+    
+    // Logout Feature
     document.getElementById('logout-link').addEventListener('click', function(e) {
         e.preventDefault();
         document.getElementById('logout-form').submit();
     });
-    </script>
-    {% endblock %}
- </body>
+</script>

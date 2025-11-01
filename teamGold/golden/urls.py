@@ -15,7 +15,7 @@ urlpatterns = [
     path('following/', views.following, name='following'),
     path("follow_requests/", views.follow_requests, name="follow_requests"),
     path("friends/", views.friends, name="friends"),
-    path("home/", views.home, name="home"),
+    path("new_post/", views.new_post, name="new_post"),
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
     path('stream/', views.stream_view, name = 'stream'),
     path('add_comment/', views.add_comment, name = "add_comment"),

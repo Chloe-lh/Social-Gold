@@ -12,7 +12,7 @@
     <h3> Post your thoughts </h3>
     <section>
         {% if form %}
-            <form method="POST" action="{% url 'home' %}" enctype="multipart/form-data"> 
+            <form method="POST" action="{% url 'new_post' %}" enctype="multipart/form-data"> 
                 {% csrf_token %} 
                 {% if editing_entry %}
                     <textarea name="content" rows="10" cols="50" placeholder="Enter your text here...">{{ editing_entry.content|striptags }}</textarea><br><br>
@@ -63,11 +63,11 @@
                     <tr>
                         <br><strong>{{ entry.author}}</strong> <spacer>
                         {% if request.user == entry.author %}
-                            <form method="POST" action="{% url 'home' %}" style="display: inline;">
+                            <form method="POST" action="{% url 'new_post' %}" style="display: inline;">
                                 {% csrf_token %}
                                 <button name="entry_edit" value="{{ entry.id }}">Edit</button>
                             </form>
-                            <form method="POST" action="{% url 'home' %}" style="display: inline;">
+                            <form method="POST" action="{% url 'new_post' %}" style="display: inline;">
                                 {% csrf_token %}
                                 <button name="entry_delete" value="{{ entry.id }}">Delete</button>
                         {% endif %}

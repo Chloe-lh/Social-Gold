@@ -16,7 +16,6 @@
 
 }
 
-
 html {
     background: linear-gradient(to bottom, #F08A4B 0%, #F08A4B 55%, #FFF9E9 55%, #FFF9E9 100%);
     background-repeat: no-repeat;
@@ -59,8 +58,12 @@ section {
     background-color: #E9E9E9;
 }
 
+h1 {
+    color: var(--colour-yellow);
+}
+
 h2 {
-    -webkit-text-stroke: 0.7px black;
+    -webkit-text-stroke: 0.7px var(--colour-yellow)
     font-size: 100px;
     color: var(--colour-yellow);
     margin: 0;

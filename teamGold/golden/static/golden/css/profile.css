@@ -1,6 +1,6 @@
-@font-face { font-family: 'BlackMango'; src: url(golden\static\golden\css\fonts\BlackMango-Black.ttf) format('truetype'); }
-@font-face { font-family: 'Montserrat-Bold'; src: url(golden\static\golden\css\fonts\Montserrat-Bold.ttf) format('truetype'); }
-@font-face { font-family: 'Montserrat-Medium'; src: url(golden\static\golden\css\fonts\Montserrat-Medium.ttf) format('truetype'); }
+@font-face { font-family: 'BlackMango'; src: url(./fonts/BlackMango-Black.ttf) format('opentype'); }
+@font-face { font-family: 'Montserrat-Bold'; src: url(./fonts/Montserrat-Bold.ttf) format('opentype'); }
+@font-face { font-family: 'Montserrat-Medium'; src: url(./fonts/Montserrat-Medium.ttf) format('opentype'); }
 
 :root {
 
@@ -16,120 +16,362 @@
 
 }
 
-/* Profile Page Styles */
 
-/* Tabs / Profile Info */
 
-.top-nav {
-    display: flex;
-    align-items: center;
-    justify-content: space-between; /* left, center, right */
-    background: #F08A4B;
-    height: 70px;
-    padding: 0 20px;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 2;
-}
-
-/* Center username styling */
-.nav-center span {
-    flex: 1; /* take available space */
-    text-align: center;
-    color: black;
-    font-weight: bold;
-    font-size: 2rem;
-}
-
-/* Button styling */
-.nav-right button {
-    padding: 0.5rem 1rem;
-    border-radius: 0.5rem;
-    border: none;
-    background: #577590;
-    color: white;
-    font-weight: bold;
-    cursor: pointer;
-    width: 150px;
-    height: 40px;
+body {
+  margin: 0;
+  font-family: "Segoe UI", sans-serif;
+  background-color: var(--colour-background);
+  color: var(--text-light);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 h1 {
-    margin: 0;
-    font-size: 3.5rem;
-    font-family: 'Montserrat-Medium';
-    color: var(--colour-yellow);
+  margin: 0;
+  font-size: 3.5rem;
+  font-family: 'Montserrat-Medium';
+  color: var(--colour-yellow);
+}
 
+.topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+
+  /* transparent background */
+  background-color: transparent;
+  backdrop-filter: none;
+
+  color: var(--colour-yellow);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 1.5rem;
+  z-index: 1000;
+
+  box-shadow: none;
+  border: none;
 }
-.tabs {
-    display: flex;
-    gap: 3rem;
-    margin-top: 1rem;
+
+.topbar-left,
+.topbar-center,
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
+
+.topbar .brand {
+  font-size: 1.4rem;
+  letter-spacing: 2px;
+  color: var(--colour-yellow);
+}
+
+.topbar .topbar-center span {
+  color: var(--colour-yellow);
+  font-weight: bold;
+  font-size: 1.5rem;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  color: var(--colour-yellow);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.toggle-btn {
+  font-size: 1.2rem;
+  background: none;
+  border: none;
+  color: var(--colour-yellow);
+  cursor: pointer;
+}
+
+/* ================================
+   MAIN WRAPPER + LAYOUT
+================================ */
+.wrapper {
+  display: flex;
+  flex: 1;
+  margin-top: 60px; 
+  height: calc(100vh - 60px);
+  overflow: hidden;
+}
+
+/* ================================
+   SIDEBAR (TOGGLEABLE)
+================================ */
+.sidebar {
+  width: 220px;
+  background-color: var(--bg-panel);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: width 0.3s ease, padding 0.3s ease;
+}
+
+.sidebar.collapsed {
+  width: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
 .profile-pic {
-    width: 120px;
-    height: 120px;
-    border-radius: 50%;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 2px solid var(--colour-yellow);
+  margin-bottom: 1rem;
+  transition: all 0.3s ease;
 }
 
 .profile-pic:hover {
-    width: 150px;
-    height: 150px;
-    border-radius: 50%;
-
+  width: 150px;
+  height: 150px;
 }
 
-.tabs button {
-    width: 100%;
-    height: 50px;
-    font-size: 1.5rem;
-    border-radius: 0%;
-    border: none;
-    background: var(--colour-off-background);
-    font-family: "BlackMango";
-    color: var(--colour-contrast);
+.sidebar-info p {
+  margin: 0.5rem 0;
+  color: var(--text-light);
+  text-align: center;
 }
 
-.tabs button:hover {
-    box-shadow: 1px 1px 20px var(--colour-yellow);
-
+.logout-btn {
+  margin-top: auto;
+  background: none;
+  border: 1px solid var(--text-light);
+  color: var(--text-light);
+  padding: 0.4rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
 }
 
+/* ================================
+   MAIN CONTENT
+================================ */
+.main-content {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+}
+
+.bio {
+  color: var(--text-muted);
+  line-height: 1.6;
+  font-style: italic;
+}
+
+/* ================================
+   PROFILE + ENTRY CARDS
+================================ */
 .entries {
-    display: grid;
-    gap: 1.5rem;
-    margin-top: 2rem;
-    margin-bottom: 2rem;
+  display: grid;
+  gap: 1.5rem;
+  margin-top: 2rem;
+  margin-bottom: 2rem;
 }
 
 .entry {
-    border: 2px solid #4a5c7a;
-    border-radius: 10px;
-    padding: 1rem;
-    background: #FFF9E9;
-    min-height: 0;
+  border: 2px solid #4a5c7a;
+  border-radius: 10px;
+  padding: 1rem;
+  background: #FFF9E9;
 }
 
+.entry img {
+  max-width: 200px;
+  height: auto;
+  border-radius: 6px;
+}
+
+/* ================================
+   EDIT PROFILE FORM
+================================ */
 #edit-profile-form {
-    border: 2px solid #4a5c7a;
-    border-radius: 10px;
-    padding: 1rem;
-    background: #FFF9E9;
-    max-width: 400px;
+  border: 2px solid #4a5c7a;
+  border-radius: 10px;
+  padding: 1rem;
+  background: #FFF9E9;
+  max-width: 400px;
 }
 
 #edit-profile-form input {
-    width: 100%;
-    margin-bottom: 0.5rem;
+  width: 100%;
+  margin-bottom: 0.5rem;
 }
 
 #edit-profile-form button {
-    background: #235e92;
-    color: white;
-    padding: 0.5rem 1rem;
-    border-radius: 0.5rem;
-    border: none;
-    cursor: pointer;
+  background: #235e92;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: none;
+  cursor: pointer;
+}
+
+/* ================================
+   TABS SECTION
+================================ */
+.tabs {
+  display: flex;
+  gap: 3rem;
+  margin-top: 1rem;
+}
+
+.tabs button,
+.tab-btn {
+  background: var(--colour-off-background);
+  color: var(--colour-contrast);
+  font-family: "BlackMango";
+  font-size: 1.5rem;
+  height: 50px;
+  border: none;
+  border-radius: 0;
+  width: 100%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tabs button:hover,
+.tab-btn:hover {
+  box-shadow: 1px 1px 20px var(--colour-yellow);
+}
+
+.tab-btn.active {
+  background-color: var(--accent);
+  color: #000;
+}
+
+/* ================================
+   TAB PANELS (TOGGLE DISPLAY)
+================================ */
+
+/* --- TAB VISIBILITY CONTROL --- */
+.tab-panels {
+  width: 100%;
+  margin-top: 1rem;
+}
+
+.tab-panel {
+  display: none !important;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.tab-panel.active {
+  display: block !important;
+  opacity: 1;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ================================
+   FOLLOWERS / FOLLOWING LIST
+================================ */
+.followers,
+.following {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.follower,
+.followee {
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: var(--accent);
+  border-bottom: 1px solid var(--text-light);
+  padding-bottom: 4px;
+}
+
+.tabs-section {
+  margin-top: 2rem;
+  background: #1d1d1d;
+  color: #ddd;
+  font-family: "Montserrat-Medium", sans-serif;
+}
+
+/* ---- Tabs ---- */
+.tabs {
+  display: flex;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.tab-btn {
+  background: #2c2c2c;
+  border: none;
+  padding: 0.6rem 1.5rem;
+  color: #ccc;
+  font-family: "BlackMango", serif;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-btn.active {
+  background: #3a3a3a;
+  color: #f2b43b;
+  box-shadow: inset 0 -2px 0 #f2b43b;
+}
+
+.tab-btn:hover {
+  color: #f2b43b;
+}
+
+/* ---- Panels ---- */
+.tab-panels {
+  width: 100%;
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
+}
+
+/* ---- Follower rows ---- */
+.follower-row {
+  border-bottom: 1px solid #444;
+  padding: 0.6rem 0;
+}
+
+.follower-name {
+  font-family: "BlackMango", serif;
+  font-size: 1.6rem;
+  color: #f2b43b;
+  display: inline-block;
+  letter-spacing: 0.5px;
+}
+
+.follower-name:hover {
+  text-shadow: 0 0 5px #f2b43b;
+}
+
+.author-list-item {
+    font-family: "BlackMango", serif;
+    font-size: 2rem;
+    color: var(--colour-yellow)
+}
+
+hr {
+    width: 82vw;
+    align-content: left;
+    height: 0.8px;
+    flex-shrink: 0; 
+    margin-inline-start: 0;
+    background: var(--colour-contrast);
 }

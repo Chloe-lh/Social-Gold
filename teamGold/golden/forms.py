@@ -1,6 +1,10 @@
 from django.contrib.auth.forms import UserCreationForm
-from .models import Author
+from .models import Author, Comment, Entry
 from django import forms
+
+'''
+Custom forms for views
+'''
 
 class CustomUserForm(UserCreationForm):
     username = forms.CharField(max_length=100, required=True)
@@ -11,6 +15,7 @@ class CustomUserForm(UserCreationForm):
         model = Author
         fields = ('username', 'password1', 'password2')
 
+# for editing a user's profile data
 class ProfileForm(forms.ModelForm):
     class Meta:
         model = Author
@@ -20,4 +25,19 @@ class ProfileForm(forms.ModelForm):
             'github': forms.URLInput(attrs={'class': 'form-input'}),
             'web': forms.URLInput(attrs={'class': 'form-input'}),
             'description': forms.Textarea(attrs={'class': 'form-input', 'rows': 4, 'cols': 50}),
+        }
+
+# for adding comments
+class CommentForm(forms.ModelForm):
+    content = forms.CharField(widget=forms.TextInput)
+    class Meta:
+        model = Comment
+        fields = ['content']
+
+class EntryList(forms.ModelForm):
+    class Meta:
+        model = Entry
+        fields = ['content', 'author', 'is_posted', 'visibility']
+        widgets = {
+            'content': forms.Textarea(attrs={'rows': 4}),
         }

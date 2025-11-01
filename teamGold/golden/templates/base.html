@@ -2,7 +2,11 @@
  to add it, place {% extends 'base.html'} at the top of your file
   -->
  <!doctype html>
+ {% load static %}
  <head>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link rel="stylesheet" href="{% static 'golden/css/stream.css' %}">
+    <link rel="icon" type="image/x-icon" href="{% static 'golden/favicon.ico' %}">
     <meta charset="utf-8">
 
     <style>

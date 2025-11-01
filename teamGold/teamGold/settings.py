@@ -151,3 +151,6 @@ LOGIN_REDIRECT_URL = '/golden/stream/'          # TODO: Change the link to homep
 
 # In production, each node (server) will have its own SITE_URL value
 SITE_URL = os.environ.get("SITE_URL", "http://127.0.0.1:8000")          
+
+# variable to help define our local node 
+LOCAL_NODE_URL = SITE_URL

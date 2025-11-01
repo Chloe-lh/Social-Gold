@@ -43,7 +43,6 @@ h1 {
   height: 60px;
 
   /* transparent background */
-  background-color: transparent;
   backdrop-filter: none;
 
   color: var(--colour-yellow);
@@ -361,3 +360,4 @@ hr {
     margin-inline-start: 0;
     background: var(--colour-contrast);
 }
+

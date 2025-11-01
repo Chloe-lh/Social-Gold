@@ -29,8 +29,6 @@ h1 {
     font-family: var();
 }
 
-
-
 .top-nav {
   position: fixed;           /* stays visible at top */
   top: 0;
@@ -41,7 +39,7 @@ h1 {
   justify-content: flex-end; /* move contents to right side */
   align-items: center;
   padding: 0 2rem;
-  background: transparent;   /* or #1d1d1d if you want a bar background */
+  background: #1d1d1d;   /* or #1d1d1d if you want a bar background */
   z-index: 1000;
 }
 .top-nav a,

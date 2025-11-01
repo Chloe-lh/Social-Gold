@@ -11,15 +11,16 @@ from django.db.models import Q
 import markdown
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework import generics
 from rest_framework.views import APIView
-from rest_framework import status
+from rest_framework import status, generics
+
 
 # BASE GOLDEN
 from golden import models
-from golden.models import Entry, EntryImage, Author, Follow, Comments, Like, Follow
+from golden.models import Entry, EntryImage, Author, Comment, Like, Follow
 from golden.entry import EntryList
-from .forms import CustomUserForm, ProfileForm
+from .forms import CustomUserForm, CommentForm, ProfileForm
+from golden.serializers import CommentSerializer, InboxSerializer
 
 # Import login authentication stuff
 from django.contrib.auth.decorators import login_required
@@ -29,23 +30,20 @@ from django.utils import timezone
 from django.contrib.auth.views import LoginView
 import uuid
 
-from .models import Author, Entry
 # view decorator
 from django.views.decorators.http import require_POST
 
 # Imports for entries
 from django.contrib.auth import get_user_model
 from .decorators import require_author
-from .models import Node
-from .serializers import NodeSerializer
-import requests
 import markdown
 
-
+#secuirity
 from django.views.decorators.csrf import csrf_exempt
+
+#imports for AJAX
 from django.http import JsonResponse
 import json
-from golden.serializers import InboxSerializer
 
 
 @login_required
@@ -54,7 +52,8 @@ def index(request):
     print("USERS:")
     for obj in objects:
         print(obj['username']) 
-    return render(request, "stream.html")
+    return render(request, "index.html")
+
 
 def signup(request):
     # we want to log users out when they want to sign up
@@ -79,7 +78,7 @@ def signup(request):
             #if not next_page:
                 #next_page = "/golden/"
 
-            return redirect('stream')     
+            return redirect('profile')     
     else:
         form = CustomUserForm()
         # next_page = request.GET.get('next')
@@ -119,7 +118,7 @@ def profile_view(request):
     except Author.DoesNotExist:
         author = None
 
-    entries = Entry.objects.all().order_by('-is_posted')
+    entries = Entry.objects.filter(author=author).order_by('published')
 
     followers_count = author.followers_set.count() if author else 0
     following_count = author.following.count() if author else 0
@@ -336,6 +335,32 @@ def friends(request):
         "page_type": "friends",  # Used in template to hide buttons
     })
 
+'''
+function based Django view
+    - handles form submission from Django Template 
+    1. user will submit a comment via the form 
+    2. view will process form, and save comment to db
+
+'''
+@login_required
+def add_comment(request):
+    if request.method == "POST": # user clicks add comment button in modal
+        form = CommentForm(request.POST)
+        # get entry id from html
+        entry_id = request.POST.get('entry_id')
+        if form.is_valid():
+            comment = form.save(commit=False) # dont save unless user presses add comment
+            # create a unique id/URL for each comment
+            comment.id = f"{settings.SITE_URL}/api/Comment/{uuid.uuid4()}"
+            comment.author = Author.objects.get(id=request.user.id)
+            comment.entry = get_object_or_404(Entry, id=entry_id)
+            comment.published = timezone.now()
+            comment.save()
+            return JsonResponse({'success': True})
+        else:
+            return JsonResponse({'success': False})
+    return JsonResponse({'success':True})
+
 @login_required
 @require_author 
 def home(request):
@@ -350,9 +375,6 @@ def home(request):
     editing_entry = None # because by default, users are not in editing mode 
     entries = Entry.objects.all().order_by('-is_posted')
     context['entries'] = entries
-
-    # ===== NEW: Sync GitHub automatically =====
-    sync_github_activity(request.current_author)
 
     # FEATURE POST AN ENTRY
     if request.method == "POST" and "entry_post" in request.POST:
@@ -435,6 +457,7 @@ def home(request):
         context['form'] = EntryList()  
         context['editing_entry'] = None 
         context['entries'] = Entry.objects.select_related("author").all()
+        context['comment_form'] = CommentForm()
         return render(request, "home.html", context | {'entries': entries})
 
     # FEATURE EDIT BUTTON CLICKED 
@@ -450,91 +473,19 @@ def home(request):
 
     context['form'] = form 
     context["editing_entry"] = editing_entry
-    context["entries"] = Entry.objects.select_related("author").all()
+    # context["entries"] = Entry.objects.select_related("author").all()
+ 
 
     return render(request, "home.html", context | {'entries': entries})
 
-def sync_github_activity(author):
-    """
-    Fetch public GitHub events for the author and create public Entries automatically.
-    """
-    print(f"Syncing GitHub for {author.username} -> {author.github}")
-    if not author.github:
-        return  # Skip if no GitHub URL
-
-    # Extract username from full URL
-    username = author.github.rstrip('/').split('/')[-1]
-
-    api_url = f"https://api.github.com/users/{username}/events/public"
-    try:
-        response = requests.get(api_url, timeout=5)
-        if response.status_code != 200:
-            print(f"Failed to fetch GitHub events: {response.status_code}")
-            return
-        events = response.json()
-    except Exception as e:
-        print(f"Error fetching GitHub events: {e}")
-        return
-
-    for event in events:
-        event_id = event.get("id")
-        event_type = event.get("type")
-        repo_name = event.get("repo", {}).get("name", "unknown repo")
-        repo_url = f"https://github.com/{repo_name}"
-        created_at = event.get("created_at")
-
-        # Unique FQID for GitHub entry
-        entry_id = f"{author.host}/authors/{author.id}/entries/github-{event_id}"
-
-        # Avoid duplicates
-        if Entry.objects.filter(id=entry_id).exists():
-            continue
-
-        content_text = ""
-        if event_type == "PushEvent":
-            commits = event.get("payload", {}).get("commits", [])
-            messages = []
-            for c in commits:
-                sha = c.get("sha")[:7]
-                msg = c.get("message", "")
-                url = c.get("url", "").replace("api.", "").replace("repos/", "").replace("commits", "commit")
-                messages.append(f"[{sha}]({url}): {msg}")
-            content_text = f"**Pushed to [{repo_name}]({repo_url})**:\n\n" + "\n".join(messages)
-
-        elif event_type == "IssuesEvent":
-            issue = event.get("payload", {}).get("issue", {})
-            issue_url = issue.get("html_url", "")
-            content_text = f"**Issue in [{repo_name}]({repo_url})**: [{issue.get('title', '')}]({issue_url})\n\n{issue.get('body', '')}"
-
-        elif event_type == "PullRequestEvent":
-            pr = event.get("payload", {}).get("pull_request", {})
-            pr_url = pr.get("html_url", "")
-            content_text = f"**Pull Request in [{repo_name}]({repo_url})**: [{pr.get('title', '')}]({pr_url})\n\n{pr.get('body', '')}"
-
-        else:
-            content_text = f"**{event_type}** in [{repo_name}]({repo_url})"
-
-        # Convert to HTML
-        html_content = markdown.markdown(content_text)
-
-        # Create Entry
-        Entry.objects.create(
-            id=entry_id,
-            author=author,
-            title=f"{event_type} on {repo_name} (GitHub)",
-            content=html_content,
-            contentType="text/html",
-            visibility="PUBLIC",
-            source=author.github,
-            origin=author.github,
-            published=created_at,
-            is_posted=timezone.now()
-        )
 
 @login_required
 def stream_view(request):
     # Get the Author object for the logged-in user
     user_author = request.user
+
+    # only a local node uses stream_view
+    remote_node = False
 
     # Get all accepted follows (authors this user follows)
     follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
@@ -558,29 +509,28 @@ def stream_view(request):
         Q(visibility='FRIENDS', author__id__in=friends_fqids)  # Friends-only: only friends
     ).order_by('-is_updated', '-published')  # Most recent first
 
+    # serialize comments for each entry
+    entry_comments = {}
+    for entry in entries:
+        if entry.visibility == 'FRIENDS':
+            allowed = set(friends_fqids + [str(user_author.id)])
+            filtered_comments = entry.comments.filter(author__id__in=allowed)
+        else:
+            filtered_comments = entry.comment.all()
+        serialized_comments = CommentSerializer(filtered_comments, many=True).data
+        entry_comments[entry.id] = serialized_comments
+
     # Prepare context for the template
     context = {
         'entries': entries,
         'user_author': user_author,
         'followed_author_fqids': followed_author_fqids,
-        'friends_fqids': friends_fqids
+        'friends_fqids': friends_fqids,
+        'comment_form' : CommentForm(),
+        'entry_comments_json': json.dumps(entry_comments),
+        'remote_node':remote_node,
     }
 
     # Render the stream page extending base.html
     return render(request, 'stream.html', context)
 
-class InboxView(APIView):
-    def post(self, request, author_id):
-        try:
-            recipient = Author.objects.get(id=author_id)
-        except Author.DoesNotExist:
-            return Response({"error": "Author not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = InboxSerializer(data=request.data)
-        if serializer.is_valid():
-            created_obj = serializer.save()  # creates Follow/Like/Comment/Post
-
-            return Response({"message": f"Delivered to {recipient.display_name}'s inbox"},
-                            status=status.HTTP_201_CREATED)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

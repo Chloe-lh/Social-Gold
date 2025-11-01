@@ -151,7 +151,8 @@ class Entry(models.Model):
     is_posted = models.DateTimeField(default=timezone.now)
     is_updated = models.DateTimeField(auto_now=True)
 
-    # We use URLs for authors to support remote likes from different nodes.
+    # We use URLs for authors to support remote likes and comments from different nodes.
+    # stores a list of authors that liked and entry
     likes = models.ManyToManyField(
         'Author',
         related_name='liked_entries',
@@ -183,7 +184,7 @@ class EntryImage(models.Model):
         return f"Image for entry {self.entry.id}"
     
 
-class Comments(models.Model):
+class Comment(models.Model):
     """
     Comment object (federated). ID is the FQID of the comment.
     Example id: "http://nodeaaaa/api/authors/111/commented/130"
@@ -195,18 +196,18 @@ class Comments(models.Model):
         to_field='id',
         db_column='author_id',
         on_delete=models.CASCADE, 
-        related_name="comments"
+        related_name="comment"
     )
     entry = models.ForeignKey(
         Entry,
         to_field='id',
         db_column='entry_id',
         on_delete=models.CASCADE, 
-        related_name="comments"
+        related_name="comment"
     )
+    content = models.TextField(max_length=200, blank=True)
     contentType = models.CharField(max_length=100, default="text/markdown")
     reply_to = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='replies')
-    comment = models.TextField()
     published = models.DateTimeField(auto_now_add=True)
 
 '''

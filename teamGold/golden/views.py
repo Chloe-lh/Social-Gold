@@ -377,7 +377,7 @@ def home(request):
 
     # FEATURE POST AN ENTRY
     if request.method == "POST" and "entry_post" in request.POST:
-        entry_id = f"https://node1.com/api/entries/{uuid.uuid4()}"
+        entry_id = f"https://node1.com/api/entries/{uuid.uuid4()}"  #****** we need to change this to dynamically get the node num
 
         # Markdown conversion 
         markdown_content = request.POST['content']
@@ -538,3 +538,36 @@ def entry(request, id):
     # TODO: entry id format?
     context = {}
     return render(request, 'entry_page.html', context)
+
+@api_view(['POST'])
+def inbox(request, author_id):
+    try:
+        host = request.build_absolute_uri('/')  # "https://node1/"
+        full_author_id = f"{host}api/authors/{author_id}/"
+        author = Author.objects.get(id=full_author_id)
+    except Author.DoesNotExist:
+        return Response({"error": "Author not found"}, status=404)
+    
+    data = request.data
+    activity_type = data.get("type", "").lower()
+
+    if activity_type == "create":
+        return handle_create(data, author)
+    elif activity_type == "like":
+        return handle_like(data, author)
+    elif activity_type == "comment":
+        return handle_comment(data, author)
+    elif activity_type == "follow":
+        return handle_follow(data, author)
+    else:
+        return Response({"error": "Unsupported type"}, status=400)
+    
+def handle_create(data, author):
+    
+    return
+def handle_like(data,author):
+    return
+def handle_comment(data,author):
+    return
+def handle_follow(data,author):
+    return

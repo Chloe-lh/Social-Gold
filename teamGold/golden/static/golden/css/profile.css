@@ -224,11 +224,6 @@ h1 {
   transition: all 0.2s ease;
 }
 
-.tabs button:hover,
-.tab-btn:hover {
-  box-shadow: 1px 1px 20px var(--colour-yellow);
-}
-
 .tab-btn.active {
   background-color: var(--accent);
   color: #000;

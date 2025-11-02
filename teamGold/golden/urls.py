@@ -28,7 +28,9 @@ urlpatterns = [
     path("api/Follow/<path:id>/", apiViews.FollowAPIView.as_view(), name="get-follow"),
     path("api/Like/<path:id>/", apiViews.LikeAPIView.as_view(), name="get-like"),
     path("api/Comment/<path:id>/", apiViews.CommentAPIView.as_view(), name="get-comment"),
-    path("api/EntryImage/<int:id>/", apiViews.EntryImageAPIView.as_view(), name="get-entry-image")
+    path("api/EntryImage/<int:id>/", apiViews.EntryImageAPIView.as_view(), name="get-entry-image"),
+    
+    path("api/author/<uuid:author_id>/inbox/", views.inbox, name="inbox")
 ]
     
 

@@ -3,16 +3,15 @@
 @font-face { font-family: 'Montserrat-Medium'; src: url(golden\static\golden\css\fonts\Montserrat-Medium.ttf) format('opentype'); }
 
 :root {
-
     /* Colour Pallet */
-    --colour-background: #1D1D1D; 
-    --colour-off-background: #2C2C2C; 
-    --colour-contrast: #DDDBD2;
-    --colour-off-contrast: #A5A491;
-    --colour-yellow: #F2B43B;
-    --colour-purple: #753997; 
-    --colour-blue: #006BA6; 
-    --colour-red: #FC5D47;
+    --background-colour: #1D1D1D;
+    --off-background: #2C2C2C;
+    --contrast-background: #DDDBD2;
+    --off-contrast-background: #A5A491;
+    --primary-colour: #F2B43B;
+    --contrast-colour-1: #753997;
+    --contrast-colour-2: #006BA6;
+    --contrast-colour-3: #FC5D47;
 
 }
 
@@ -59,13 +58,13 @@ section {
 }
 
 h1 {
-    color: var(--colour-yellow);
+    color: var(--primary-colour);
 }
 
 h2 {
-    -webkit-text-stroke: 0.7px var(--colour-yellow)
+    -webkit-text-stroke: 0.7px var(--primary-colour);
     font-size: 100px;
-    color: var(--colour-yellow);
+    color: var(--primary-colour);
     margin: 0;
     font-family: 'BlackMango';
 }

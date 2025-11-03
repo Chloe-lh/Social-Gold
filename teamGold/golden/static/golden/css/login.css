@@ -2,33 +2,6 @@
 @font-face { font-family: 'Montserrat-Bold'; src: url(fonts/Montserrat-Bold.ttf) format('opentype'); }
 @font-face { font-family: 'Montserrat-Medium'; src: url(fonts/Montserrat-Medium.ttf) format('opentype'); }
 
-:root {
-    /* Colour Pallet */
-    --background-colour: #1D1D1D;
-    --off-background: #2C2C2C;
-    --contrast-background: #DDDBD2;
-    --off-contrast-background: #A5A491;
-    --primary-colour: #F2B43B;
-    --contrast-colour-1: #753997;
-    --contrast-colour-2: #006BA6;
-    --contrast-colour-3: #FC5D47;
-    --contrast-colour-3-opacity-10: rgba(252, 93, 71, 0.1);
-
-}
-
-html[data-theme="light"] {
-    /* redefine colours for light theme */
-    --background-colour: #801010;
-    --off-background: #2C2C2C;
-    --contrast-background: #DDDBD2;
-    --off-contrast-background: #A5A491;
-    --primary-colour: #F2B43B;
-    --contrast-colour-1: #753997;
-    --contrast-colour-2: #006BA6;
-    --contrast-colour-3: #FC5D47;
-    --contrast-colour-3-opacity-10: rgba(252, 93, 71, 0.1);
-}
-
 html {
     background-color: var(--background-colour);
     width: 100%;

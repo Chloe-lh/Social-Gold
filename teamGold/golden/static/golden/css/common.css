@@ -1,5 +1,18 @@
 :root {
+    /* Colour Pallet */
     --background-colour: #1D1D1D;
+    --off-background: #2C2C2C;
+    --contrast-background: #DDDBD2;
+    --off-contrast-background: #A5A491;
+    --primary-colour: #F2B43B;
+    --contrast-colour-1: #753997;
+    --contrast-colour-2: #006BA6;
+    --contrast-colour-3: #FC5D47;
+}
+
+html[data-theme="light"] {
+    /* redefine colours for light theme */
+    --background-colour: #801010;
     --off-background: #2C2C2C;
     --contrast-background: #DDDBD2;
     --off-contrast-background: #A5A491;

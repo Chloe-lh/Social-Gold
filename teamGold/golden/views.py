@@ -44,7 +44,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 import json
 
-# Website Fun!
+# For Website Design
 import random
 
 # TODO: Do we still need this?

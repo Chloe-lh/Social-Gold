@@ -19,23 +19,23 @@
 
             <form name="login" method="POST" enctype="application/x-www-form-urlencoded">
                 {% csrf_token %}
-                <input name="username" aria-label="Username" placeholder="username" autocomplete="username">
+                <input name="username" aria-label="Username" placeholder="username">
                 <input name="password" type="password" aria-label="Password" placeholder="password">
                 <button type="submit">LOG IN</button>
                 <input type="hidden" name="next" value="{{ next }}">
             </form>
-            <p class="large">Don't have an account?</p>
+            <p>Don't have an account?</p>
 
             {% if next %}
-                <a class="button" href="{% url 'signup' %}?next={{ next }}">SIGN UP</a>
+                <a href="{% url 'signup' %}?next={{ next }}">SIGN UP</a>
             {% else %}
-                <a class="button" href="{% url 'signup' %}">SIGN UP</a>
+                <a href="{% url 'signup' %}">SIGN UP</a>
             {% endif %}
 
             <div>
                 <!-- will provide correct error when log in is pushed-->
                 {% if form.errors and request.method == "POST" %}
-                    <p class="large" role="alert">Invalid credentials</p>
+                    <p role="alert">Invalid credentials</p>
                 {% endif %}
             </div>
         </section>

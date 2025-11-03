@@ -4,19 +4,16 @@
         <title>Golden - Login</title>
         <meta charset="UTF-8">
         {% load static %}
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
         <link rel="stylesheet" href="{% static 'golden/css/login.css' %}">
     </head>
 
     <body>
-        <section>
+        <section class="signup-section">
             <!-- signup -->
-            <header>
-                <h2>
-                    <span>Make Yours</span>
-                    GOLDEN
-                </h2>
-            </header>
+             <header>
+                <h2>Golden</h2>
+             </header>
 
             {% if form.errors %}
                 {% for field, errors in form.errors.items %}
@@ -26,23 +23,24 @@
                 {% endfor %}
             {% endif %}
 
-            <form name="signup" method="POST" enctype="application/x-www-form-urlencoded">
+             <form name="signup" method="POST" enctype="application/x-www-form-urlencoded">
                 {% csrf_token %}
-                <input name="username" aria-label="Username" placeholder="username" autocomplete="username">
-
-                <p class="medium">Your password must be at least 8 characters long with at least 2 numbers</p>
-                <input name="password1" aria-label="Password" placeholder="password" autocomplete="new-password">
-                <input name="password2" aria-label="Password" placeholder="re-enter password" autocomplete="new-password">
-                <button type="submit">CREATE</button>
+                <input name="username" aria-label="Username" placeholder="Username">
+                <input name="password1" aria-label="Password" placeholder="Password">
+                <input name="password2" aria-label="Password" placeholder="Password">
+                <button type="submit">Sign Up</button>
                 <input type="hidden" name="next" value="{{ next }}">
-            </form>
+             </form>
+                <p>Already have an account?</p>
 
-            {% if next %}
-                <a class="medium" href="{% url 'login' %}?next={{ next }}">I already have an account</a>
-            {% else %}
-                <a class="medium" href="{% url 'login' %}">I already have an account</a>
-            {% endif %}
-            
+                {% if next %}
+                    <a href="{% url 'login' %}?next={{ next }}">Login</a>
+                {% else %}
+                    <a href="{% url 'login' %}">Login</a>
+                {% endif %}
+            <div class="box-decor login-section">
+                <!-- element purely for aesthetics and no real semantic value -->
+            </div>
         </section>
     </body>
 </html>

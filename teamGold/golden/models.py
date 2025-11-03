@@ -56,7 +56,7 @@ class Author(AbstractBaseUser, PermissionsMixin):
         default="profile_pics/default_profile.webp",
         upload_to='profile_pics/')
     username = models.CharField(max_length=50, unique=True, default="goldenuser")
-    password = models.CharField(max_length=128, default="goldenpassword")
+    password = models.CharField(max_length=50, default="goldenpassword")
     email = models.CharField(blank=True)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)

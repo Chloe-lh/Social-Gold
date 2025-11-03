@@ -49,16 +49,19 @@ to inherit these properties
             <li class="item">
                 <a href="{% url 'new_post' %}" class="icon-btn" aria-label="Add Post"> 
                     <img src="{% static 'golden/icons/add-post-icon.png' %}"/>
+                    <span class="sr-only">New Post</span>
                 </a>
             </li>
             <li class="item">
-                <a href="{% url 'home' %}" class="icon-btn" aria-label="Home"> 
+                <a href="{% url 'stream' %}" class="icon-btn" aria-label="Stream"> 
                     <img src="{% static 'golden/icons/home-icon.png' %}"/>
+                    <span class="sr-only">Stream</span>
                 </a>
             </li>
             <li class="item">
                 <a href="{% url 'profile' %}" class="icon-btn" aria-label="Profile"> 
                     <img src="{% static 'golden/icons/user-icon.png' %}"/>
+                    <span class="sr-only">Profile</span>
                 </a>
             </li>
         </ul>

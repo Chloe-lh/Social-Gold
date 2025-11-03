@@ -274,7 +274,6 @@ dist
 
 # migrations
 /migrations
-/teamGold/golden/migrations
 
 # static files 
 ./staticfiles/admin

@@ -147,7 +147,7 @@ AUTH_USER_MODEL = "golden.Author"
 LOGIN_URL = "login"
 
 # Sets the default redirect page after login
-LOGIN_REDIRECT_URL = '/golden/'
+LOGIN_REDIRECT_URL = '/golden/home/'          # TODO: Change the link to homepage after it's done
 
 # In production, each node (server) will have its own SITE_URL value
 SITE_URL = os.environ.get("SITE_URL", "http://127.0.0.1:8000")          

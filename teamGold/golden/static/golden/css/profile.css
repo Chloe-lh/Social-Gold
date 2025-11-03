@@ -1,5 +1,5 @@
 /* ================================
-   THEME VARIABLES (SAFE DUPLICATE)
+   THEME VARIABLES
 ================================ */
 :root {
     --colour-background: #1D1D1D;
@@ -16,7 +16,6 @@
     --accent: #F2B43B;
 }
 
-/* Make sure the content area looks good on this page */
 main.content {
     background: var(--colour-background);
     color: var(--text-light);
@@ -75,7 +74,6 @@ main.content {
     box-shadow: 0 6px 14px rgba(0,0,0,0.35);
 }
 
-/* form card */
 #edit-profile-form {
     max-width: 480px;
     background: var(--colour-off-background);
@@ -142,7 +140,7 @@ main.content {
 }
 
 /* ================================
-   TABS — square buttons w/ bottom highlight
+   TABS 
 ================================ */
 .tabs-section {
     margin-top: 2.5rem;
@@ -151,7 +149,6 @@ main.content {
     font-family: "Montserrat-Medium", sans-serif;
 }
 
-/* tab container */
 .tabs {
     display: flex;
     justify-content: flex-start;
@@ -160,9 +157,8 @@ main.content {
     margin-bottom: 1rem;
 }
 
-/* each tab button — square shape */
 .tab-btn {
-    flex: 1;  /* equal width */
+    flex: 1;  
     height: 60px;
     background: var(--colour-off-background);
     color: var(--colour-contrast);
@@ -175,13 +171,11 @@ main.content {
     border-bottom: 4px solid transparent;
 }
 
-/* hover effect */
 .tab-btn:hover {
     color: var(--colour-yellow);
     background: #353535;
 }
 
-/* active tab — yellow underline highlight */
 .tab-btn.active {
     color: var(--colour-yellow);
     border-bottom: 4px solid var(--colour-yellow);
@@ -189,7 +183,6 @@ main.content {
     box-shadow: 0 -2px 8px rgba(242, 180, 59, 0.3) inset;
 }
 
-/* tab panels (content area) */
 .tab-panels {
     width: 100%;
     padding-top: 1rem;

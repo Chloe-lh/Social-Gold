@@ -48,7 +48,7 @@ class MyUserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 class Author(AbstractBaseUser, PermissionsMixin):
-    id = models.URLField(primary_key=True)
+    id = models.URLField(primary_key=True, unique = True)
     host  = models.URLField(blank=True)
     github = models.URLField(blank=True)
     web = models.URLField(blank=True)
@@ -171,8 +171,17 @@ class EntryImage(models.Model):
     entry = models.ForeignKey(
         Entry,
         on_delete=models.CASCADE,
-        related_name='images'
+        related_name='images',
+        blank = True,
+        null = True
+        
     )
+    name = models.CharField(
+    max_length=255,
+    blank=True,
+    null=True,
+    help_text="Optional: rename the file for admin-friendly URLs"
+)
     image = models.ImageField(upload_to='entry_images/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
     order = models.PositiveIntegerField(default=0)  
@@ -181,7 +190,9 @@ class EntryImage(models.Model):
         ordering = ['order', 'uploaded_at']
     
     def __str__(self):
-        return f"Image for entry {self.entry.id}"
+        if self.entry:
+            return f"Image for entry {self.entry.id}"
+        return f"Standalone Image {self.id}"  # or just "Standalone Image"
     
 
 class Comment(models.Model):

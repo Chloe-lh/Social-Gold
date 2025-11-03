@@ -9,16 +9,31 @@ urlpatterns = [
     path("", views.index, name="index"),
     path("login/", views.CustomLoginView.as_view(template_name = "login.html"), name="login"),
     path("signup/", views.signup, name="signup"),
+    path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
+
+    path("home/", views.home, name="home"),
+    # path('stream/', views.stream_view, name = 'stream'),
+    # TODO: move stream functionalities into home.
+
     path('profile/', views.profile_view, name='profile'),
+    # profile should contain: main profile that contains a list of the author's entries
+    # profile also contains the following: followers, following, and requests
+    path('profile/followers/', views.followers, name='followers'),
+    path('profile/following/', views.following, name='following'),
+    path("profile/follow_requests/", views.follow_requests, name="follow_requests"),
+
+    path('entry/<int:id>', views.entry, name = "entry"),
+    # TODO: change the id to be the entry id, whatever we decide to use later
+    # TODO: entries can have comment page number queries (Or we just allow infinite scroll for comments..?)
+    # TODO: entries should have comments feature if there is a logged in user
+
+    # TODO: the following may be deleted/incorporated into another view
     path('search/', views.search_authors, name='search_authors'),
-    path('followers/', views.followers, name='followers'),
-    path('following/', views.following, name='following'),
-    path("follow_requests/", views.follow_requests, name="follow_requests"),
     path("friends/", views.friends, name="friends"),
     path("new_post/", views.new_post, name="new_post"),
-    path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
     path('stream/', views.stream_view, name = 'stream'),
     path('add_comment/', views.add_comment, name = "add_comment"),
+
     # API end points
     # API views will be visible in /swagger/
     # Switched from <str:id> to <path:id> for file and URL flexibility
@@ -28,7 +43,9 @@ urlpatterns = [
     path("api/Follow/<path:id>/", apiViews.FollowAPIView.as_view(), name="get-follow"),
     path("api/Like/<path:id>/", apiViews.LikeAPIView.as_view(), name="get-like"),
     path("api/Comment/<path:id>/", apiViews.CommentAPIView.as_view(), name="get-comment"),
-    path("api/EntryImage/<int:id>/", apiViews.EntryImageAPIView.as_view(), name="get-entry-image")
+    path("api/EntryImage/<int:id>/", apiViews.EntryImageAPIView.as_view(), name="get-entry-image"),
+    
+    path("api/author/<uuid:author_id>/inbox/", views.inbox, name="inbox")
 ]
     
 

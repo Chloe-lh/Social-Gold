@@ -30,6 +30,8 @@ urlpatterns = [
     # TODO: the following may be deleted/incorporated into another view
     path('search/', views.search_authors, name='search_authors'),
     path("friends/", views.friends, name="friends"),
+    path("new_post/", views.new_post, name="new_post"),
+    path('stream/', views.stream_view, name = 'stream'),
     path('add_comment/', views.add_comment, name = "add_comment"),
 
     # API end points

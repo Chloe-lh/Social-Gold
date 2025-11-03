@@ -3,7 +3,7 @@ import requests
 '''
 helper function for remote nodes
 sends a POST request with with HTTP Authentication
-ei  When a local author follows a remote author
+    When a local author follows a remote author
     When a local author likes or comments on a remote post
 '''
 def send_to_remote_node(node, url, data):

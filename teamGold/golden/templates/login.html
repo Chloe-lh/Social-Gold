@@ -4,40 +4,39 @@
         <title>Golden - Login</title>
         <meta charset="UTF-8">
         {% load static %}
-
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="stylesheet" href="{% static 'golden/css/login.css' %}">
     </head>
 
     <body>
-        <section class="login-section">
+        <section>
             <!-- login -->
             <header>
-                <h2>Golden</h2>
+                <h2>GOLDEN</h2>
             </header>
-            <!-- will provide correct error when log in is pushed-->
-            {% if form.errors and request.method == "POST" %}
-                <div class="alert">
-                    {{form.non_field_errors}}
-                </div>
-            <!-- <p>Your username and password didn't match. Please try again.</p> -->
-            {% endif %}
+
+            <img src="{% static 'golden/icons/profile-picture.png' %}">
 
             <form name="login" method="POST" enctype="application/x-www-form-urlencoded">
                 {% csrf_token %}
-                <input name="username" aria-label="Username" placeholder="Username">
-                <input name="password" type="password" aria-label="Password" placeholder="Password">
-                <button type="submit">Login</button>
+                <input name="username" aria-label="Username" placeholder="username">
+                <input name="password" type="password" aria-label="Password" placeholder="password">
+                <button type="submit">LOG IN</button>
                 <input type="hidden" name="next" value="{{ next }}">
             </form>
             <p>Don't have an account?</p>
 
             {% if next %}
-                <a href="{% url 'signup' %}?next={{ next }}">Sign Up</a>
+                <a href="{% url 'signup' %}?next={{ next }}">SIGN UP</a>
             {% else %}
-                <a href="{% url 'signup' %}">Sign Up</a>
+                <a href="{% url 'signup' %}">SIGN UP</a>
             {% endif %}
-            <div class="box-decor signup-section">
-                <!-- element purely for aesthetics and no real semantic value -->
+
+            <div>
+                <!-- will provide correct error when log in is pushed-->
+                {% if form.errors and request.method == "POST" %}
+                    <p role="alert">Invalid credentials</p>
+                {% endif %}
             </div>
         </section>
     </body>

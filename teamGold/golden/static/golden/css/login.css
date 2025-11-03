@@ -1,66 +1,91 @@
+@font-face { font-family: 'BlackMango'; src: url(fonts/BlackMango-Black.ttf) format('opentype'); }
+@font-face { font-family: 'Montserrat-Bold'; src: url(fonts/Montserrat-Bold.ttf) format('opentype'); }
+@font-face { font-family: 'Montserrat-Medium'; src: url(fonts/Montserrat-Medium.ttf) format('opentype'); }
+
+:root {
+    /* Colour Pallet */
+    --background-colour: #1D1D1D;
+    --off-background: #2C2C2C;
+    --contrast-background: #DDDBD2;
+    --off-contrast-background: #A5A491;
+    --primary-colour: #F2B43B;
+    --contrast-colour-1: #753997;
+    --contrast-colour-2: #006BA6;
+    --contrast-colour-3: #FC5D47;
+    --contrast-colour-3-opacity-10: rgba(252, 93, 71, 0.1);
+
+}
+
+html[data-theme="light"] {
+    /* redefine colours for light theme */
+    --background-colour: #801010;
+    --off-background: #2C2C2C;
+    --contrast-background: #DDDBD2;
+    --off-contrast-background: #A5A491;
+    --primary-colour: #F2B43B;
+    --contrast-colour-1: #753997;
+    --contrast-colour-2: #006BA6;
+    --contrast-colour-3: #FC5D47;
+    --contrast-colour-3-opacity-10: rgba(252, 93, 71, 0.1);
+}
+
 html {
-    background: linear-gradient(to bottom, #F08A4B 0%, #F08A4B 55%, #FFF9E9 55%, #FFF9E9 100%);
-    background-repeat: no-repeat;
-    background-size: contain;
+    background-color: var(--background-colour);
     width: 100%;
     height: 100%;
 }
 
 body {
     display: flex;
-    margin: 0;
     height: 100%;
-    width: 100%;
+    width: 60%;
     justify-content: center;
     align-items: center;
+    background-color: var(--off-background);
+    margin: auto;
+    max-width: 700px;
 }
 
-section {
-    display: flex;
-    flex-flow: column;
-    justify-content: center;
-    position: relative;
-    width: min(50vw, 70vh);
-    max-width: 500px;
-    min-width: 350px;
-    height: min(50vw, 70vh);
-    max-height: 500px;
-    min-height: 340px;
-    border: 1px solid black;
-    padding: 50px;
-    padding-top: 30px;
-    box-sizing: border-box;
-}
-
-.login-section {
-    background-color: #FFF9E9;
-}
-
-.signup-section {
-    background-color: #E9E9E9;
+h1 {
+    color: var(--primary-colour);
 }
 
 h2 {
-    -webkit-text-stroke: 0.7px black;
     font-size: 50px;
-    color: #F3CA40;
+    color: var(--primary-colour);
     margin: 0;
+    font-family: 'BlackMango';
+    letter-spacing: 5px;
+    text-align: center;
+}
+
+img {
+    height: 200px;
+    width: 200px;
+    align-self: center;
+}
+
+section {
+    width: 100%;
+    padding: 0 100px;
+    display: flex;
+    flex-flow: column;
 }
 
 input {
-    background-color: #E7B393;
-    border: 1px solid black;
+    background-color: transparent;
+    border: 3px solid #F2A541;
     border-radius: 6px;
-    font-size: 28px;
-    color: #FFF9E9;
+    font-size: 20px;
+    color: var(--contrast-background);
     padding: 5px 15px;
     height: 45px;
     box-sizing: border-box;
-    box-shadow: 0px 5px 10px rgba(0, 0, 0, 0.25);
+    font-family: 'BlackMango';
 }
 
 input::placeholder {
-    color: #FFF9E9;
+    color: var(--contrast-background);
 }
 
 form {
@@ -71,47 +96,50 @@ form {
 }
 
 button, a {
-    background-color: #577591;
-    height: 45px;
-    color: #FFF9E9;
-    font-size: 28px;
+    background-color: var(--contrast-colour-2);
+    height: 40px;
+    color: var(--contrast-background);
+    font-size: 20px;
     box-shadow: 0px 5px 10px rgba(0, 0, 0, 0.25);
     border-radius: 6px;
     border: none;
+    font-family: 'BlackMango';
 }
 
 p {
     margin: 10px 0;
     text-align: center;
-    font-size: 25px;
+    font-size: 20px;
+    color: var(--contrast-background);
+    font-family: 'Montserrat-Bold';
+}
+
+p[role='alert'] {
+    background-color: var(--contrast-colour-3-opacity-10);
+    border-radius: 10px;
+    padding: 25px 40px;
+    width: 150px;
 }
 
 a {
-    background-color: #D78A76;
+    background-color: var(--contrast-colour-3);
     display: block;
-    width: fit-content;
+    width: 130px;
     text-decoration: none;
-    line-height: 45px;
+    line-height: 40px;
     margin: auto;
     padding: 0 30px;
+    text-align: center;
+}
+
+div {
+    width: fit-content;
+    align-self: center;
+    margin-top: 30px;
+    height: 80px;
 }
 
 :focus-visible {
     outline: 2px solid #577591;
     outline-offset: 5px;
-}
-
-div.box-decor {
-    width: min(50vw, 70vh);
-    max-width: 500px;
-    min-width: 350px;
-    height: min(50vw, 70vh);
-    max-height: 500px;
-    min-height: 340px;
-    border: 1px solid black;
-    box-sizing: border-box;
-    position: absolute;
-    top: 25px;
-    left: 45px;
-    z-index: -1;
 }

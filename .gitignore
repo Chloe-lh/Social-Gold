@@ -272,5 +272,8 @@ dist
 *.min.js
 *.min.js.map
 
-# database
+# migrations
 /migrations
+
+# static files 
+./staticfiles/admin

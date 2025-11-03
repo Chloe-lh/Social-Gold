@@ -1,46 +1,22 @@
 {% extends "base.html" %}
-
 {% load static %}
+
 {% block head %}
 <link rel="stylesheet" href="{% static 'golden/css/profile.css' %}">
 {% endblock %}
 
 {% block content %}
 
-<!-- Profile Tabs / Info -->
-<nav class="top-nav">
-    <div class="nav-left">
-        <h1><a href="">Golden</a></h1>
-    </div>
-    <div class="nav-center">
-        <span>@{{ author.username }}</span>
-    </div>
-    <div class="nav-right">
-        <button id="edit-profile-btn" class="nav">Edit Profile</button>
-    </div>
-</nav>
-<div class="tabs">
-  {% if author.profileImage %}
-    <img class="profile-pic" src="{{ author.profileImage.url }}" alt="Profile">
-  {% else %}
-    <img class="profile-pic" src="{% static 'golden/images/default_profile.webp' %}" alt="Default Profile">
-  {% endif %}
-    <button id="followers-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Followers ({{ followers_count }}) </button>
-    <button id="following-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Following ({{ following_count }}) </button>
-    <button id="friends-btn" style="padding:0.5rem 1rem; border-radius:0.5rem;">Friends ({{ friends_count }})</button>  
-</div>
-<p style="font-style: italic; color: #555;">
-    {{ author.description|default:"This user hasn't added a bio yet." }}
-</p>
+<body>
+  <section class="edit-profile-button">
+    <button id="edit-profile-btn" class="nav">
+        <img src="{% static 'golden/icons/edit-profile-icon.png' %}"/>
+        <span class="sr-only">Edit Profile</span>
+    </button>
+  </section>
 
-<!-- Edit Profile Form -->
- <script>
-document.getElementById('edit-profile-btn').addEventListener('click', function(){
-    const form = document.getElementById('edit-profile-form');
-    form.style.display = form.style.display === 'none' ? 'block' : 'none';
-});
-</script>
-<div id="edit-profile-form" style="display:none; margin-top: 1rem;">
+  <!-- Editing Profile Form -->
+  <section id="edit-profile-form" style="display:none; margin-top: 1rem;">
     <form method="POST" enctype="multipart/form-data">
         {% csrf_token %}
         
@@ -64,39 +40,108 @@ document.getElementById('edit-profile-btn').addEventListener('click', function()
 
         <button type="submit" name="edit_profile">Save Profile</button>
     </form>
-</div>
+  </section>
 
-<!-- Entries Section -->
-<h2 style="text-align:center;">My Entries</h2>
-{% for entry in entries %}
-<div class="entries">
-  <div class="entry">
-    <p><strong>Author:</strong>  @{{ author.username }} <br>
-      <strong>Date:</strong> {{ entry.published|date:"Y/m/d" }}
+  <!-- Profile Description -->
+  <section class="description">
+    <p style="font-style: italic; color: #555;">
+      {{ author.description|default:"This user hasn't added a bio yet." }}
     </p>
-    <div class="content">
-      {% if entry.images.all %}
-        {% for images in entry.images.all %}
-          <img src="{{ images.image.url }}" alt="Post image" style="max-width: 200px; height: auto;">
-        {% endfor %}
-      {% endif %}
-      {{ entry.content|safe }}
-    </div>
-  </div>
-{% empty %}
-    <p style="text-align:center;">You have no entries yet.</p>
-{% endfor %}
-</div>
-  <script>
-  document.getElementById('followers-btn').onclick = function() {
-      window.location.href = "{% url 'followers' %}";
-  };
-  document.getElementById('following-btn').onclick = function() {
-      window.location.href = "{% url 'following' %}";
-  };
-  document.getElementById('friends-btn').onclick = function() {
-      window.location.href = "{% url 'friends' %}";
-  };
-  </script>
+  </section>
+
+  <!-- Tab Section -->
+  <section class="tabs-section"> 
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="entries">entries</button>
+      <button class="tab-btn" data-tab="followers">followers</button>
+      <button class="tab-btn" data-tab="following">following</button>
+      <button class="tab-btn" data-tab="requests">requests</button>
+    </nav>
+
+    <section class="tab-panels">
+      <section class="tab-panel active" data-tab-panel="entries">
+        {% if entries %}
+          {% for entry in entries %}
+            <article class="entry">
+              <p><strong>@{{ author.username }}</strong> · {{ entry.published|date:"Y/m/d" }}</p>
+              <div class="content">
+                {% for img in entry.images.all %} 
+                  <img src="{{ img.image.url }}" alt="entry image" class="entry-img">
+                {% endfor %}
+                {{ entry.content|safe }}
+              </div>
+            </article>
+          {% endfor %}
+        {% else %}
+          <p>You have no entries yet.</p>
+        {% endif %}
+      </section>
+
+      <section class="tab-panel" data-tab-panel="followers">
+        {% if followers %}
+          {% for f in followers %}
+            <div class="author-list-item">{{ f.username }}</div>
+            <hr>
+          {% endfor %}
+        {% else %}
+          <p>You're a lonely loser.</p>
+        {% endif %}
+      </section>
+
+      <section class="tab-panel" data-tab-panel="following">
+        {% if following %}
+          {% for f in following %}
+            <div class="author-list-item">{{ f.username }}</div>
+            <hr>
+          {% endfor %}
+        {% else %}
+          <p>Narcissist coded.</p>
+        {% endif %}
+      </section>
+
+      <section class="tab-panel" data-tab-panel="requests">
+        {% if follow_requests %}
+          {% for r in follow_requests %}
+            <div class="author-list-item">{{ r.actor.username }} wants to follow you</div>
+            <hr>
+          {% endfor %}
+        {% else %}
+          <p>No pending requests.</p>
+        {% endif %}
+      </section>
+    </section>
+  </section>
+</body>
+
+<!-- Edit Profile Form -->
+<script>
+document.getElementById('edit-profile-btn').addEventListener('click', function(){
+    const form = document.getElementById('edit-profile-form');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+});
+</script>
+
+<!-- Activation of Profile Tabs -->
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const tabButtons = document.querySelectorAll(".tab-btn");
+  const tabPanels = document.querySelectorAll(".tab-panel");
+
+  tabButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      const target = btn.dataset.tab;
+      const targetPanel = document.querySelector(`[data-tab-panel="${target}"]`);
+
+      // Remove Active, so that css can catch the change
+      tabButtons.forEach(b => b.classList.remove("active"));
+      tabPanels.forEach(p => p.classList.remove("active"));
+
+      // Activate clicked + matching panel
+      btn.classList.add("active");
+      if (targetPanel) targetPanel.classList.add("active");
+    });
+  });
+});
+</script>
 
 {% endblock %}

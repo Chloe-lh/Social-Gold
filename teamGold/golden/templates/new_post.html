@@ -1,18 +1,21 @@
 {% extends "base.html" %}
 {% load static %}
 
+
 {% block head %}
-    <title>{{ title }}</title>
+<link rel="stylesheet" href="{% static 'golden/css/entry.css' %}">
 {% endblock %}
-    
+
 {% block content %}
-    <h1> GOLDEN </h1>
+    <h1> Entry Log </h1>
     <hr>
 
-    <h3> Post your thoughts </h3>
-    <section>
+    <!-- New Entry Section Form -->
+    <section class="entry-section">
+        <h3> {{ entry_heading }} </h3>
+        <section class="entry-text-box">
         {% if form %}
-            <form method="POST" action="{% url 'home' %}" enctype="multipart/form-data"> 
+            <form method="POST" action="{% url 'new_post' %}" enctype="multipart/form-data"> 
                 {% csrf_token %} 
                 {% if editing_entry %}
                     <textarea name="content" rows="10" cols="50" placeholder="Enter your text here...">{{ editing_entry.content|striptags }}</textarea><br><br>
@@ -26,8 +29,11 @@
                         {% endfor %}
                     {% endif %}
                     
+                    <!-- Image -->
                     <label>Upload Image:</label>
                     <input type="file" name="images" accept="image/*" multiple><br><br>
+                    
+                    <!-- Visibility -->
                     <label for = "visibility"> visibility: </label>
                     <select id="visibility" name="visibility">
                         <option value="PUBLIC" {% if editing_entry.visibility == "PUBLIC" %}selected{% endif %}>Public</option>
@@ -38,8 +44,12 @@
                     <button name="entry_update" value="{{ editing_entry.id }}">Save</button><br><br>    
                 {% else %}
                     <textarea name="content" rows="10" cols="50" placeholder="Enter your text here">{{entry.content}}</textarea><br><br>
+                    
+                    <!-- Image -->
                     <label>Upload Image:</label>
                     <input type="file" name="images" accept="image/*" multiple><br><br>
+                    
+                    <!-- Visibility -->
                     <label for = "visibility"> visibility: </label>
                     <select id="visibility" name="visibility">
                         <option value="PUBLIC" {% if editing_entry.visibility == "PUBLIC" %}selected{% endif %}>Public</option>
@@ -47,43 +57,42 @@
                         <option value="FRIENDS" {% if editing_entry.visibility == "FRIENDS-ONLY" %}selected{% endif %}>Friends-Only</option>
                     </select>
                     
-
                     <button name="entry_post">Post</button><br><br> 
                 {% endif %}
             </form>
+
+        </section>
+    </section>
+            
+    <table>
+        <tbody>
+        {% for entry in entries %}
+            <tr>
+                <br><strong>{{ entry.author}}</strong> <spacer>
+                {% if request.user == entry.author %}
+                    <form method="POST" action="{% url 'new_post' %}" style="display: inline;">
+                        {% csrf_token %}
+                        <button name="entry_edit" value="{{ entry.id }}">Edit</button>
+                    </form>
+                    <form method="POST" action="{% url 'new_post' %}" style="display: inline;">
+                        {% csrf_token %}
+                        <button name="entry_delete" value="{{ entry.id }}">Delete</button>
+                {% endif %}
+
+                <br><br>
+                {% if entry.images.all %}
+                    {% for images in entry.images.all %}
+                        <img src="{{ images.image.url }}" alt="Post image" style="max-width: 200px; height: auto;">
+                    {% endfor %}
+                {% endif %}
+                {{ entry.content | safe }} 
+                <br><hr>
+            </tr>
+        {% endfor %}
+        </tbody>
+        {% include "comments.html" %}
+    </table> 
+            
         {% endif %}
     
-
-
-        <hr>
-
-            <table>
-                <tbody>
-                {% for entry in entries %}
-                    <tr>
-                        <br><strong>{{ entry.author}}</strong> <spacer>
-                        {% if request.user == entry.author %}
-                            <form method="POST" action="{% url 'home' %}" style="display: inline;">
-                                {% csrf_token %}
-                                <button name="entry_edit" value="{{ entry.id }}">Edit</button>
-                            </form>
-                            <form method="POST" action="{% url 'home' %}" style="display: inline;">
-                                {% csrf_token %}
-                                <button name="entry_delete" value="{{ entry.id }}">Delete</button>
-                        {% endif %}
-
-                        <br><br>
-                        {% if entry.images.all %}
-                            {% for images in entry.images.all %}
-                                <img src="{{ images.image.url }}" alt="Post image" style="max-width: 200px; height: auto;">
-                            {% endfor %}
-                        {% endif %}
-                        {{ entry.content | safe }} 
-                        <br><hr>
-                    </tr>
-                {% endfor %}
-                </tbody>
-                {% include "comments.html" %}
-            </table> 
-        </section>
     {% endblock %}

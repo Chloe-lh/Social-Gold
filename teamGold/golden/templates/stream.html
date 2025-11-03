@@ -48,7 +48,7 @@
         {% include "comments.html" %}
         <!-- enbed JSON data from view in template to pass to js as js object-->
         <script id="entry-comments" type="application/json">
-          {{ entry_comments_json|safe }}
+          <!-- {{ entry_comments_json|safe }} -->
         </script>
         <script src="{% static 'golden/js/comments.js' %}"></script>
 

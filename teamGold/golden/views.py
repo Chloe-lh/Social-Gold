@@ -14,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status, generics
 
+
 # BASE GOLDEN
 from golden import models
 from golden.models import Entry, EntryImage, Author, Comment, Like, Follow
@@ -36,7 +37,7 @@ from django.contrib.auth import get_user_model
 from .decorators import require_author
 import markdown
 
-# Security 
+#secuirity
 from django.views.decorators.csrf import csrf_exempt
 
 #imports for AJAX
@@ -46,60 +47,179 @@ import json
 # Website Fun!
 import random
 
+# TODO: Do we still need this?
+# @login_required
+# def stream_view(request):
+#     # Get the Author object for the logged-in user
+#     user_author = request.user
+
+#     # only a local node uses stream_view
+#     remote_node = False
+
+#     # Get all accepted follows (authors this user follows)
+#     follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
+#     followed_author_fqids = [f.object for f in follows]
+
+#     # etermine authors who are "friends" (mutual follows)
+#     friends_fqids = []
+#     for f in follows:
+#         try:
+#             # Check if the followed author also follows the user
+#             reciprocal = Follow.objects.get(actor__id=f.object, object=user_author.id, state='ACCEPTED')
+#             friends_fqids.append(f.object)
+#         except Follow.DoesNotExist:
+#             continue
+
+#     # Query entries according to visibility rules
+
+#     entries = Entry.objects.filter(
+#         Q(visibility='PUBLIC') |  # Public entries: everyone can see
+#         Q(visibility='UNLISTED', author__id__in=followed_author_fqids) |  # Unlisted: only followers
+#         Q(visibility='FRIENDS', author__id__in=friends_fqids)  # Friends-only: only friends
+#     ).order_by('-is_updated', '-published')  # Most recent first
+
+#     # serialize comments for each entry
+#     # entry_comments = {}
+#     # for entry in entries:
+#     #     if entry.visibility == 'FRIENDS':
+#     #         allowed = set(friends_fqids + [str(user_author.id)])
+#     #         filtered_comments = entry.comments.filter(author__id__in=allowed)
+#     #     else:
+#     #         filtered_comments = entry.comment.all()
+#     #     serialized_comments = CommentSerializer(filtered_comments, many=True).data
+#     #     entry_comments[entry.id] = serialized_comments
+
+#     # Prepare context for the template
+#     context = {
+#         'entries': entries,
+#         'user_author': user_author,
+#         'followed_author_fqids': followed_author_fqids,
+#         'friends_fqids': friends_fqids,
+#         'comment_form' : CommentForm(),
+#         # 'entry_comments_json': json.dumps(entry_comments),
+#         'remote_node':remote_node,
+#     }
+
+#     # Render the stream page extending base.html
+#     return render(request, 'stream.html', context)
+
+
 @login_required
+@require_author 
 def home(request):
-    # Get the Author object for the logged-in user
-    user_author = request.user
+    """
+    @require_author is linked with deorators.py to ensure user distinction
+    """
+    if request.current_author is None:
+        return redirect('signup')
+    
+    context = {}
+    form = EntryList()
+    editing_entry = None # because by default, users are not in editing mode 
+    entries = Entry.objects.all().order_by('-is_posted')
+    context['entries'] = entries
 
-    # only a local node uses home stream
-    remote_node = False
+    # FEATURE POST AN ENTRY
+    if request.method == "POST" and "entry_post" in request.POST:
+        entry_id = f"{settings.SITE_URL}/api/entries/{uuid.uuid4()}"  #****** we need to change this to dynamically get the node num
 
-    # Get all accepted follows (authors this user follows)
-    follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
-    followed_author_fqids = [f.object for f in follows]
+        # Markdown conversion 
+        markdown_content = request.POST['content']
+        html_content = markdown.markdown(markdown_content)
 
-    # etermine authors who are "friends" (mutual follows)
-    friends_fqids = []
-    for f in follows:
-        try:
-            # Check if the followed author also follows the user
-            reciprocal = Follow.objects.get(actor__id=f.object, object=user_author.id, state='ACCEPTED')
-            friends_fqids.append(f.object)
-        except Follow.DoesNotExist:
-            continue
+        with transaction.atomic(): 
+            entry = Entry.objects.create(
+                id=entry_id,
+                author=request.current_author,
+                content=html_content,
+                visibility=request.POST.get('visibility', 'PUBLIC')
+            )
+        
 
-    # Query entries according to visibility rules
+        images = request.FILES.getlist('images')
+        for idx, image in enumerate(images):
+            EntryImage.objects.create(
+                entry=entry, image=image, order=idx)
+                    
+        return redirect('home')
+    
+    # FEATURE DELETE AN ENTRY 
+    if request.method == "POST" and "entry_delete" in request.POST:
+        primary_key = request.POST.get('entry_delete')
+        entry = Entry.objects.get(id=primary_key)
 
-    entries = Entry.objects.filter(
-        Q(visibility='PUBLIC') |  # Public entries: everyone can see
-        Q(visibility='UNLISTED', author__id__in=followed_author_fqids) |  # Unlisted: only followers
-        Q(visibility='FRIENDS', author__id__in=friends_fqids)  # Friends-only: only friends
-    ).order_by('-is_updated', '-published')  # Most recent first
+        # also for testing purposes 
+        if entry.author.id != request.current_author.id:
+            return HttpResponseForbidden("This isn't yours")
 
-    # serialize comments for each entry
-    # entry_comments = {}
-    # for entry in entries:
-    #     if entry.visibility == 'FRIENDS':
-    #         allowed = set(friends_fqids + [str(user_author.id)])
-    #         filtered_comments = entry.comments.filter(author__id__in=allowed)
-    #     else:
-    #         filtered_comments = entry.comment.all()
-    #     serialized_comments = CommentSerializer(filtered_comments, many=True).data
-    #     entry_comments[entry.id] = serialized_comments
+        entry.delete()
+        return redirect('home')
+    
+    # FEATURE UPDATE AN EDITED ENTRY
+    if request.method == "POST" and "entry_update" in request.POST:
+        primary_key = request.POST.get("entry_update")
+        editing_entry = get_object_or_404(Entry, id=primary_key)
 
-    # Prepare context for the template
-    context = {
-        'entries': entries,
-        'user_author': user_author,
-        'followed_author_fqids': followed_author_fqids,
-        'friends_fqids': friends_fqids,
-        'comment_form' : CommentForm(),
-        # 'entry_comments_json': json.dumps(entry_comments),
-        'remote_node':remote_node,
-    }
+        # for testing 
+        if editing_entry.author.id != request.current_author.id:
+            return HttpResponseForbidden("No editing")
+        
+        raw_md = request.POST.get("content", "")
+        visibility = request.POST.get("visibility", editing_entry.visibility)
 
-    # Render the home page extending base.html
-    return render(request, 'home.html', context)
+        # difference between adding a new image and remove an image 
+        new_images = request.FILES.getlist("images")
+        remove_images = request.POST.getlist("remove_images")
+        remove_ids = []
+        for x in remove_images:
+            try:
+                remove_ids.append(int(x))
+            except (TypeError, ValueError):
+                pass 
+
+        with transaction.atomic():
+            editing_entry.content = markdown.markdown(raw_md)
+            editing_entry.visibility = visibility
+            editing_entry.contentType = "text/html"
+            editing_entry.save()
+
+            if remove_ids:
+                EntryImage.objects.filter(entry=editing_entry, id__in=remove_ids).delete()
+
+            # Append any newly uploaded images, preserving order
+            if new_images:
+                current_max = editing_entry.images.count()
+                for idx, f in enumerate(new_images):
+                    EntryImage.objects.create(
+                        entry=editing_entry,
+                        image=f,
+                        order=current_max + idx
+                    )
+
+        context = {}
+        context['form'] = EntryList()  
+        context['editing_entry'] = None 
+        context['entries'] = Entry.objects.select_related("author").all()
+        context['comment_form'] = CommentForm()
+        return render(request, "home.html", context | {'entries': entries})
+
+    # FEATURE EDIT BUTTON CLICKED 
+    if request.method == "POST" and "entry_edit" in request.POST:
+        primary_key = request.POST.get('entry_edit')
+        editing_entry = get_object_or_404(Entry, id=primary_key)
+
+        form = EntryList(instance=editing_entry)
+        context["editing_entry"] = editing_entry
+        context["form"] = form
+        context["entries"] = Entry.objects.select_related("author").all()
+        return render(request, "home.html", context | {'entries': entries})
+
+    context['form'] = form 
+    context["editing_entry"] = editing_entry
+    # context["entries"] = Entry.objects.select_related("author").all()
+ 
+
+    return render(request, "home.html", context | {'entries': entries})
 
 '''
 For displaying an error message if a user is not approved yet
@@ -114,29 +234,34 @@ class CustomLoginView(LoginView):
             return super().form_valid(form)
 
 def signup(request):
-    # intuitively we want to log users out when they want to sign up
+    # we want to log users out when they want to sign up
     logout(request)
+    # objects = Author.objects.values()
+    User = get_user_model()
+    objects = User.objects.values()
+    print("USERS:")
+    for obj in objects:
+        print(obj['username'])
 
     if request.method == "POST":
         # create a form instance and populate it with data from the request
         form = CustomUserForm(request.POST)
-        next_page = request.POST.get('next')
+        # next_page = request.POST.get('next')
         
         # we don't want to create a user if the inputs are not valid since that can raise errors
         if form.is_valid():
             user = form.save(commit=False)
             user.id = f"{settings.SITE_URL}/api/authors/{uuid.uuid4()}"
             user.save()
+            #if not next_page:
+                #next_page = "/golden/"
 
             return redirect('profile')     
     else:
         form = CustomUserForm()
-        next_page = request.GET.get('next')
+        # next_page = request.GET.get('next')
 
-    # the default page to be redirected to is the home page if none is specified
-    if not next_page:
-        next_page = "/golden/"
-    return render(request, "signup.html", {"form": form, 'next': next_page})
+    return render(request, "signup.html", {"form": form})
 
 '''
 Uses the database to authenticate if a user is approved or not
@@ -148,7 +273,6 @@ class ApprovedUserBackend(ModelBackend):
         if isinstance(user, Author) and is_approved:
             return super().user_can_authenticate(user)
         return False # dont allow user to log in if not approved
-
 
 @login_required
 def profile_view(request):
@@ -172,28 +296,12 @@ def profile_view(request):
     else:
         form = ProfileForm(instance=author)
 
-    followers_qs = []
-    if author and isinstance(author.followers_info, dict):
-        follower_keys = list(author.followers_info.keys())
-        query = Q()
-        for key in follower_keys:
-            # match exact full URL or just the UUID part
-            uuid_part = key.rstrip('/').split('/')[-1]
-            query |= Q(id=key) | Q(id__endswith=uuid_part)
-        followers_qs = Author.objects.filter(query).distinct()
-
-    following_qs = author.following.all() if author else []
-    follow_requests_qs = Follow.objects.filter(object=author.id, state="REQUESTED") if author else []
-
     context = {
         'author': author,
         'entries': entries,
         'followers_count': followers_count,
         'following_count': following_count,
         'friends_count': friends_count,
-        'followers': followers_qs,
-        'following': following_qs,
-        'follow_requests': follow_requests_qs,
         'form': form,
     }
     return render(request, 'profile.html', context)
@@ -417,6 +525,56 @@ def add_comment(request):
             return JsonResponse({'success': False})
     return JsonResponse({'success':True})
 
+@api_view(['POST'])
+def inbox(request, author_id):
+    try:
+        host = request.build_absolute_uri('/')  # "https://node1/"
+        full_author_id = f"{host}api/authors/{author_id}/"
+        author = Author.objects.get(id=full_author_id)
+    except Author.DoesNotExist:
+        return Response({"error": "Author not found"}, status=404)
+    
+    data = request.data
+    activity_type = data.get("type", "").lower()
+
+    if activity_type == "create":
+        return handle_create(data, author)
+    elif activity_type == "like":
+        return handle_like(data, author)
+    elif activity_type == "comment":
+        return handle_comment(data, author)
+    elif activity_type == "follow":
+        return handle_follow(data, author)
+    else:
+        return Response({"error": "Unsupported type"}, status=400)
+    
+def handle_create(data, author):
+    
+    return
+def handle_like(data,author):
+    return
+def handle_comment(data,author):
+    return
+def handle_follow(data,author):
+    return
+
+def entry_detail(request, entry_uuid):
+
+    # Look for the entry whose full ID ends with this UUID
+    entry = get_object_or_404(Entry, id__endswith=str(entry_uuid))
+
+    # Restrict access based on visibility
+    if entry.visibility == 'FRIENDS-ONLY':
+        # Only the author or authorized users (like followers) can access
+        if request.user != entry.author:
+            raise Http404("This entry is private.")
+
+    context = {
+        'entry': entry
+    }
+
+    return render(request, 'entry_detail.html', {'entry': entry})
+
 @login_required
 @require_author 
 def new_post(request):
@@ -548,42 +706,3 @@ def new_post(request):
  
 
     return render(request, "new_post.html", context | {'entries': entries})
-
-def entry(request, id):
-    # id will be the entry id
-    # TODO: entry id format?
-    context = {}
-    return render(request, 'entry_page.html', context)
-
-@api_view(['POST'])
-def inbox(request, author_id):
-    try:
-        host = request.build_absolute_uri('/')  # "https://node1/"
-        full_author_id = f"{host}api/authors/{author_id}/"
-        author = Author.objects.get(id=full_author_id)
-    except Author.DoesNotExist:
-        return Response({"error": "Author not found"}, status=404)
-    
-    data = request.data
-    activity_type = data.get("type", "").lower()
-
-    if activity_type == "create":
-        return handle_create(data, author)
-    elif activity_type == "like":
-        return handle_like(data, author)
-    elif activity_type == "comment":
-        return handle_comment(data, author)
-    elif activity_type == "follow":
-        return handle_follow(data, author)
-    else:
-        return Response({"error": "Unsupported type"}, status=400)
-    
-def handle_create(data, author):
-    
-    return
-def handle_like(data,author):
-    return
-def handle_comment(data,author):
-    return
-def handle_follow(data,author):
-    return

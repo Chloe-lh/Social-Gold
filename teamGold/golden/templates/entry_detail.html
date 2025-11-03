@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container mx-auto p-6">
+    <h1 class="text-2xl font-semibold mb-4">{{ entry.title|default:"Untitled" }}</h1>
+
+    <div class="text-gray-700 mb-2">
+        <strong>{{ entry.author.display_name }}</strong> • {{ entry.published|date:"Y-m-d H:i" }}
+    </div>
+
+    <div class="entry-body mb-4">{{ entry.content|safe }}</div>
+
+    {% for image in entry.images.all %}
+    <img src="{{ image.image.url }}" alt="Entry image" class="rounded-lg max-w-full mb-2">
+    {% endfor %}
+
+    {% if entry.is_updated and entry.is_updated != entry.published %}
+    <p class="text-xs text-gray-500">Edited: {{ entry.is_updated|date:"Y-m-d H:i" }}</p>
+    {% endif %}
+
+    <div class="text-sm text-gray-600 mt-4">
+        Likes: {{ entry.likes.count }} | Comments: {{ entry.comment.count }}
+    </div>
+</div>
+{% endblock %}

@@ -123,7 +123,7 @@ label {
   margin-top: 0.4rem;
 }
 
-/* --- Optional avatar badge in corner --- */
+/* --- Optional avatar badge in corner ---
 section::after {
   content: "";
   position: absolute;
@@ -134,4 +134,4 @@ section::after {
   background: url('/static/golden/images/default_profile.webp') no-repeat center center / cover;
   border: 2px solid #f2b43b;
   border-radius: 50%;
-}
+} */

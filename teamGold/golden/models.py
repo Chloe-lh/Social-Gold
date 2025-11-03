@@ -52,7 +52,7 @@ class Author(AbstractBaseUser, PermissionsMixin):
     host  = models.URLField(blank=True)
     github = models.URLField(blank=True)
     web = models.URLField(blank=True)
-    profileImage = models.FileField(
+    profileImage = models.ImageField(
         default="profile_pics/default_profile.webp",
         upload_to='profile_pics/')
     username = models.CharField(max_length=50, unique=True, default="goldenuser")

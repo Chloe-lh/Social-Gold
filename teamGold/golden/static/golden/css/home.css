@@ -33,7 +33,11 @@ article.entry + article.entry {
   cursor: pointer;
   vertical-align: middle;
 }
+
 .comment-btn img {
     display: inline-block;
     vertical-align: middle;
 }
+
+/* Frame */
+

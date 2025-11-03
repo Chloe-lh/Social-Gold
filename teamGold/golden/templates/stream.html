@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container mx-auto p-6">
+  <h1 class="text-2xl font-semibold mb-4">Stream</h1>
+
+  <section class="space-y-4">
+    {% for entry in entries %}
+      <article class="entry cursor-pointer hover:bg-gray-100 p-4 rounded-lg"
+            data-entry-id="{{ entry.id }}">
+        <header class="flex items-center justify-between mb-2">
+          <div>
+            <a href="#" class="font-medium hover:underline">{{ entry.author.display_name }}</a>
+            <span class="text-xs text-gray-500"> • {{ entry.published|date:"Y-m-d H:i" }}</span>
+          </div>
+          <div class="text-xs text-gray-400">
+            {% if entry.visibility == "PUBLIC" %}Public
+            {% elif entry.visibility == "UNLISTED" %}Unlisted
+            {% elif entry.visibility == "FRIENDS" %}Friends
+            {% endif %}
+          </div>
+        </header>
+
+        {% if entry.title %}
+          <h2 class="text-lg font-semibold mb-1">{{ entry.title }}</h2>
+        {% endif %}
+        <div class="entry-body">{{ entry.content|safe }}</div>
+        {% for image in entry.images.all %}
+        <img src="{{ image.image.url }}" alt="Entry image" class="mt-2 rounded-lg max-w-full">
+        {% endfor %}
+
+        {% if entry.is_updated and entry.is_updated != entry.published %}
+          <footer class="mt-2 text-xs text-gray-500">Edited: {{ entry.is_updated|date:"Y-m-d H:i" }}</footer>
+        {% endif %}
+
+        <footer class="mt-2 text-sm text-gray-600 flex space-x-4">
+          <span>Likes: {{ entry.likes.count }}</span>
+            <button class="comment-btn" data-entry-id="{{ entry.id }}">
+                <img src="{% static 'golden/icons/comment-icon.png' %}">
+              </button>
+            <span>{{ entry.comment.count }} Comments</span>
+        </footer>
+      </article>
+    {% empty %}
+      <p class="text-gray-600">No posts to show.</p>
+    {% endfor %}
+       <!-- for comments -->
+        {% include "comments.html" %}
+        <!-- enbed JSON data from view in template to pass to js as js object-->
+        <script id="entry-comments" type="application/json">
+          {{ entry_comments_json|safe }}
+        </script>
+        <script src="{% static 'golden/js/comments.js' %}"></script>
+
+
+  </section>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const entries = document.querySelectorAll(".entry");
+
+    entries.forEach(function(entry) {
+        entry.addEventListener("click", function(e) {
+            // Prevent clicks on buttons or images from triggering navigation
+            if (e.target.closest("button") || e.target.tagName === "IMG") return;
+
+            const fqid = entry.dataset.entryId; // e.g., https://node1.com/api/entries/7125b60a-f900-4a10-906e-94f974bb85ff
+            const uuid = fqid.split("/").pop(); // get only the UUID
+            const localUrl = `/golden/entry/${uuid}/`; // build local URL
+
+            window.location.href = localUrl;
+        });
+    });
+});
+</script>
+{% endblock %}
+

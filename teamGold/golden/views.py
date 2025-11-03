@@ -101,36 +101,6 @@ def home(request):
     # Render the home page extending base.html
     return render(request, 'home.html', context)
 
-def signup(request):
-    # we want to log users out when they want to sign up
-    logout(request)
-    # objects = Author.objects.values()
-    User = get_user_model()
-    objects = User.objects.values()
-    print("USERS:")
-    for obj in objects:
-        print(obj['username'])
-
-    if request.method == "POST":
-        # create a form instance and populate it with data from the request
-        form = CustomUserForm(request.POST)
-        # next_page = request.POST.get('next')
-        
-        # we don't want to create a user if the inputs are not valid since that can raise errors
-        if form.is_valid():
-            user = form.save(commit=False)
-            user.id = f"{settings.SITE_URL}/api/authors/{uuid.uuid4()}"
-            user.save()
-            #if not next_page:
-                #next_page = "/golden/"
-
-            return redirect('profile')     
-    else:
-        form = CustomUserForm()
-        # next_page = request.GET.get('next')
-
-    return render(request, "signup.html", {"form": form})
-
 '''
 For displaying an error message if a user is not approved yet
 '''
@@ -142,7 +112,31 @@ class CustomLoginView(LoginView):
             return self.form_invalid(form)
         else:
             return super().form_valid(form)
+
+def signup(request):
+    # intuitively we want to log users out when they want to sign up
+    logout(request)
+
+    if request.method == "POST":
+        # create a form instance and populate it with data from the request
+        form = CustomUserForm(request.POST)
+        next_page = request.POST.get('next')
         
+        # we don't want to create a user if the inputs are not valid since that can raise errors
+        if form.is_valid():
+            user = form.save(commit=False)
+            user.id = f"{settings.SITE_URL}/api/authors/{uuid.uuid4()}"
+            user.save()
+
+            return redirect('profile')     
+    else:
+        form = CustomUserForm()
+        next_page = request.GET.get('next')
+
+    # the default page to be redirected to is the home page if none is specified
+    if not next_page:
+        next_page = "/golden/"
+    return render(request, "signup.html", {"form": form, 'next': next_page})
 
 '''
 Uses the database to authenticate if a user is approved or not

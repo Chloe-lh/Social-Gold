@@ -569,15 +569,15 @@ def handle_follow(data,author):
     return
 
 def entry_detail(request, entry_uuid):
-    #entry = get_object_or_404(Entry, id=entry_id)
 
     # Look for the entry whose full ID ends with this UUID
     entry = get_object_or_404(Entry, id__endswith=str(entry_uuid))
 
-    # Restrict unlisted entries
-    if entry.visibility == 'UNLISTED' and request.user != entry.author:
-        # Allow only users with the link or your followers
-        pass  # handle follower check or just allow link access
+    # Restrict access based on visibility
+    if entry.visibility == 'FRIENDS-ONLY':
+        # Only the author or authorized users (like followers) can access
+        if request.user != entry.author:
+            raise Http404("This entry is private.")
 
     context = {
         'entry': entry

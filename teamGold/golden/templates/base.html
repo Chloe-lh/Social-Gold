@@ -46,43 +46,51 @@ to inherit these properties
     <!-- Side Nav -->
     <button class="side-toggle" onclick="toggleSidebar()">☰</button>
     <section class="side-nav">
-    <h1>Golden</h1>
-        {% if request.user.is_authenticated and request.user.profileImage %}
-            <img class="profile-pic" src="{{ request.user.profileImage.url }}" alt="Profile">
-        {% else %}
-            <img class="profile-pic" src="{% static 'golden/images/default_profile.webp' %}" alt="Default Profile">
-        {% endif %}
+        <div id="profile information">
+            <h1 id="navbar-header">Golden</h1>
+            {% if request.user.is_authenticated and request.user.profileImage %}
+                <img class="profile-pic" src="{{ request.user.profileImage.url }}" alt="Profile">
+            {% else %}
+                <img class="profile-pic" src="{% static 'golden/images/default_profile.webp' %}" alt="Default Profile">
+            {% endif %}
+            <p>username</p>
+            <p>email</p>
+            <p>github</p>
+        </div>
 
         <ul class="menu">
             <li class="item"><a href="#" id="logout-link">Log Out</a></li>
         </ul>
     </section>
 
-    <!-- Top Base Nav -->
-    <nav class="top-nav">
-        <ul class="menu">
-            <li class="item">
-                <a href="{% url 'new_post' %}" class="icon-btn" aria-label="Add Post"> 
-                    <img src="{% static 'golden/icons/add-post-icon.png' %}"/>
-                </a>
-            </li>
-            <li class="item">
-                <a href="{% url 'home' %}" class="icon-btn" aria-label="Home"> 
-                    <img src="{% static 'golden/icons/home-icon.png' %}"/>
-                </a>
-            </li>
-            <li class="item">
-                <a href="{% url 'profile' %}" class="icon-btn" aria-label="Profile"> 
-                    <img src="{% static 'golden/icons/user-icon.png' %}"/>
-                </a>
-            </li>
-        </ul>
-    </nav>
+    <div class="main">
+        <!-- Top Base Nav -->
+        <nav class="top-nav">
+            <h2 id="one-breadcrumb">Hello, user</h2>
+            <ul class="menu">
+                <li class="item">
+                    <a href="{% url 'new_post' %}" class="icon-btn" aria-label="Add Post"> 
+                        <img src="{% static 'golden/icons/add-post-icon.png' %}"/>
+                    </a>
+                </li>
+                <li class="item">
+                    <a href="{% url 'home' %}" class="icon-btn" aria-label="Home"> 
+                        <img src="{% static 'golden/icons/home-icon.png' %}"/>
+                    </a>
+                </li>
+                <li class="item">
+                    <a href="{% url 'profile' %}" class="icon-btn" aria-label="Profile"> 
+                        <img src="{% static 'golden/icons/user-icon.png' %}"/>
+                    </a>
+                </li>
+            </ul>
+        </nav>
 
-    <form id="logout-form" method="POST" action="{% url 'logout' %}" style="display:none;">
-        {% csrf_token %}
-    </form>
+        <form id="logout-form" method="POST" action="{% url 'logout' %}" style="display:none;">
+            {% csrf_token %}
+        </form>
 
-    <!-- Child templates will over ride to display page content-->
-    <main class="content">{% block content %}{% endblock %} </main>
+        <!-- Child templates will over ride to display page content-->
+        <main class="content">{% block content %}{% endblock %} </main>
+</div>
 </body>

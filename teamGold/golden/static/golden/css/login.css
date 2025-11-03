@@ -1,7 +1,3 @@
-@font-face { font-family: 'BlackMango'; src: url(fonts/BlackMango-Black.ttf) format('opentype'); }
-@font-face { font-family: 'Montserrat-Bold'; src: url(fonts/Montserrat-Bold.ttf) format('opentype'); }
-@font-face { font-family: 'Montserrat-Medium'; src: url(fonts/Montserrat-Medium.ttf) format('opentype'); }
-
 html {
     background-color: var(--background-colour);
     width: 100%;

@@ -1,5 +1,5 @@
 from django.contrib.auth.forms import UserCreationForm
-from .models import Author, Comment
+from .models import Author, Comment, Entry
 from django import forms
 
 
@@ -31,3 +31,10 @@ class CommentForm(forms.ModelForm):
         model = Comment
         fields = ['content']
 
+class EntryList(forms.ModelForm):
+    class Meta:
+        model = Entry
+        fields = ['content', 'author', 'is_posted', 'visibility']
+        widgets = {
+            'content': forms.Textarea(attrs={'rows': 4}),
+        }

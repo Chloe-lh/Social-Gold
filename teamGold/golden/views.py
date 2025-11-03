@@ -378,7 +378,7 @@ def home(request):
 
     # FEATURE POST AN ENTRY
     if request.method == "POST" and "entry_post" in request.POST:
-        entry_id = f"https://node1.com/api/entries/{uuid.uuid4()}"  #****** we need to change this to dynamically get the node num
+        entry_id = f"{settings.SITE_URL}/api/entries/{uuid.uuid4()}"  #****** we need to change this to dynamically get the node num
 
         # Markdown conversion 
         markdown_content = request.POST['content']
@@ -567,6 +567,23 @@ def handle_comment(data,author):
     return
 def handle_follow(data,author):
     return
+
+def entry_detail(request, entry_uuid):
+
+    # Look for the entry whose full ID ends with this UUID
+    entry = get_object_or_404(Entry, id__endswith=str(entry_uuid))
+
+    # Restrict access based on visibility
+    if entry.visibility == 'FRIENDS-ONLY':
+        # Only the author or authorized users (like followers) can access
+        if request.user != entry.author:
+            raise Http404("This entry is private.")
+
+    context = {
+        'entry': entry
+    }
+
+    return render(request, 'entry_detail.html', {'entry': entry})
 
 
 

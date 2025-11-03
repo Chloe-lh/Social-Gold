@@ -19,6 +19,7 @@ urlpatterns = [
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
     path('stream/', views.stream_view, name = 'stream'),
     path('add_comment/', views.add_comment, name = "add_comment"),
+    path('entry/<uuid:entry_uuid>/', views.entry_detail, name='entry_detail'),
     # API end points
     # API views will be visible in /swagger/
     # Switched from <str:id> to <path:id> for file and URL flexibility

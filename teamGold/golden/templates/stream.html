@@ -7,7 +7,8 @@
 
   <section class="space-y-4">
     {% for entry in entries %}
-      <article class="entry">
+      <article class="entry cursor-pointer hover:bg-gray-100 p-4 rounded-lg"
+            data-entry-id="{{ entry.id }}">
         <header class="flex items-center justify-between mb-2">
           <div>
             <a href="#" class="font-medium hover:underline">{{ entry.author.display_name }}</a>
@@ -55,5 +56,24 @@
 
   </section>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const entries = document.querySelectorAll(".entry");
+
+    entries.forEach(function(entry) {
+        entry.addEventListener("click", function(e) {
+            // Prevent clicks on buttons or images from triggering navigation
+            if (e.target.closest("button") || e.target.tagName === "IMG") return;
+
+            const fqid = entry.dataset.entryId; // e.g., https://node1.com/api/entries/7125b60a-f900-4a10-906e-94f974bb85ff
+            const uuid = fqid.split("/").pop(); // get only the UUID
+            const localUrl = `/golden/entry/${uuid}/`; // build local URL
+
+            window.location.href = localUrl;
+        });
+    });
+});
+</script>
 {% endblock %}
 

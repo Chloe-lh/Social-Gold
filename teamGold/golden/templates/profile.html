@@ -3,6 +3,36 @@
 {% load static %}
 {% block head %}
 <link rel="stylesheet" href="{% static 'golden/css/profile.css' %}">
+<style>
+.request-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    margin-bottom: 8px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+.request-row:hover {
+    background-color: #2C2C2C;
+}
+.action-btn {
+    padding: 6px 12px;
+    margin-left: 6px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+.approve-btn {
+    background-color: #4CAF50;
+    color: white;
+}
+.reject-btn {
+    background-color: #f44336;
+    color: white;
+}
+</style>
 {% endblock %}
 
 {% block content %}
@@ -48,17 +78,20 @@
     </p>
   </section>
 
-  <!-- Tab Section -->
+  <!-- Tab Sections -->
   <section class="tabs-section"> 
     <nav class="tabs">
       <button class="tab-btn active" data-tab="entries">entries</button>
       <button class="tab-btn" data-tab="followers">followers</button>
       <button class="tab-btn" data-tab="following">following</button>
       <button class="tab-btn" data-tab="requests">requests</button>
+      <button class="tab-btn" data-tab="friends">friends</button>
       <button class="tab-btn" data-tab="search">search</button>
     </nav>
 
     <section class="tab-panels">
+
+      <!-- Entries Tab Section -->
       <section class="tab-panel active" data-tab-panel="entries">
         {% if entries %}
           {% for entry in entries %}
@@ -77,10 +110,17 @@
         {% endif %}
       </section>
 
+      <!-- Followers Tab Section -->
       <section class="tab-panel" data-tab-panel="followers">
         {% if followers %}
           {% for f in followers %}
-            <div class="author-list-item">{{ f.username }}</div>
+            <div class="author-list-item" style="display:flex; justify-content:space-between; align-items:center;">
+              <span>{{ f.username }}</span>
+              <form method="POST" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" name="remove_follower" value="{{ f.id }}" class="action-btn reject-btn">Remove</button>
+              </form>
+            </div>
             <hr>
           {% endfor %}
         {% else %}
@@ -88,10 +128,17 @@
         {% endif %}
       </section>
 
+      <!-- Following Tab Section -->
       <section class="tab-panel" data-tab-panel="following">
         {% if following %}
           {% for f in following %}
-            <div class="author-list-item">{{ f.username }}</div>
+            <div class="author-list-item" style="display:flex; justify-content:space-between; align-items:center;">
+              <span>{{ f.username }}</span>
+              <form method="POST" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" name="unfollow" value="{{ f.id }}" class="action-btn reject-btn">Remove</button>
+              </form>
+            </div>
             <hr>
           {% endfor %}
         {% else %}
@@ -99,24 +146,60 @@
         {% endif %}
       </section>
 
+      <!-- Request Tab Section -->
       <section class="tab-panel" data-tab-panel="requests">
-        {% if follow_requests %}
-          {% for r in follow_requests %}
-            <div class="author-list-item">{{ r.actor.username }} wants to follow you</div>
+      {% if follow_requests %}
+        <ul style="list-style: none; padding: 0;">
+          {% for req in follow_requests %}
+          <li class="request-row">
+            <span>{{ req.actor.username }} wants to follow you</span>
+            <div>
+              <form method="POST" style="display:inline;">
+                {% csrf_token %}
+                <input type="hidden" name="follow_id" value="{{ req.id }}">
+                <input type="hidden" name="action" value="approve">
+                <button class="action-btn approve-btn">Approve</button>
+            </form>
+
+            <form method="POST" style="display:inline;">
+                {% csrf_token %}
+                <input type="hidden" name="follow_id" value="{{ req.id }}">
+                <input type="hidden" name="action" value="reject">
+                <button class="action-btn reject-btn">Reject</button>
+            </form>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>No follow requests.</p>
+      {% endif %}
+      </section>
+
+      <!-- Friends Tab Section -->
+      <section class="tab-panel" data-tab-panel="friends">
+        {% if friends %}
+          {% for f in friends %}
+            <div class="author-list-item" style="display:flex; justify-content:space-between; align-items:center;">
+              <span>{{ f.username }}</span>
+              <form method="POST" style="display:inline;">
+                {% csrf_token %}
+                <button type="submit" name="remove_friend" value="{{ f.id }}" class="action-btn reject-btn">
+                  Unfriend
+                </button>
+              </form>
+            </div>
             <hr>
           {% endfor %}
         {% else %}
-          <p>No pending requests.</p>
+          <p>No friends yet.</p>
         {% endif %}
-      </section> 
+      </section>
 
+      <!-- Search Tab Section -->
       <section class="tab-panel" data-tab-panel="search">
-        <header>
-            <h2 style="color: var(--colour-yellow); font-family: 'BlackMango';">Search Authors</h2>
-        </header>
-
         <form method="GET" action="{% url 'search_authors' %}" 
-              style="display: flex; width: 100%; gap: 10px; margin-bottom: 20px; height: 48px;">
+            style="display: flex; width: 100%; gap: 10px; margin-bottom: 20px; height: 48px;">
             <input type="text" name="q" class="search-bar" placeholder="Search by username" value="{{ query }}"
                   style="flex: 1; padding: 0 20px; font-size: 1rem; box-sizing: border-box; height: 100%;
                           border: 1px solid #555; background: var(--colour-off-background); color: var(--colour-contrast);
@@ -162,12 +245,11 @@
         </div>
       </section>
 
-
     </section>
 
   </section>
 
-<!-- Edit Profile Form -->
+<!-- Edit Profile Form Toggle -->
 <script>
 document.getElementById('edit-profile-btn').addEventListener('click', function(){
     const form = document.getElementById('edit-profile-form');
@@ -175,7 +257,7 @@ document.getElementById('edit-profile-btn').addEventListener('click', function()
 });
 </script>
 
-<!-- Activation of Profile Tabs -->
+<!-- Tab Switching -->
 <script>
 document.addEventListener("DOMContentLoaded", () => {
   const tabButtons = document.querySelectorAll(".tab-btn");
@@ -186,11 +268,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const target = btn.dataset.tab;
       const targetPanel = document.querySelector(`[data-tab-panel="${target}"]`);
 
-      // Remove Active, so that css can catch the change
       tabButtons.forEach(b => b.classList.remove("active"));
       tabPanels.forEach(p => p.classList.remove("active"));
 
-      // Activate clicked + matching panel
       btn.classList.add("active");
       if (targetPanel) targetPanel.classList.add("active");
     });

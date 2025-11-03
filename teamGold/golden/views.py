@@ -276,37 +276,113 @@ class ApprovedUserBackend(ModelBackend):
 
 @login_required
 def profile_view(request):
-    user = request.user
-    try:
-        author = Author.objects.get(id=user.id)
-    except Author.DoesNotExist:
-        author = None
+    author = Author.from_user(request.user)
 
-    entries = Entry.objects.filter(author=author).order_by('published')
+    if request.method == "POST":
+        # 1️⃣ Approve / Reject follow requests
+        if "follow_id" in request.POST and "action" in request.POST:
+            follow_id = request.POST.get("follow_id")
+            action = request.POST.get("action")
+            follow_request = get_object_or_404(Follow, id=follow_id, object=author.id)
 
-    followers_count = author.followers_set.count() if author else 0
-    following_count = author.following.count() if author else 0
-    friends_count = len(author.friends) if author else 0
+            if action == "approve":
+                follow_request.state = "ACCEPTED"
+                follow_request.save()
 
-    if request.method == 'POST' and 'edit_profile' in request.POST:
-        form = ProfileForm(request.POST, request.FILES, instance=author)
-        if form.is_valid():
-            form.save()
-            return redirect('profile')
+                follower = follow_request.actor
+                followers_info = author.followers_info or {}
+                followers_info[str(follower.id)] = follower.username
+                author.followers_info = followers_info
+                author.save(update_fields=["followers_info"])
+
+                follower.following.add(author)
+                follower.save()
+
+                author.update_friends()
+                follower.update_friends()
+
+            elif action == "reject":
+                follow_request.state = "REJECTED"
+                follow_request.save()
+
+            return redirect("profile")
+
+        if "remove_follower" in request.POST:
+            target_id = request.POST.get("remove_follower")
+            target = get_object_or_404(Author, id=target_id)
+            followers_info = author.followers_info or {}
+            followers_info.pop(str(target.id), None)
+            author.followers_info = followers_info
+            author.save(update_fields=["followers_info"])
+            Follow.objects.filter(actor=target, object=author.id).delete()
+            target.update_friends()
+            author.update_friends()
+            return redirect("profile")
+
+        if "unfollow" in request.POST:
+            target_id = request.POST.get("unfollow")
+            target = get_object_or_404(Author, id=target_id)
+            author.following.remove(target)
+            Follow.objects.filter(actor=author, object=target.id).delete()
+            target.update_friends()
+            author.update_friends()
+            return redirect("profile")
+
+        if "remove_friend" in request.POST:
+            target_id = request.POST.get("remove_friend")
+            target = get_object_or_404(Author, id=target_id)
+
+            # Remove each other from following and followers_info
+            author.following.remove(target)
+            target.following.remove(author)
+            followers_info = author.followers_info or {}
+            followers_info.pop(str(target.id), None)
+            author.followers_info = followers_info
+            author.save(update_fields=["followers_info"])
+            target_info = target.followers_info or {}
+            target_info.pop(str(author.id), None)
+            target.followers_info = target_info
+            target.save(update_fields=["followers_info"])
+
+            author.update_friends()
+            target.update_friends()
+            Follow.objects.filter(actor=author, object=target.id).delete()
+            Follow.objects.filter(actor=target, object=author.id).delete()
+
+            return redirect("profile")
+
+        if "edit_profile" in request.POST:
+            form = ProfileForm(request.POST, request.FILES, instance=author)
+            if form.is_valid():
+                form.save()
+            return redirect("profile")
+
     else:
         form = ProfileForm(instance=author)
 
+    # --- BUILD CONTEXT DATA ---
+    entries = Entry.objects.filter(author=author).order_by("-published")
+    followers_info = author.followers_info or {}
+    followers = Author.objects.filter(id__in=list(followers_info.keys())) if followers_info else []
+    following = author.following.all()
+    follow_requests = Follow.objects.filter(object=author.id, state="REQUESTED")
+    friends_data = author.friends or {}
+    friends = Author.objects.filter(id__in=list(friends_data.keys())) if friends_data else []
+
     context = {
-        'author': author,
-        'entries': entries,
-        'followers_count': followers_count,
-        'following_count': following_count,
-        'friends_count': friends_count,
-        'form': form,
+        "author": author,
+        "entries": entries,
+        "followers": followers,
+        "following": following,
+        "follow_requests": follow_requests,
+        "friends": friends,
+        "form": form,
     }
-    return render(request, 'profile.html', context)
+
+    return render(request, "profile.html", context)
 
 FOLLOW_STATE_CHOICES = ["REQUESTED", "ACCEPTED", "REJECTED"]
+
 
 @login_required
 def search_authors(request):

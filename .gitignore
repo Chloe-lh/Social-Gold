@@ -273,7 +273,8 @@ dist
 *.min.js.map
 
 # migrations
-migrations/
+/migrations
+/teamGold/golden/migrations
 
 # static files 
 ./staticfiles/admin

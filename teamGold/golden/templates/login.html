@@ -4,7 +4,8 @@
         <title>Golden - Login</title>
         <meta charset="UTF-8">
         {% load static %}
-
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" href="{% static 'golden/css/global.css' %}">
         <link rel="stylesheet" href="{% static 'golden/css/login.css' %}">
     </head>
 
@@ -24,9 +25,9 @@
 
             <form name="login" method="POST" enctype="application/x-www-form-urlencoded">
                 {% csrf_token %}
-                <input name="username" aria-label="Username" placeholder="Username">
-                <input name="password" type="password" aria-label="Password" placeholder="Password">
-                <button type="submit">Login</button>
+                <input name="username" aria-label="Username" placeholder="username" autocomplete="username">
+                <input name="password" type="password" aria-label="Password" placeholder="password" autocomplete="off">
+                <button type="submit">LOG IN</button>
                 <input type="hidden" name="next" value="{{ next }}">
             </form>
             <p>Don't have an account?</p>

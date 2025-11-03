@@ -1,0 +1,160 @@
+body{
+    display: flex;
+    margin: 0;
+}
+
+#navbar-header {
+    font-size: 50px;
+    color: var(--primary-colour);
+    margin: 0;
+    font-family: 'BlackMango';
+    letter-spacing: 5px;
+    text-align: center;
+}
+
+.side-nav{
+    height: 100%;
+    width: 300px;
+    background: var(--off-background);
+    overflow-x: hidden;
+    transition: left 0.3s;
+    padding-top: 10px;
+    box-sizing: border-box;
+    display: flex;
+    flex-flow: column;
+    justify-content: space-between;
+} 
+.side-nav ul{
+    padding: 32px 8px 32px 32px;
+    font-size: 20px;
+    margin:0;
+    list-style-type: none;
+}
+.side-nav ul li{
+    margin-top: 20px;
+    margin-bottom: 50px;
+}
+.side-toggle{
+    display: none;
+    position: fixed;
+    z-index:3;
+    border: none;
+    border-radius: 75px;
+    font-size: 18px;
+    background:#F08A4B;
+    padding: 10px;
+    top: 55px;
+}
+
+div.main {
+    flex: 1 1;
+    overflow: auto;
+}
+
+.top-nav {
+    height: 80px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 60px 0 40px;
+    background: var(--background-colour);
+    position: sticky;
+    top: 0;
+}
+
+#one-breadcrumb {
+    color: var(--contrast-background);
+    font-family: 'Montserrat-Bold';
+    font-size: 40px;
+    margin: 0;
+}
+
+a {
+    text-decoration: none;
+    color:#A5A491;
+}
+
+.menu {
+    list-style: none;
+    display: flex;
+    gap: 2rem;
+    margin: 0;
+    padding: 0;
+}
+.menu .item a {
+    text-decoration: none;
+    color: #f2b43b;
+    font-family: "BlackMango", serif;
+    font-size: 1.2rem;
+    transition: color 0.2s ease;
+}
+.menu .item a:hover {
+    color: #fff9e9;
+    text-shadow: 0 0 6px #f2b43b;
+}
+/* the button look */
+.top-nav .icon-btn {
+    width: 44px;
+    height: 44px;
+    background: #2c2c2c;
+    border-radius: 1rem;        /* ← button-ish, make 50% for circle */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    border: 1px solid rgba(242, 180, 59, 0.35);
+}
+.top-nav .icon-btn:hover,
+.top-nav .icon-btn:focus-visible {
+    background: #f2b43b;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.25);
+    outline: none;
+}
+
+/* icon inside */
+.top-nav .icon-btn img {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+    display: block;
+}
+
+.content{
+    height: 100%;
+    padding: 0 60px 0 40px;
+}
+/*
+when viewed on a smaller screen, the side nav is not visible
+to open the side bar press a button
+*/
+/* TODO: we will worry about responsiveness later */
+/* @media (max-width:850px){
+    .side-nav{
+        left: -170px;
+    }
+    .side-nav.open{
+        left:0;
+    }
+    .side-toggle{
+        display:block;
+    }
+    .content{
+        margin-left:0;
+    }
+} */
+
+ul {
+    text-align: right;
+}
+
+.profile-pic {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    border: 2px solid var(--colour-yellow);
+    margin-bottom: 1rem;
+    transition: all 0.3s ease;
+}
+

@@ -21,7 +21,7 @@
             <form name="login" method="POST" enctype="application/x-www-form-urlencoded">
                 {% csrf_token %}
                 <input name="username" aria-label="Username" placeholder="username" autocomplete="username">
-                <input name="password" type="password" aria-label="Password" placeholder="password">
+                <input name="password" type="password" aria-label="Password" placeholder="password" autocomplete="off">
                 <button type="submit">LOG IN</button>
                 <input type="hidden" name="next" value="{{ next }}">
             </form>

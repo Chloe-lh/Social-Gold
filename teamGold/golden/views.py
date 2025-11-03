@@ -18,7 +18,7 @@ from rest_framework import status, generics
 from golden import models
 from golden.models import Entry, EntryImage, Author, Comment, Like, Follow
 from .forms import CustomUserForm, CommentForm, ProfileForm, EntryList
-from golden.serializers import CommentSerializer, InboxSerializer
+from golden.serializers import CommentSerializer
 
 # Import login authentication stuff
 from django.contrib.auth.decorators import login_required
@@ -46,45 +46,60 @@ import json
 # Website Fun!
 import random
 
-
 @login_required
-def index(request):
-    objects = Author.objects.values()
-    print("USERS:")
-    for obj in objects:
-        print(obj['username']) 
-    return render(request, "index.html")
+def home(request):
+    # Get the Author object for the logged-in user
+    user_author = request.user
 
+    # only a local node uses home stream
+    remote_node = False
 
-def signup(request):
-    # we want to log users out when they want to sign up
-    logout(request)
-    # objects = Author.objects.values()
-    User = get_user_model()
-    objects = User.objects.values()
-    print("USERS:")
-    for obj in objects:
-        print(obj['username'])
+    # Get all accepted follows (authors this user follows)
+    follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
+    followed_author_fqids = [f.object for f in follows]
 
-    if request.method == "POST":
-        # create a form instance and populate it with data from the request
-        form = CustomUserForm(request.POST)
-        # next_page = request.POST.get('next')
-        
-        # we don't want to create a user if the inputs are not valid since that can raise errors
-        if form.is_valid():
-            user = form.save(commit=False)
-            user.id = f"{settings.SITE_URL}/api/authors/{uuid.uuid4()}"
-            user.save()
-            #if not next_page:
-                #next_page = "/golden/"
+    # etermine authors who are "friends" (mutual follows)
+    friends_fqids = []
+    for f in follows:
+        try:
+            # Check if the followed author also follows the user
+            reciprocal = Follow.objects.get(actor__id=f.object, object=user_author.id, state='ACCEPTED')
+            friends_fqids.append(f.object)
+        except Follow.DoesNotExist:
+            continue
 
-            return redirect('profile')     
-    else:
-        form = CustomUserForm()
-        # next_page = request.GET.get('next')
+    # Query entries according to visibility rules
 
-    return render(request, "signup.html", {"form": form})
+    entries = Entry.objects.filter(
+        Q(visibility='PUBLIC') |  # Public entries: everyone can see
+        Q(visibility='UNLISTED', author__id__in=followed_author_fqids) |  # Unlisted: only followers
+        Q(visibility='FRIENDS', author__id__in=friends_fqids)  # Friends-only: only friends
+    ).order_by('-is_updated', '-published')  # Most recent first
+
+    # serialize comments for each entry
+    # entry_comments = {}
+    # for entry in entries:
+    #     if entry.visibility == 'FRIENDS':
+    #         allowed = set(friends_fqids + [str(user_author.id)])
+    #         filtered_comments = entry.comments.filter(author__id__in=allowed)
+    #     else:
+    #         filtered_comments = entry.comment.all()
+    #     serialized_comments = CommentSerializer(filtered_comments, many=True).data
+    #     entry_comments[entry.id] = serialized_comments
+
+    # Prepare context for the template
+    context = {
+        'entries': entries,
+        'user_author': user_author,
+        'followed_author_fqids': followed_author_fqids,
+        'friends_fqids': friends_fqids,
+        'comment_form' : CommentForm(),
+        # 'entry_comments_json': json.dumps(entry_comments),
+        'remote_node':remote_node,
+    }
+
+    # Render the home page extending base.html
+    return render(request, 'home.html', context)
 
 '''
 For displaying an error message if a user is not approved yet
@@ -97,7 +112,31 @@ class CustomLoginView(LoginView):
             return self.form_invalid(form)
         else:
             return super().form_valid(form)
+
+def signup(request):
+    # intuitively we want to log users out when they want to sign up
+    logout(request)
+
+    if request.method == "POST":
+        # create a form instance and populate it with data from the request
+        form = CustomUserForm(request.POST)
+        next_page = request.POST.get('next')
         
+        # we don't want to create a user if the inputs are not valid since that can raise errors
+        if form.is_valid():
+            user = form.save(commit=False)
+            user.id = f"{settings.SITE_URL}/api/authors/{uuid.uuid4()}"
+            user.save()
+
+            return redirect('profile')     
+    else:
+        form = CustomUserForm()
+        next_page = request.GET.get('next')
+
+    # the default page to be redirected to is the home page if none is specified
+    if not next_page:
+        next_page = "/golden/"
+    return render(request, "signup.html", {"form": form, 'next': next_page})
 
 '''
 Uses the database to authenticate if a user is approved or not
@@ -509,62 +548,6 @@ def new_post(request):
  
 
     return render(request, "new_post.html", context | {'entries': entries})
-
-
-@login_required
-def stream_view(request):
-    # Get the Author object for the logged-in user
-    user_author = request.user
-
-    # only a local node uses stream_view
-    remote_node = False
-
-    # Get all accepted follows (authors this user follows)
-    follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
-    followed_author_fqids = [f.object for f in follows]
-
-    # etermine authors who are "friends" (mutual follows)
-    friends_fqids = []
-    for f in follows:
-        try:
-            # Check if the followed author also follows the user
-            reciprocal = Follow.objects.get(actor__id=f.object, object=user_author.id, state='ACCEPTED')
-            friends_fqids.append(f.object)
-        except Follow.DoesNotExist:
-            continue
-
-    # Query entries according to visibility rules
-
-    entries = Entry.objects.filter(
-        Q(visibility='PUBLIC') |  # Public entries: everyone can see
-        Q(visibility='UNLISTED', author__id__in=followed_author_fqids) |  # Unlisted: only followers
-        Q(visibility='FRIENDS', author__id__in=friends_fqids)  # Friends-only: only friends
-    ).order_by('-is_updated', '-published')  # Most recent first
-
-    # serialize comments for each entry
-    # entry_comments = {}
-    # for entry in entries:
-    #     if entry.visibility == 'FRIENDS':
-    #         allowed = set(friends_fqids + [str(user_author.id)])
-    #         filtered_comments = entry.comments.filter(author__id__in=allowed)
-    #     else:
-    #         filtered_comments = entry.comment.all()
-    #     serialized_comments = CommentSerializer(filtered_comments, many=True).data
-    #     entry_comments[entry.id] = serialized_comments
-
-    # Prepare context for the template
-    context = {
-        'entries': entries,
-        'user_author': user_author,
-        'followed_author_fqids': followed_author_fqids,
-        'friends_fqids': friends_fqids,
-        'comment_form' : CommentForm(),
-        # 'entry_comments_json': json.dumps(entry_comments),
-        'remote_node':remote_node,
-    }
-
-    # Render the stream page extending base.html
-    return render(request, 'stream.html', context)
 
 def entry(request, id):
     # id will be the entry id

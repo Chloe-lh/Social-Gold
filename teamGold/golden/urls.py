@@ -6,14 +6,10 @@ from django.contrib.auth import views as auth_views
 These URL Patterns registers all views 
 '''
 urlpatterns = [
-    path("", views.index, name="index"),
+    path("", views.home, name="home"),
     path("login/", views.CustomLoginView.as_view(template_name = "login.html"), name="login"),
     path("signup/", views.signup, name="signup"),
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
-
-    path("home/", views.home, name="home"),
-    # path('stream/', views.stream_view, name = 'stream'),
-    # TODO: move stream functionalities into home.
 
     path('profile/', views.profile_view, name='profile'),
     # profile should contain: main profile that contains a list of the author's entries
@@ -31,7 +27,6 @@ urlpatterns = [
     path('search/', views.search_authors, name='search_authors'),
     path("friends/", views.friends, name="friends"),
     path("new_post/", views.new_post, name="new_post"),
-    path('stream/', views.stream_view, name = 'stream'),
     path('add_comment/', views.add_comment, name = "add_comment"),
 
     # API end points

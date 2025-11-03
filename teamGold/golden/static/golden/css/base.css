@@ -51,6 +51,16 @@ div.main {
     overflow: auto;
 }
 
+#profile-information {
+    padding: 0 30px;
+}
+
+#profile-information p {
+    font-family: montserrat-bold;
+    color: var(--contrast-background);
+    font-size: 22px;
+}
+
 .top-nav {
     height: 80px;
     display: flex;

@@ -9,15 +9,9 @@ to inherit these properties
 {% load static %}
 
 <head>
-    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"> -->
-
     <!-- load stylesheets -->
     <link rel="stylesheet" href="{% static 'golden/css/global.css' %}">
     <link rel="stylesheet" href="{% static 'golden/css/base.css' %}">
-    <!-- <link rel="stylesheet" href="{% static 'golden/css/stream.css' %}"> -->
-
-    <!-- load icons here -->
-    <link rel="icon" type="image/x-icon" href="{% static 'golden/favicon.ico' %}">
   
     <meta charset="utf-8">
     <script>
@@ -45,8 +39,8 @@ to inherit these properties
     <!-- Side Nav -->
     <button class="side-toggle" onclick="toggleSidebar()">☰</button>
     <section class="side-nav">
-        <div id="profile information">
-            <h1 id="navbar-header">Golden</h1>
+        <div id="profile-information">
+            <h1 id="navbar-header">GOLDEN</h1>
             {% if request.user.is_authenticated and request.user.profileImage %}
                 <img class="profile-pic" src="{{ request.user.profileImage.url }}" alt="Profile">
             {% else %}

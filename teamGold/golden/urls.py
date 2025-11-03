@@ -1,6 +1,12 @@
 from django.urls import path
-from . import views, apiViews
 from django.contrib.auth import views as auth_views
+from . import apiViews, views
+
+# Added this because the above global wasn't working. 
+# Deciding to force import the one's not recognized.
+from .apiViews import (
+    EntryCommentAPIView, EntryImageAPIView, AuthorFriendsView
+)
 
 '''
 These URL Patterns registers all views 
@@ -33,12 +39,17 @@ urlpatterns = [
     # API views will be visible in /swagger/
     # Switched from <str:id> to <path:id> for file and URL flexibility
     path("api/Profile/<path:id>/", apiViews.ProfileAPIView.as_view(), name="get-profile"),
-    path("api/Entry/<path:id>/", apiViews.EntryAPIView.as_view(), name="get-entry"),
     path("api/Node/<path:id>/", apiViews.NodeAPIView.as_view(), name="get-node"),
     path("api/Follow/<path:id>/", apiViews.FollowAPIView.as_view(), name="get-follow"),
+    path("api/Author/<path:author_id>/friends/", AuthorFriendsView.as_view()),
     path("api/Like/<path:id>/", apiViews.LikeAPIView.as_view(), name="get-like"),
-    path("api/Comment/<path:id>/", apiViews.CommentAPIView.as_view(), name="get-comment"),
+    path("api/Entry/<path:id>/", apiViews.EntryAPIView.as_view(), name="get-entry"),
+    path("api/Entry/<path:entry_id>/comments/", EntryCommentAPIView.as_view(), name="entry-comments"),
+
+    # ! Thee two serve the same purpose, but the first is for getting images, the second is for uploading images to an entry
     path("api/EntryImage/<int:id>/", apiViews.EntryImageAPIView.as_view(), name="get-entry-image"),
+    path("api/Entry/<path:entry_id>/images/", EntryImageAPIView.as_view(), name="entryimage-upload"),
+
     
     path("api/author/<uuid:author_id>/inbox/", views.inbox, name="inbox")
 ]

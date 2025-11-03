@@ -18,8 +18,9 @@ from rest_framework import status, generics
 # BASE GOLDEN
 from golden import models
 from golden.models import Entry, EntryImage, Author, Comment, Like, Follow
-from .forms import CustomUserForm, CommentForm, ProfileForm, EntryList
-from golden.serializers import CommentSerializer, InboxSerializer
+from golden.entry import EntryList
+from .forms import CustomUserForm, CommentForm, ProfileForm
+from golden.serializers import CommentSerializer
 
 # Import login authentication stuff
 from django.contrib.auth.decorators import login_required
@@ -509,15 +510,15 @@ def stream_view(request):
     ).order_by('-is_updated', '-published')  # Most recent first
 
     # serialize comments for each entry
-    # entry_comments = {}
-    # for entry in entries:
-    #     if entry.visibility == 'FRIENDS':
-    #         allowed = set(friends_fqids + [str(user_author.id)])
-    #         filtered_comments = entry.comments.filter(author__id__in=allowed)
-    #     else:
-    #         filtered_comments = entry.comment.all()
-    #     serialized_comments = CommentSerializer(filtered_comments, many=True).data
-    #     entry_comments[entry.id] = serialized_comments
+    entry_comments = {}
+    for entry in entries:
+        if entry.visibility == 'FRIENDS':
+            allowed = set(friends_fqids + [str(user_author.id)])
+            filtered_comments = entry.comments.filter(author__id__in=allowed)
+        else:
+            filtered_comments = entry.comment.all()
+        serialized_comments = CommentSerializer(filtered_comments, many=True).data
+        entry_comments[entry.id] = serialized_comments
 
     # Prepare context for the template
     context = {
@@ -526,18 +527,13 @@ def stream_view(request):
         'followed_author_fqids': followed_author_fqids,
         'friends_fqids': friends_fqids,
         'comment_form' : CommentForm(),
-        # 'entry_comments_json': json.dumps(entry_comments),
+        'entry_comments_json': json.dumps(entry_comments),
         'remote_node':remote_node,
     }
 
     # Render the stream page extending base.html
     return render(request, 'stream.html', context)
 
-def entry(request, id):
-    # id will be the entry id
-    # TODO: entry id format?
-    context = {}
-    return render(request, 'entry_page.html', context)
 
 @api_view(['POST'])
 def inbox(request, author_id):
@@ -571,3 +567,7 @@ def handle_comment(data,author):
     return
 def handle_follow(data,author):
     return
+
+
+
+

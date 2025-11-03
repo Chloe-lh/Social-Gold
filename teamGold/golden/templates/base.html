@@ -14,109 +14,12 @@ to inherit these properties
     <!-- load stylesheets -->
     <link rel="stylesheet" href="{% static 'golden/css/global.css' %}">
     <link rel="stylesheet" href="{% static 'golden/css/base.css' %}">
-    <!-- <link rel="stylesheet" href="{% static 'golden/css/common.css' %}"> -->
     <!-- <link rel="stylesheet" href="{% static 'golden/css/stream.css' %}"> -->
 
     <!-- load icons here -->
     <link rel="icon" type="image/x-icon" href="{% static 'golden/favicon.ico' %}">
   
     <meta charset="utf-8">
-    <style>
-        body{
-            padding-top: 10px;
-            margin:0px;
-            background: #FFF9E9;
-            font-family:'Arial';
-        }
-        .top-nav{
-            display:flex;
-            background: #F08A4B;
-            width:100%;
-            height: 70px;
-            margin: 0 auto;
-            padding: 0px 20px;
-            position:fixed;
-            justify-content: space-between;
-            align-items: center;
-            top:0;
-            left:0;
-            right:0;
-            z-index:2; 
-            box-sizing: border-box; /* Important: ensures padding doesn't overflow width */
-        }
-        .top-nav a,
-        .menu a,
-        .side-nav a,
-        .item a {
-            text-decoration: none;
-            color:black;
-        }
-        .menu{
-            display: flex;
-            list-style-type:none;
-            margin:0;
-            padding:20px;
-        }
-        .item{
-            font-size: 18px;
-            margin: 0 15px;
-        }
-        .side-nav{
-            height:100%;
-            width: 150px;
-            position: fixed;
-            z-index:1;
-            left:0;
-            top:70px;
-            background: #F3CA40;
-            overflow-x:hidden;
-            transition: left 0.3s;
-        } 
-        .side-nav ul{
-            padding: 32px 8px 32px 32px;
-            font-size: 20px;
-            margin:0;
-            list-style-type: none;
-        }
-        .side-nav ul li{
-            margin-top: 20px;
-            margin-bottom: 50px;
-        }
-        .side-toggle{
-            display: none;
-            position: fixed;
-            z-index:3;
-            border: none;
-            border-radius: 75px;
-            font-size: 18px;
-            background:#F08A4B;
-            padding: 10px;
-            top: 55px;
-        }
-        .content{
-            margin-left: 200px;
-            margin-top: 100px;
-            margin-right: 50px;
-        }
-        /*
-        when viewed on a smaller screen, the side nav is not visible
-        to open the side bar press a button
-        */
-        @media (max-width:700px){
-            .side-nav{
-                left: -170px;
-            }
-            .side-nav.open{
-                left:0;
-            }
-            .side-toggle{
-                display:block;
-            }
-            .content{
-                margin-left:0;
-            }
-        }
-    </style>
     <script>
         function toggleSidebar(){
             document.querySelector('.side-nav').classList.toggle('open');
@@ -133,6 +36,7 @@ to inherit these properties
             document.getElementById('logout-form').submit();
         });
     </script>
+  
     {% block head %}{% endblock %}
         
 </head>
@@ -154,8 +58,6 @@ to inherit these properties
         </div>
 
         <ul class="menu">
-            <li class="item"><a href="{% url 'profile' %}">Profile</a></li>
-            <li class="item"><a href="{% url 'home' %}">Home</a></li>
             <li class="item"><a href="#" id="logout-link">Log Out</a></li>
         </ul>
     </section>

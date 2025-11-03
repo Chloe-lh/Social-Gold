@@ -1,0 +1,137 @@
+/* --- Container Section --- */
+section {
+  background: #1E1E1E;
+  border: 1px solid #f2b43b;         /* golden border */
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 2rem auto;
+  max-width: 700px;
+  color: #E0E0E0;
+  position: relative;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.4);
+  font-family: 'Arial', sans-serif;
+}
+
+/* --- Header --- */
+h3 {
+  color: #f2b43b;
+  margin-left: 0.2rem;
+  font-size: 1.3rem;
+  font-weight: 700;
+  border: 1px solid #f2b43b;
+  border-radius: 6px;
+  display: inline-block;
+  padding: 0.3rem 0.8rem;
+  background: #1D1D1D;
+  margin-bottom: 1rem;
+}
+
+/* --- Textarea --- */
+textarea {
+  width: 100%;
+  background: #2C2C2C;
+  border: 1px solid rgba(242, 180, 59, 0.3);
+  border-radius: 6px;
+  padding: 0.75rem;
+  color: #EEE;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: #f2b43b;
+  box-shadow: 0 0 6px rgba(242, 180, 59, 0.4);
+}
+
+/* --- File Input --- */
+input[type="file"] {
+  display: inline-block;
+  margin-top: 0.5rem;
+  background: #2C2C2C;
+  border: 1px solid rgba(242, 180, 59, 0.3);
+  border-radius: 4px;
+  color: #f2b43b;
+  padding: 0.4rem;
+  font-size: 0.9rem;
+}
+
+input[type="file"]::file-selector-button {
+  background: #f2b43b;
+  color: #1D1D1D;
+  border: none;
+  border-radius: 4px;
+  padding: 0.3rem 0.7rem;
+  cursor: pointer;
+  margin-right: 0.6rem;
+}
+
+input[type="file"]::file-selector-button:hover {
+  background: #ffcf6e;
+}
+
+/* --- Visibility Dropdown --- */
+select {
+  background: #2C2C2C;
+  border: 1px solid rgba(242, 180, 59, 0.3);
+  color: #E0E0E0;
+  border-radius: 4px;
+  padding: 0.4rem;
+  font-size: 0.9rem;
+  margin-top: 0.6rem;
+}
+
+select:focus {
+  outline: none;
+  border-color: #f2b43b;
+}
+
+/* --- Buttons --- */
+button {
+  background: #f2b43b;
+  border: none;
+  border-radius: 6px;
+  color: #1D1D1D;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-top: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+button:hover {
+  background: #ffcf6e;
+  transform: translateY(-1px);
+}
+
+/* --- Uploaded Image Preview --- */
+section img {
+  border-radius: 6px;
+  margin: 0.5rem 0;
+  border: 1px solid rgba(242,180,59,0.25);
+}
+
+/* --- Checkbox Label --- */
+label {
+  color: #A5A491;
+  font-size: 0.9rem;
+  display: inline-block;
+  margin-top: 0.4rem;
+}
+
+/* --- Optional avatar badge in corner --- */
+section::after {
+  content: "";
+  position: absolute;
+  top: -18px;
+  right: 20px;
+  width: 36px;
+  height: 36px;
+  background: url('/static/golden/images/default_profile.webp') no-repeat center center / cover;
+  border: 2px solid #f2b43b;
+  border-radius: 50%;
+}

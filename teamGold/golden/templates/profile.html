@@ -7,7 +7,6 @@
 
 {% block content %}
 
-<body>
   <section class="edit-profile-button">
     <button id="edit-profile-btn" class="nav">
         <img src="{% static 'golden/icons/edit-profile-icon.png' %}"/>
@@ -56,6 +55,7 @@
       <button class="tab-btn" data-tab="followers">followers</button>
       <button class="tab-btn" data-tab="following">following</button>
       <button class="tab-btn" data-tab="requests">requests</button>
+      <button class="tab-btn" data-tab="search">search</button>
     </nav>
 
     <section class="tab-panels">
@@ -108,10 +108,64 @@
         {% else %}
           <p>No pending requests.</p>
         {% endif %}
+      </section> 
+
+      <section class="tab-panel" data-tab-panel="search">
+        <header>
+            <h2 style="color: var(--colour-yellow); font-family: 'BlackMango';">Search Authors</h2>
+        </header>
+
+        <form method="GET" action="{% url 'search_authors' %}" 
+              style="display: flex; width: 100%; gap: 10px; margin-bottom: 20px; height: 48px;">
+            <input type="text" name="q" class="search-bar" placeholder="Search by username" value="{{ query }}"
+                  style="flex: 1; padding: 0 20px; font-size: 1rem; box-sizing: border-box; height: 100%;
+                          border: 1px solid #555; background: var(--colour-off-background); color: var(--colour-contrast);
+                          border-radius: 6px;">
+            <button type="submit" 
+                    style="flex-shrink: 0; padding: 0 20px; font-size: 1rem; border: 2px solid #000;
+                          background: var(--colour-yellow); color: #000; border-radius: 6px; cursor: pointer; height: 100%;
+                          font-weight: 600;">
+                Search
+            </button>
+        </form>
+
+        <div class="author-list">
+            {% if authors %}
+                <ul style="list-style: none; padding: 0;">
+                    {% for author in authors %}
+                        {% if author != request.user %}
+                            <li class="author-row" 
+                                style="display: flex; justify-content: space-between; align-items: center;
+                                      background: var(--colour-off-background); border: 1px solid #333; 
+                                      border-radius: 6px; padding: 10px 15px; margin-bottom: 8px;
+                                      color: var(--colour-contrast); transition: background 0.2s ease;">
+                                <span>{{ author.username }}</span>
+
+                                <form method="POST" action="{% url 'search_authors' %}" style="display:inline;">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="author_id" value="{{ author.id }}">
+                                    {% if author.follow_state == "REQUESTED" %}
+                                        <button class="follow-btn" disabled>Requested</button>
+                                    {% elif author.follow_state == "ACCEPTED" %}
+                                        <button class="follow-btn" disabled>Following</button>
+                                    {% else %}
+                                        <button class="follow-btn">Follow</button>
+                                    {% endif %}
+                                </form>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p style="color: var(--text-muted);">No authors found.</p>
+            {% endif %}
+        </div>
       </section>
+
+
     </section>
+
   </section>
-</body>
 
 <!-- Edit Profile Form -->
 <script>

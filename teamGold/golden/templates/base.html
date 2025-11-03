@@ -21,28 +21,13 @@ to inherit these properties
     <link rel="icon" type="image/x-icon" href="{% static 'golden/favicon.ico' %}">
   
     <meta charset="utf-8">
-    <script>
-        function toggleSidebar(){
-            document.querySelector('.side-nav').classList.toggle('open');
-        }
-
-        // Toggle the Side Nav-Bar
-        function toggleSidebar(){
-            document.querySelector('.side-nav').classList.toggle('open');
-        }
-        
-        // Logout Feature
-        document.getElementById('logout-link').addEventListener('click', function(e) {
-            e.preventDefault();
-            document.getElementById('logout-form').submit();
-        });
-    </script>
   
     {% block head %}{% endblock %}
         
 </head>
 
 <body>
+
     <!-- Side Nav -->
     <button class="side-toggle" onclick="toggleSidebar()">☰</button>
     <section class="side-nav">
@@ -51,7 +36,7 @@ to inherit these properties
             {% if request.user.is_authenticated and request.user.profileImage %}
                 <img class="profile-pic" src="{{ request.user.profileImage.url }}" alt="Profile">
             {% else %}
-                <img class="profile-pic" src="{% static 'golden/images/default_profile.webp' %}" alt="Default Profile">
+                <img class="profile-pic" src="{% static 'golden/media/profile_pics/default_profile.webp' %}" alt="Default Profile">
             {% endif %}
             <p>username</p>
             <p>email</p>
@@ -62,6 +47,8 @@ to inherit these properties
             <li class="item"><a href="#" id="logout-link">Log Out</a></li>
         </ul>
     </section>
+
+  
 
     <div class="main">
         <!-- Top Base Nav -->
@@ -90,7 +77,27 @@ to inherit these properties
             {% csrf_token %}
         </form>
 
-        <!-- Child templates will over ride to display page content-->
-        <main class="content">{% block content %}{% endblock %} </main>
+    <!-- Child templates will over ride to display page content-->
+    <main class="page-content">{% block content %}{% endblock %} </main>
+    
 </div>
+
+<script>
+        function toggleSidebar(){
+            document.querySelector('.side-nav').classList.toggle('open');
+        }
+
+        // Toggle the Side Nav-Bar
+        function toggleSidebar(){
+            document.querySelector('.side-nav').classList.toggle('open');
+        }
+        
+        // Logout Feature
+        document.getElementById('logout-link').addEventListener('click', function(e) {
+            e.preventDefault();
+            document.getElementById('logout-form').submit();
+        });
+</script>
+
+
 </body>

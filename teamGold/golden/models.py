@@ -194,7 +194,6 @@ class EntryImage(models.Model):
             return f"Image for entry {self.entry.id}"
         return f"Standalone Image {self.id}"  # or just "Standalone Image"
     
-
 class Comment(models.Model):
     """
     Comment object (federated). ID is the FQID of the comment.
@@ -223,7 +222,7 @@ class Comment(models.Model):
 
 '''
 Another person create their own node by setting up their own server and running our Django project
-as a seperate instance. They get a unique url that they should add to their node info
+as a separate instance. They get a unique url that they should add to their node info
 - the nodes interact by sending HTTP request to API end points (ei /api/authors/)
 - example: when another nodes author likes an entry, the remote node sends a API request to
     /api/likes. The local node receives the request and adds the like to the post
@@ -300,7 +299,7 @@ class Follow(models.Model):
     )
     object = models.URLField()  # FQID of the author being followed
     state = models.CharField(max_length=20, choices=FOLLOW_STATE_CHOICES, default="REQUESTING")
-    published = models.DateTimeField()
+    published = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"Follow {self.id} {self.actor} -> {self.object} ({self.state})"

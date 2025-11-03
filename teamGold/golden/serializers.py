@@ -30,11 +30,28 @@ class LikeSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class CommentSerializer(serializers.ModelSerializer):
-    author_username = serializers.CharField(source='author.username', read_only=True)
     class Meta:
         model = Comment
-        # only include fields that will be displayed
-        fields = ['author_username', 'content', 'published']
+        fields = '__all__'
+
+""" 
+This comment section shows an alternative, more detailed CommentSerializer
+that includes custom representations. 
+
+class CommentSerializer(serializers.ModelSerializer):
+    author_username = serializers.CharField(source='author.username', read_only=True)
+
+    class Meta:
+        model = Comment
+        fields = [
+            'id',                 
+            'author_username',   
+            'entry',              
+            'content',          
+            'contentType',
+            'published'
+        ]
+"""    
 
 class FollowSerializer(serializers.ModelSerializer):
     class Meta:
@@ -45,4 +62,7 @@ class EntryImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = EntryImage
         fields = '__all__'
-
+        
+        extra_kwargs = {
+            'entry': {'read_only': True}, # By having 'entry' as an argument, we can prevent the DRF from requiring it in POST data
+        }

@@ -14,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status, generics
 
+
 # BASE GOLDEN
 from golden import models
 from golden.models import Entry, EntryImage, Author, Comment, Like, Follow
@@ -36,15 +37,12 @@ from django.contrib.auth import get_user_model
 from .decorators import require_author
 import markdown
 
-# Security 
+#secuirity
 from django.views.decorators.csrf import csrf_exempt
 
 #imports for AJAX
 from django.http import JsonResponse
 import json
-
-# Website Fun!
-import random
 
 
 @login_required
@@ -133,28 +131,12 @@ def profile_view(request):
     else:
         form = ProfileForm(instance=author)
 
-    followers_qs = []
-    if author and isinstance(author.followers_info, dict):
-        follower_keys = list(author.followers_info.keys())
-        query = Q()
-        for key in follower_keys:
-            # match exact full URL or just the UUID part
-            uuid_part = key.rstrip('/').split('/')[-1]
-            query |= Q(id=key) | Q(id__endswith=uuid_part)
-        followers_qs = Author.objects.filter(query).distinct()
-
-    following_qs = author.following.all() if author else []
-    follow_requests_qs = Follow.objects.filter(object=author.id, state="REQUESTED") if author else []
-
     context = {
         'author': author,
         'entries': entries,
         'followers_count': followers_count,
         'following_count': following_count,
         'friends_count': friends_count,
-        'followers': followers_qs,
-        'following': following_qs,
-        'follow_requests': follow_requests_qs,
         'form': form,
     }
     return render(request, 'profile.html', context)
@@ -380,32 +362,18 @@ def add_comment(request):
 
 @login_required
 @require_author 
-def new_post(request):
+def home(request):
     """
     @require_author is linked with deorators.py to ensure user distinction
     """
     if request.current_author is None:
         return redirect('signup')
     
-    headings = [
-        "Post your thoughts",
-        "What’s on your mind?",
-        "How are we feeling?",
-        "Got something to share?",
-        "Drop today’s entry",
-        "Even the smallest wins are worth sharing",
-        "Anything you want to talk about?",
-        "What's up?"
-    ]
-    entry_heading = random.choice(headings)
-
-    
     context = {}
     form = EntryList()
     editing_entry = None # because by default, users are not in editing mode 
     entries = Entry.objects.all().order_by('-is_posted')
     context['entries'] = entries
-    context['entry_heading'] = entry_heading
 
     # FEATURE POST AN ENTRY
     if request.method == "POST" and "entry_post" in request.POST:
@@ -429,7 +397,7 @@ def new_post(request):
             EntryImage.objects.create(
                 entry=entry, image=image, order=idx)
                     
-        return redirect('new_post')
+        return redirect('home')
     
     # FEATURE DELETE AN ENTRY 
     if request.method == "POST" and "entry_delete" in request.POST:
@@ -441,7 +409,7 @@ def new_post(request):
             return HttpResponseForbidden("This isn't yours")
 
         entry.delete()
-        return redirect('new_post')
+        return redirect('home')
     
     # FEATURE UPDATE AN EDITED ENTRY
     if request.method == "POST" and "entry_update" in request.POST:
@@ -489,8 +457,7 @@ def new_post(request):
         context['editing_entry'] = None 
         context['entries'] = Entry.objects.select_related("author").all()
         context['comment_form'] = CommentForm()
-        
-        return render(request, "new_post.html", context | {'entries': entries})
+        return render(request, "home.html", context | {'entries': entries})
 
     # FEATURE EDIT BUTTON CLICKED 
     if request.method == "POST" and "entry_edit" in request.POST:
@@ -501,14 +468,14 @@ def new_post(request):
         context["editing_entry"] = editing_entry
         context["form"] = form
         context["entries"] = Entry.objects.select_related("author").all()
-        return render(request, "new_post.html", context | {'entries': entries})
+        return render(request, "home.html", context | {'entries': entries})
 
     context['form'] = form 
     context["editing_entry"] = editing_entry
     # context["entries"] = Entry.objects.select_related("author").all()
  
 
-    return render(request, "new_post.html", context | {'entries': entries})
+    return render(request, "home.html", context | {'entries': entries})
 
 
 @login_required

@@ -1,90 +1,55 @@
-<!--
-Base.html is the standardized template for GOLDEN. 
-If you are adding another html file, ensure that 
-{% extends 'base.html'} is the top of that file
-to inherit these properties 
--->
-
-<!DOCTYPE HTML> 
-{% load static %}
-
-<head>
+<!-- This file contains the header and side nav bar for most of the pages on our site
+ to add it, place {% extends 'base.html'} at the top of your file
+  -->
+ <!doctype html>
+ {% load static %}
+ <head>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <link rel="stylesheet" href="{% static 'golden/css/stream.css' %}">
     <link rel="stylesheet" href="{% static 'golden/css/common.css' %}">
     <link rel="icon" type="image/x-icon" href="{% static 'golden/favicon.ico' %}">
-    <link rel="stylesheet" href="{% static 'golden/css/base.css' %}">
-  
     <meta charset="utf-8">
     <script>
         function toggleSidebar(){
             document.querySelector('.side-nav').classList.toggle('open');
         }
     </script>
-  
     {% block head %}{% endblock %}
-        
-</head>
-
-<body>
-    
-    <!-- Side Nav -->
-    <button class="side-toggle" onclick="toggleSidebar()">☰</button>
-    <section class="side-nav">
-    <h1>Golden</h1>
-        {% if request.user.is_authenticated and request.user.profileImage %}
-            <img class="profile-pic" src="{{ request.user.profileImage.url }}" alt="Profile">
-        {% else %}
-            <img class="profile-pic" src="{% static 'golden/images/default_profile.webp' %}" alt="Default Profile">
-        {% endif %}
-
+ </head>
+ <body>
+    <!-- We need to place urls as we go -->
+    <!-- TOP HEADER -->
+    <nav class="top-nav">
+        <h1><a href="">Golden</a></h1>
         <ul class="menu">
+            <li class="item"><a href="{% url 'profile' %}">Profile</a></li>
+            <li class="item"><a href="{% url 'home' %}">Home</a></li>
             <li class="item"><a href="#" id="logout-link">Log Out</a></li>
         </ul>
-    </section>
-
-    <!-- Top Base Nav -->
-    <nav class="top-nav">
-        <ul class="menu">
-            <li class="item">
-                <a href="{% url 'new_post' %}" class="icon-btn" aria-label="Add Post"> 
-                    <img src="{% static 'golden/icons/add-post-icon.png' %}"/>
-                    <span class="sr-only">New Post</span>
-                </a>
-            </li>
-            <li class="item">
-                <a href="{% url 'stream' %}" class="icon-btn" aria-label="Stream"> 
-                    <img src="{% static 'golden/icons/home-icon.png' %}"/>
-                    <span class="sr-only">Stream</span>
-                </a>
-            </li>
-            <li class="item">
-                <a href="{% url 'profile' %}" class="icon-btn" aria-label="Profile"> 
-                    <img src="{% static 'golden/icons/user-icon.png' %}"/>
-                    <span class="sr-only">Profile</span>
-                </a>
-            </li>
-        </ul>
     </nav>
-
     <form id="logout-form" method="POST" action="{% url 'logout' %}" style="display:none;">
         {% csrf_token %}
     </form>
-
-    <!-- Child templates will over ride to display page content-->
-    <main class="content">{% block content %}{% endblock %} </main>
-</body>
-
-<script>
-
-    // Toggle the Side Nav-Bar
-    function toggleSidebar(){
-        document.querySelector('.side-nav').classList.toggle('open');
-    }
-    
-    // Logout Feature
-    document.getElementById('logout-link').addEventListener('click', function(e) {
-        e.preventDefault();
-        document.getElementById('logout-form').submit();
-    });
-</script>
+    <!-- SIDE BAR -->
+    <button class="side-toggle" onclick="toggleSidebar()">☰</button>
+    <div class="side-nav">
+        <ul>
+            <li><a href="{% url 'home' %}">Home</a></li>
+            <!-- <li><a href="{% url 'home' %}">New Post</a></li> -->
+            <li><a href="{% url 'follow_requests' %}">Follow Requests</a></li>
+            <li><a href="{% url 'search_authors' %}">Search</a></li>
+        </ul>
+    </div>
+    <main class="content">
+        <!-- Child templates will over ride to display page content-->
+        {% block content %}{% endblock %}
+    </main>
+    {% block scripts %}
+    <script>
+        document.getElementById('logout-link').addEventListener('click', function(e) {
+            e.preventDefault();
+            document.getElementById('logout-form').submit();
+        });
+    </script>
+    {% endblock %}
+ </body>

@@ -7,6 +7,7 @@ These URL Patterns registers all views
 '''
 urlpatterns = [
     path("", views.home, name="home"),
+    path("new_post/", views.new_post, name="new_post"),
     path("login/", views.CustomLoginView.as_view(template_name = "login.html"), name="login"),
     path("signup/", views.signup, name="signup"),
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
@@ -26,7 +27,6 @@ urlpatterns = [
     # TODO: the following may be deleted/incorporated into another view
     path('search/', views.search_authors, name='search_authors'),
     path("friends/", views.friends, name="friends"),
-    path("new_post/", views.new_post, name="new_post"),
     path('add_comment/', views.add_comment, name = "add_comment"),
 
 

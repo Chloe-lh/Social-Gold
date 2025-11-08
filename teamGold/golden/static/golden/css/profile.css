@@ -283,3 +283,45 @@ hr {
         font-size: 1rem;
     }
 }
+
+.request-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    margin-bottom: 8px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+.request-row:hover {
+    background-color: #2C2C2C;
+}
+.action-btn {
+    padding: 6px 12px;
+    margin-left: 6px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+}
+.approve-btn {
+    background-color: #4CAF50;
+    color: white;
+}
+.reject-btn {
+    background-color: #f44336;
+    color: white;
+}
+
+.author-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--colour-off-background);
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 10px 15px;
+  margin-bottom: 8px;
+  color: var(--colour-contrast);
+  transition: background 0.2s ease;
+}

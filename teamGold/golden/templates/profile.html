@@ -3,40 +3,11 @@
 {% load static %}
 {% block head %}
 <link rel="stylesheet" href="{% static 'golden/css/profile.css' %}">
-<style>
-.request-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px;
-    margin-bottom: 8px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-}
-.request-row:hover {
-    background-color: #2C2C2C;
-}
-.action-btn {
-    padding: 6px 12px;
-    margin-left: 6px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: bold;
-}
-.approve-btn {
-    background-color: #4CAF50;
-    color: white;
-}
-.reject-btn {
-    background-color: #f44336;
-    color: white;
-}
-</style>
 {% endblock %}
 
 {% block content %}
-
+<body>
+  <!-- Profile Header -->
   <section class="edit-profile-button">
     <button id="edit-profile-btn" class="nav">
         <img src="{% static 'golden/icons/edit-profile-icon.png' %}"/>
@@ -47,35 +18,33 @@
   <!-- Editing Profile Form -->
   <section id="edit-profile-form" style="display:none; margin-top: 1rem;">
     <form method="POST" enctype="multipart/form-data">
-        {% csrf_token %}
+      {% csrf_token %}
         
-        {{ form.username.label }}<br>
-        {{ form.username }}<br><br>
+      {{ form.username.label }}<br>
+      {{ form.username }}<br><br>
 
-        <label for="profileImage">Profile Picture:</label><br>
-        <input type="file" name="profileImage" accept="image/*"><br><br>
+      <label for="profileImage">Profile Picture:</label><br>
+      <input type="file" name="profileImage" accept="image/*"><br><br>
 
-        <label for="description">Bio / About Me:</label><br>
-        <textarea name="description" rows="4" cols="50" placeholder="Write something about yourself...">
-            {{ user.description }}
-        </textarea>
-        <br><br>
+      <label for="description">Bio / About Me:</label><br>
+      <textarea name="description" rows="4" cols="50" placeholder="Write something about yourself...">
+          {{ user.description }}
+      </textarea>
+      <br><br>
 
-        {{ form.github.label }}<br>
-        {{ form.github }}<br><br>
+      {{ form.github.label }}<br>
+      {{ form.github }}<br><br>
 
-        {{ form.web.label }}<br>
-        {{ form.web }}<br><br>
+      {{ form.web.label }}<br>
+      {{ form.web }}<br><br>
 
-        <button type="submit" name="edit_profile">Save Profile</button>
+      <button type="submit" name="edit_profile">Save Profile</button>
     </form>
   </section>
 
   <!-- Profile Description -->
   <section class="description">
-    <p style="font-style: italic; color: #555;">
-      {{ author.description|default:"This user hasn't added a bio yet." }}
-    </p>
+    <p class="bio-description">{{ author.description|default:"This user hasn't added a bio yet." }}</p>
   </section>
 
   <!-- Tab Sections -->
@@ -91,174 +60,182 @@
 
     <section class="tab-panels">
 
-      <!-- Entries Tab Section -->
-      <section class="tab-panel active" data-tab-panel="entries">
-        {% if entries %}
-          {% for entry in entries %}
-            <article class="entry">
-              <p><strong>@{{ author.username }}</strong> · {{ entry.published|date:"Y/m/d" }}</p>
-              <div class="content">
-                {% for img in entry.images.all %} 
-                  <img src="{{ img.image.url }}" alt="entry image" class="entry-img">
-                {% endfor %}
-                {{ entry.content|safe }}
-              </div>
-            </article>
-          {% endfor %}
-        {% else %}
-          <p>You have no entries yet.</p>
-        {% endif %}
-      </section>
-
-      <!-- Followers Tab Section -->
-      <section class="tab-panel" data-tab-panel="followers">
-        {% if followers %}
-          {% for f in followers %}
-            <div class="author-list-item" style="display:flex; justify-content:space-between; align-items:center;">
-              <span>{{ f.username }}</span>
-              <form method="POST" style="display:inline;">
-                {% csrf_token %}
-                <button type="submit" name="remove_follower" value="{{ f.id }}" class="action-btn reject-btn">Remove</button>
-              </form>
+    <!-- Entries Tab Section -->
+    <section class="tab-panel active" data-tab-panel="entries">
+      {% if entries %}
+        {% for entry in entries %}
+          <article class="entry">
+            <p><strong>@{{ author.username }}</strong> · {{ entry.published|date:"Y/m/d" }}</p>
+            <div class="content">
+              {% for img in entry.images.all %} 
+                <img src="{{ img.image.url }}" alt="entry image" class="entry-img">
+              {% endfor %}
+              {{ entry.content|safe }}
             </div>
-            <hr>
-          {% endfor %}
-        {% else %}
-          <p>You're a lonely loser.</p>
-        {% endif %}
-      </section>
-
-      <!-- Following Tab Section -->
-      <section class="tab-panel" data-tab-panel="following">
-        {% if following %}
-          {% for f in following %}
-            <div class="author-list-item" style="display:flex; justify-content:space-between; align-items:center;">
-              <span>{{ f.username }}</span>
-              <form method="POST" style="display:inline;">
-                {% csrf_token %}
-                <button type="submit" name="unfollow" value="{{ f.id }}" class="action-btn reject-btn">Remove</button>
-              </form>
-            </div>
-            <hr>
-          {% endfor %}
-        {% else %}
-          <p>Narcissist coded.</p>
-        {% endif %}
-      </section>
-
-      <!-- Request Tab Section -->
-      <section class="tab-panel" data-tab-panel="requests">
-      {% if follow_requests %}
-        <ul style="list-style: none; padding: 0;">
-          {% for req in follow_requests %}
-          <li class="request-row">
-            <span>{{ req.actor.username }} wants to follow you</span>
-            <div>
-              <form method="POST" style="display:inline;">
-                {% csrf_token %}
-                <input type="hidden" name="follow_id" value="{{ req.id }}">
-                <input type="hidden" name="action" value="approve">
-                <button class="action-btn approve-btn">Approve</button>
-            </form>
-
-            <form method="POST" style="display:inline;">
-                {% csrf_token %}
-                <input type="hidden" name="follow_id" value="{{ req.id }}">
-                <input type="hidden" name="action" value="reject">
-                <button class="action-btn reject-btn">Reject</button>
-            </form>
-            </div>
-          </li>
-          {% endfor %}
-        </ul>
+          </article>
+        {% endfor %}
       {% else %}
-        <p>No follow requests.</p>
+        <p>You have no entries yet.</p>
       {% endif %}
-      </section>
-
-      <!-- Friends Tab Section -->
-      <section class="tab-panel" data-tab-panel="friends">
-        {% if friends %}
-          {% for f in friends %}
-            <div class="author-list-item" style="display:flex; justify-content:space-between; align-items:center;">
-              <span>{{ f.username }}</span>
-              <form method="POST" style="display:inline;">
-                {% csrf_token %}
-                <button type="submit" name="remove_friend" value="{{ f.id }}" class="action-btn reject-btn">
-                  Unfriend
-                </button>
-              </form>
-            </div>
-            <hr>
-          {% endfor %}
-        {% else %}
-          <p>No friends yet.</p>
-        {% endif %}
-      </section>
-
-      <!-- Search Tab Section -->
-      <section class="tab-panel" data-tab-panel="search">
-        <form method="GET" action="{% url 'search_authors' %}" 
-            style="display: flex; width: 100%; gap: 10px; margin-bottom: 20px; height: 48px;">
-            <input type="text" name="q" class="search-bar" placeholder="Search by username" value="{{ query }}"
-                  style="flex: 1; padding: 0 20px; font-size: 1rem; box-sizing: border-box; height: 100%;
-                          border: 1px solid #555; background: var(--colour-off-background); color: var(--colour-contrast);
-                          border-radius: 6px;">
-            <button type="submit" 
-                    style="flex-shrink: 0; padding: 0 20px; font-size: 1rem; border: 2px solid #000;
-                          background: var(--colour-yellow); color: #000; border-radius: 6px; cursor: pointer; height: 100%;
-                          font-weight: 600;">
-                Search
-            </button>
-        </form>
-
-        <div class="author-list">
-            {% if authors %}
-                <ul style="list-style: none; padding: 0;">
-                    {% for author in authors %}
-                        {% if author != request.user %}
-                            <li class="author-row" 
-                                style="display: flex; justify-content: space-between; align-items: center;
-                                      background: var(--colour-off-background); border: 1px solid #333; 
-                                      border-radius: 6px; padding: 10px 15px; margin-bottom: 8px;
-                                      color: var(--colour-contrast); transition: background 0.2s ease;">
-                                <span>{{ author.username }}</span>
-
-                                <form method="POST" action="{% url 'search_authors' %}" style="display:inline;">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="author_id" value="{{ author.id }}">
-                                    {% if author.follow_state == "REQUESTED" %}
-                                        <button class="follow-btn" disabled>Requested</button>
-                                    {% elif author.follow_state == "ACCEPTED" %}
-                                        <button class="follow-btn" disabled>Following</button>
-                                    {% else %}
-                                        <button class="follow-btn">Follow</button>
-                                    {% endif %}
-                                </form>
-                            </li>
-                        {% endif %}
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <p style="color: var(--text-muted);">No authors found.</p>
-            {% endif %}
-        </div>
-      </section>
-
     </section>
 
-  </section>
+    <!-- Followers Tab Section -->
+    <section class="tab-panel" data-tab-panel="followers">
+      {% if followers %}
+        {% for f in followers %}
+          <div class="author-list-item" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>{{ f.username }}</span>
+            <form method="POST" style="display:inline;">
+              {% csrf_token %}
+              <button type="submit" name="remove_follower" value="{{ f.id }}" class="action-btn reject-btn">Remove</button>
+            </form>
+          </div>
+          <hr>
+        {% endfor %}
+      {% else %}
+        <p>You're a lonely loser.</p>
+      {% endif %}
+    </section>
 
-<!-- Edit Profile Form Toggle -->
+    <!-- Following Tab Section -->
+    <section class="tab-panel" data-tab-panel="following">
+      {% if following %}
+        {% for f in following %}
+          <div class="author-list-item" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>{{ f.username }}</span>
+            <form method="POST" style="display:inline;">
+              {% csrf_token %}
+              <button type="submit" name="unfollow" value="{{ f.id }}" class="action-btn reject-btn">Remove</button>
+            </form>
+          </div>
+          <hr>
+        {% endfor %}
+      {% else %}
+        <p>Narcissist coded.</p>
+      {% endif %}
+    </section>
+
+    <!-- Request Tab Section -->
+    <section class="tab-panel" data-tab-panel="requests">
+    {% if follow_requests %}
+      <ul style="list-style: none; padding: 0;">
+        {% for req in follow_requests %}
+        <li class="request-row">
+          <span>{{ req.actor.username }} wants to follow you</span>
+          <div>
+            <form method="POST" style="display:inline;">
+              {% csrf_token %}
+              <input type="hidden" name="follow_id" value="{{ req.id }}">
+              <input type="hidden" name="action" value="approve">
+              <button class="action-btn approve-btn">Approve</button>
+          </form>
+
+          <form method="POST" style="display:inline;">
+              {% csrf_token %}
+              <input type="hidden" name="follow_id" value="{{ req.id }}">
+              <input type="hidden" name="action" value="reject">
+              <button class="action-btn reject-btn">Reject</button>
+          </form>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No follow requests.</p>
+    {% endif %}
+    </section>
+
+    <!-- Friends Tab Section -->
+    <!-- THIS IS IMPORTANT TO PLEASE READ IF YOU ARE REFRACTORING THIS HTML FILE
+    This tab should not exist, and the concept of knowing your friends needs to be integrated 
+    in Followers/Following. Check Figma for the visual design on this concept. 
+    Comment by: Kenneth
+    -->
+    <section class="tab-panel" data-tab-panel="friends">
+      {% if friends %}
+        {% for f in friends %}
+          <div class="author-list-item" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>{{ f.username }}</span>
+            <form method="POST" style="display:inline;">
+              {% csrf_token %}
+              <button type="submit" name="remove_friend" value="{{ f.id }}" class="action-btn reject-btn">
+                Unfriend
+              </button>
+            </form>
+          </div>
+          <hr>
+        {% endfor %}
+      {% else %}
+        <p>No friends yet.</p>
+      {% endif %}
+    </section>
+
+    <!-- Search Tab Section -->
+    <!-- THIS IS IMPORTANT TO PLEASE READ IF YOU ARE REFRACTORING THIS HTML FILE
+    When you click this tab, you are suppose to see everyone immediately, you should not 
+    need to type in the username to see the users, because what if they don't even know 
+    what they're looking for eh?
+    Comment by: Kenneth
+    -->
+    <section class="tab-panel" data-tab-panel="search">
+      <form method="GET" action="{% url 'search_authors' %}" 
+        style="display: flex; width: 100%; gap: 10px; margin-bottom: 20px; height: 48px;">
+        <input type="text" name="q" class="search-bar" placeholder="Search by username" value="{{ query }}"
+          style="flex: 1; padding: 0 20px; font-size: 1rem; box-sizing: border-box; height: 100%;
+                 border: 1px solid #555; background: var(--colour-off-background); color: var(--colour-contrast);
+                        border-radius: 6px;">
+          <button type="submit" 
+                  style="flex-shrink: 0; padding: 0 20px; font-size: 1rem; border: 2px solid #000;
+                        background: var(--colour-yellow); color: #000; border-radius: 6px; cursor: pointer; height: 100%;
+                        font-weight: 600;">
+              Search
+          </button>
+      </form>
+
+      <div class="author-list">
+          {% if authors %}
+              <ul style="list-style: none; padding: 0;">
+                  {% for author in authors %}
+                      {% if author != request.user %}
+                          <li class="author-row" 
+                              style="display: flex; justify-content: space-between; align-items: center;
+                                    background: var(--colour-off-background); border: 1px solid #333; 
+                                    border-radius: 6px; padding: 10px 15px; margin-bottom: 8px;
+                                    color: var(--colour-contrast); transition: background 0.2s ease;">
+                              <span>{{ author.username }}</span>
+
+                              <form method="POST" action="{% url 'search_authors' %}" style="display:inline;">
+                                  {% csrf_token %}
+                                  <input type="hidden" name="author_id" value="{{ author.id }}">
+                                  {% if author.follow_state == "REQUESTED" %}
+                                      <button class="follow-btn" disabled>Requested</button>
+                                  {% elif author.follow_state == "ACCEPTED" %}
+                                      <button class="follow-btn" disabled>Following</button>
+                                  {% else %}
+                                      <button class="follow-btn">Follow</button>
+                                  {% endif %}
+                              </form>
+                          </li>
+                      {% endif %}
+                  {% endfor %}
+              </ul>
+          {% else %}
+              <p style="color: var(--text-muted);">No authors found.</p>
+          {% endif %}
+      </div>
+    </section>
+    </section>
+  </section>
+</body>
+
 <script>
-document.getElementById('edit-profile-btn').addEventListener('click', function(){
+// Edit Profile Form Toggle 
+document.getElementById('edit-profile-btn').addEventListener('click', function() {
     const form = document.getElementById('edit-profile-form');
     form.style.display = form.style.display === 'none' ? 'block' : 'none';
 });
-</script>
 
-<!-- Tab Switching -->
-<script>
+// Tab Switching
 document.addEventListener("DOMContentLoaded", () => {
   const tabButtons = document.querySelectorAll(".tab-btn");
   const tabPanels = document.querySelectorAll(".tab-panel");
@@ -277,5 +254,4 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 </script>
-
 {% endblock %}

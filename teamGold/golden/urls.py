@@ -34,7 +34,7 @@ urlpatterns = [
     path('search/', views.search_authors, name='search_authors'),
     path("friends/", views.friends, name="friends"),
     path('add_comment/', views.add_comment, name = "add_comment"),
-
+    path("admin/", views.profile_view, name="admin"), # You need to change the views.new_post to the actual admin view when it's created 
 
     # API end points
     # API views will be visible in /swagger/

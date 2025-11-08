@@ -10,8 +10,8 @@ to inherit these properties
 
 <head>
     <!-- load stylesheets -->
-    <link rel="stylesheet" href="{% static 'golden/css/global.css' %}">
     <link rel="stylesheet" href="{% static 'golden/css/base.css' %}">
+    <link rel="stylesheet" href="{% static 'golden/css/global.css' %}">
   
     <meta charset="utf-8">
   
@@ -41,13 +41,16 @@ to inherit these properties
         </ul>
     </section>
 
-  
-
+    <!-- Top Base Nav -->
     <div class="main">
-        <!-- Top Base Nav -->
         <nav class="top-nav">
             <h2 id="one-breadcrumb">Hello, user</h2>
             <ul class="menu">
+                <li class="item">
+                    <a href="{% url 'admin' %}" class="icon-btn" aria-label="admin"> 
+                        <img src="{% static 'golden/icons/admin-icon.png' %}"/>
+                    </a>
+                </li>
                 <li class="item">
                     <a href="{% url 'new_post' %}" class="icon-btn" aria-label="Add Post"> 
                         <img src="{% static 'golden/icons/add-post-icon.png' %}"/>
@@ -73,7 +76,7 @@ to inherit these properties
     <!-- Child templates will over ride to display page content-->
     <main class="page-content">{% block content %}{% endblock %} </main>
     
-</div>
+    </div>
 
 <script>
         function toggleSidebar(){

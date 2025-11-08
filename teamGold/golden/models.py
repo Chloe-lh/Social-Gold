@@ -57,6 +57,7 @@ class Author(AbstractBaseUser, PermissionsMixin):
         upload_to='profile_pics/')
     username = models.CharField(max_length=50, unique=True, default="goldenuser")
     password = models.CharField(max_length=128, default="goldenpassword")
+    name = models.CharField(max_length=100, blank=True) # Kenneth: I added this because the user story says NAME not username. 
     email = models.CharField(blank=True)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)

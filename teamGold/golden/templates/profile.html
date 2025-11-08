@@ -20,8 +20,8 @@
     <form method="POST" enctype="multipart/form-data">
       {% csrf_token %}
         
-      {{ form.username.label }}<br>
-      {{ form.username }}<br><br>
+      {{ form.name.label }}<br>
+      {{ form.name }}<br><br>
 
       <label for="profileImage">Profile Picture:</label><br>
       <input type="file" name="profileImage" accept="image/*"><br><br>

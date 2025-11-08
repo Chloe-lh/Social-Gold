@@ -176,12 +176,7 @@ class EntryImage(models.Model):
         null = True
         
     )
-    name = models.CharField(
-    max_length=255,
-    blank=True,
-    null=True,
-    help_text="Optional: rename the file for admin-friendly URLs"
-)
+    name = models.CharField(max_length=255, blank=True, null=True)
     image = models.ImageField(upload_to='entry_images/')
     uploaded_at = models.DateTimeField(auto_now_add=True)
     order = models.PositiveIntegerField(default=0)  

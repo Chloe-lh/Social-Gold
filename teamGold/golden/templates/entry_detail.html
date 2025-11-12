@@ -1,10 +1,13 @@
 {% extends "base.html" %}
 {% load static %}
-
+<!-- Opened when user presses comment button, shows entry plus comments below-->
 {% block content %}
 <div class="container mx-auto p-6">
-    <h1 class="text-2xl font-semibold mb-4">{{ entry.title|default:"Untitled" }}</h1>
 
+    <div>
+    <a href="#" class="font-medium hover:underline">{{ entry.author.display_name }}</a>
+    <span class="text-xs text-gray-500"> • {{ entry.published|date:"Y-m-d H:i" }}</span>
+    </div>
     <div class="text-gray-700 mb-2">
         <strong>{{ entry.author.display_name }}</strong> • {{ entry.published|date:"Y-m-d H:i" }}
     </div>

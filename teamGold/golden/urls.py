@@ -26,6 +26,7 @@ urlpatterns = [
     path("profile/follow_requests/", views.follow_requests, name="follow_requests"),
 
     path('entry/<uuid:entry_uuid>/', views.entry_detail, name='entry_detail'),
+    
     # TODO: change the id to be the entry id, whatever we decide to use later
     # TODO: entries can have comment page number queries (Or we just allow infinite scroll for comments..?)
     # TODO: entries should have comments feature if there is a logged in user
@@ -46,6 +47,7 @@ urlpatterns = [
     path("api/Like/<path:id>/", apiViews.LikeAPIView.as_view(), name="get-like"),
     path("api/Entry/<path:id>/", apiViews.EntryAPIView.as_view(), name="get-entry"),
     path("api/Entry/<path:entry_id>/comments/", EntryCommentAPIView.as_view(), name="entry-comments"),
+
 
     # ! Thee two serve the same purpose, but the first is for getting images, the second is for uploading images to an entry
     path("api/EntryImage/<int:id>/", apiViews.EntryImageAPIView.as_view(), name="get-entry-image"),

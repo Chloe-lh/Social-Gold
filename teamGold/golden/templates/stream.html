@@ -36,24 +36,19 @@
 
         <footer class="mt-2 text-sm text-gray-600 flex space-x-4">
           <span>Likes: {{ entry.likes.count }}</span>
-            <button class="comment-btn" data-entry-id="{{ entry.id }}">
+          <!-- when someone presses the comment button, go to the entry_detail page-->
+            <button class="comment-btn" data-entry-id="{{ entry.id }}" data-entry-url="{% url 'entry_detail' entry.id}">
                 <img src="{% static 'golden/icons/comment-icon.png' %}">
               </button>
-            <span>{{ entry.comment.count }} Comments</span>
+            <span>{{ entry.comment.count }} </span>
+            <button class="like-btn" data-entry-id="{{entry.id}}">
+              <img src="{% static 'golden/icons/like-icon.png'}">
+            <span>{{ entry.like.count }}</span>
         </footer>
       </article>
     {% empty %}
       <p class="text-gray-600">No posts to show.</p>
     {% endfor %}
-       <!-- for comments -->
-        {% include "comments.html" %}
-        <!-- enbed JSON data from view in template to pass to js as js object-->
-        <script id="entry-comments" type="application/json">
-          {{ entry_comments_json|safe }}
-        </script>
-        <script src="{% static 'golden/js/comments.js' %}"></script>
-
-
   </section>
 </div>
 
@@ -73,7 +68,20 @@ document.addEventListener("DOMContentLoaded", function() {
             window.location.href = localUrl;
         });
     });
-});
+  // Attach click event to all comment buttons will open entry-detail
+    document.querySelectorAll('.comment-btn').forEach(btn => {
+        btn.addEventListener("click", function(e) {
+          e.stopPropagation();
+          // url from html
+          const url = this.dataset.entryUrl || (() => {
+            const fqid = this.dataset.entryId || '';
+            const uuid = fqid.split('/').pop();
+            return `/golden/entry/${uuid}/`;
+          })();
+          if (url) window.location.href = url;
+        });
+    });
+  });
 </script>
 {% endblock %}
 

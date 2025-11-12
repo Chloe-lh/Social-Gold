@@ -48,178 +48,167 @@ import json
 import random
 
 # TODO: Do we still need this?
-# @login_required
-# def stream_view(request):
-#     # Get the Author object for the logged-in user
-#     user_author = request.user
-
-#     # only a local node uses stream_view
-#     remote_node = False
-
-#     # Get all accepted follows (authors this user follows)
-#     follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
-#     followed_author_fqids = [f.object for f in follows]
-
-#     # etermine authors who are "friends" (mutual follows)
-#     friends_fqids = []
-#     for f in follows:
-#         try:
-#             # Check if the followed author also follows the user
-#             reciprocal = Follow.objects.get(actor__id=f.object, object=user_author.id, state='ACCEPTED')
-#             friends_fqids.append(f.object)
-#         except Follow.DoesNotExist:
-#             continue
-
-#     # Query entries according to visibility rules
-
-#     entries = Entry.objects.filter(
-#         Q(visibility='PUBLIC') |  # Public entries: everyone can see
-#         Q(visibility='UNLISTED', author__id__in=followed_author_fqids) |  # Unlisted: only followers
-#         Q(visibility='FRIENDS', author__id__in=friends_fqids)  # Friends-only: only friends
-#     ).order_by('-is_updated', '-published')  # Most recent first
-
-#     # serialize comments for each entry
-#     # entry_comments = {}
-#     # for entry in entries:
-#     #     if entry.visibility == 'FRIENDS':
-#     #         allowed = set(friends_fqids + [str(user_author.id)])
-#     #         filtered_comments = entry.comments.filter(author__id__in=allowed)
-#     #     else:
-#     #         filtered_comments = entry.comment.all()
-#     #     serialized_comments = CommentSerializer(filtered_comments, many=True).data
-#     #     entry_comments[entry.id] = serialized_comments
-
-#     # Prepare context for the template
-#     context = {
-#         'entries': entries,
-#         'user_author': user_author,
-#         'followed_author_fqids': followed_author_fqids,
-#         'friends_fqids': friends_fqids,
-#         'comment_form' : CommentForm(),
-#         # 'entry_comments_json': json.dumps(entry_comments),
-#         'remote_node':remote_node,
-#     }
-
-#     # Render the stream page extending base.html
-#     return render(request, 'stream.html', context)
-
-
 @login_required
-@require_author 
-def home(request):
-    """
-    @require_author is linked with deorators.py to ensure user distinction
-    """
-    if request.current_author is None:
-        return redirect('signup')
+def stream_view(request):
+    # Get the Author object for the logged-in user
+    user_author = request.user
+
+    # only a local node uses stream_view
+    remote_node = False
+
+    # Get all accepted follows (authors this user follows)
+    follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
+    followed_author_fqids = [f.object for f in follows]
+
+    # etermine authors who are "friends" (mutual follows)
+    friends_fqids = []
+    for f in follows:
+        try:
+            # Check if the followed author also follows the user
+            reciprocal = Follow.objects.get(actor__id=f.object, object=user_author.id, state='ACCEPTED')
+            friends_fqids.append(f.object)
+        except Follow.DoesNotExist:
+            continue
+
+    # Query entries according to visibility rules
+
+    entries = Entry.objects.filter(
+        Q(visibility='PUBLIC') |  # Public entries: everyone can see
+        Q(visibility='UNLISTED', author__id__in=followed_author_fqids) |  # Unlisted: only followers
+        Q(visibility='FRIENDS', author__id__in=friends_fqids)  # Friends-only: only friends
+    ).order_by('-is_updated', '-published')  # Most recent first
+
+    # Prepare context for the template
+    context = {
+        'entries': entries,
+        'user_author': user_author,
+        'followed_author_fqids': followed_author_fqids,
+        'friends_fqids': friends_fqids,
+        'comment_form' : CommentForm(),
+        # 'entry_comments_json': json.dumps(entry_comments),
+        'remote_node':remote_node,
+    }
+
+    # Render the stream page extending base.html
+    return render(request, 'stream.html', context)
+
+
+# @login_required
+# @require_author 
+# def home(request):
+#     """
+#     @require_author is linked with deorators.py to ensure user distinction
+#     """
+#     if request.current_author is None:
+#         return redirect('signup')
     
-    context = {}
-    form = EntryList()
-    editing_entry = None # because by default, users are not in editing mode 
-    entries = Entry.objects.all().order_by('-is_posted')
-    context['entries'] = entries
+#     context = {}
+#     form = EntryList()
+#     editing_entry = None # because by default, users are not in editing mode 
+#     entries = Entry.objects.all().order_by('-is_posted')
+#     context['entries'] = entries
 
-    # FEATURE POST AN ENTRY
-    if request.method == "POST" and "entry_post" in request.POST:
-        entry_id = f"{settings.SITE_URL}/api/entries/{uuid.uuid4()}"  #****** we need to change this to dynamically get the node num
+#     # FEATURE POST AN ENTRY
+#     if request.method == "POST" and "entry_post" in request.POST:
+#         entry_id = f"{settings.SITE_URL}/api/entries/{uuid.uuid4()}"  #****** we need to change this to dynamically get the node num
 
-        # Markdown conversion 
-        markdown_content = request.POST['content']
-        html_content = markdown.markdown(markdown_content)
+#         # Markdown conversion 
+#         markdown_content = request.POST['content']
+#         html_content = markdown.markdown(markdown_content)
 
-        with transaction.atomic(): 
-            entry = Entry.objects.create(
-                id=entry_id,
-                author=request.current_author,
-                content=html_content,
-                visibility=request.POST.get('visibility', 'PUBLIC')
-            )
+#         with transaction.atomic(): 
+#             entry = Entry.objects.create(
+#                 id=entry_id,
+#                 author=request.current_author,
+#                 content=html_content,
+#                 visibility=request.POST.get('visibility', 'PUBLIC')
+#             )
         
 
-        images = request.FILES.getlist('images')
-        for idx, image in enumerate(images):
-            EntryImage.objects.create(
-                entry=entry, image=image, order=idx)
+#         images = request.FILES.getlist('images')
+#         for idx, image in enumerate(images):
+#             EntryImage.objects.create(
+#                 entry=entry, image=image, order=idx)
                     
-        return redirect('home')
+#         return redirect('home')
     
-    # FEATURE DELETE AN ENTRY 
-    if request.method == "POST" and "entry_delete" in request.POST:
-        primary_key = request.POST.get('entry_delete')
-        entry = Entry.objects.get(id=primary_key)
+#     # FEATURE DELETE AN ENTRY 
+#     if request.method == "POST" and "entry_delete" in request.POST:
+#         primary_key = request.POST.get('entry_delete')
+#         entry = Entry.objects.get(id=primary_key)
 
-        # also for testing purposes 
-        if entry.author.id != request.current_author.id:
-            return HttpResponseForbidden("This isn't yours")
+#         # also for testing purposes 
+#         if entry.author.id != request.current_author.id:
+#             return HttpResponseForbidden("This isn't yours")
 
-        entry.delete()
-        return redirect('home')
+#         entry.delete()
+#         return redirect('home')
     
-    # FEATURE UPDATE AN EDITED ENTRY
-    if request.method == "POST" and "entry_update" in request.POST:
-        primary_key = request.POST.get("entry_update")
-        editing_entry = get_object_or_404(Entry, id=primary_key)
+#     # FEATURE UPDATE AN EDITED ENTRY
+#     if request.method == "POST" and "entry_update" in request.POST:
+#         primary_key = request.POST.get("entry_update")
+#         editing_entry = get_object_or_404(Entry, id=primary_key)
 
-        # for testing 
-        if editing_entry.author.id != request.current_author.id:
-            return HttpResponseForbidden("No editing")
+#         # for testing 
+#         if editing_entry.author.id != request.current_author.id:
+#             return HttpResponseForbidden("No editing")
         
-        raw_md = request.POST.get("content", "")
-        visibility = request.POST.get("visibility", editing_entry.visibility)
+#         raw_md = request.POST.get("content", "")
+#         visibility = request.POST.get("visibility", editing_entry.visibility)
 
-        # difference between adding a new image and remove an image 
-        new_images = request.FILES.getlist("images")
-        remove_images = request.POST.getlist("remove_images")
-        remove_ids = []
-        for x in remove_images:
-            try:
-                remove_ids.append(int(x))
-            except (TypeError, ValueError):
-                pass 
+#         # difference between adding a new image and remove an image 
+#         new_images = request.FILES.getlist("images")
+#         remove_images = request.POST.getlist("remove_images")
+#         remove_ids = []
+#         for x in remove_images:
+#             try:
+#                 remove_ids.append(int(x))
+#             except (TypeError, ValueError):
+#                 pass 
 
-        with transaction.atomic():
-            editing_entry.content = markdown.markdown(raw_md)
-            editing_entry.visibility = visibility
-            editing_entry.contentType = "text/html"
-            editing_entry.save()
+#         with transaction.atomic():
+#             editing_entry.content = markdown.markdown(raw_md)
+#             editing_entry.visibility = visibility
+#             editing_entry.contentType = "text/html"
+#             editing_entry.save()
 
-            if remove_ids:
-                EntryImage.objects.filter(entry=editing_entry, id__in=remove_ids).delete()
+#             if remove_ids:
+#                 EntryImage.objects.filter(entry=editing_entry, id__in=remove_ids).delete()
 
-            # Append any newly uploaded images, preserving order
-            if new_images:
-                current_max = editing_entry.images.count()
-                for idx, f in enumerate(new_images):
-                    EntryImage.objects.create(
-                        entry=editing_entry,
-                        image=f,
-                        order=current_max + idx
-                    )
+#             # Append any newly uploaded images, preserving order
+#             if new_images:
+#                 current_max = editing_entry.images.count()
+#                 for idx, f in enumerate(new_images):
+#                     EntryImage.objects.create(
+#                         entry=editing_entry,
+#                         image=f,
+#                         order=current_max + idx
+#                     )
 
-        context = {}
-        context['form'] = EntryList()  
-        context['editing_entry'] = None 
-        context['entries'] = Entry.objects.select_related("author").all()
-        context['comment_form'] = CommentForm()
-        return render(request, "home.html", context | {'entries': entries})
+#         context = {}
+#         context['form'] = EntryList()  
+#         context['editing_entry'] = None 
+#         context['entries'] = Entry.objects.select_related("author").all()
+#         context['comment_form'] = CommentForm()
+#         return render(request, "home.html", context | {'entries': entries})
 
-    # FEATURE EDIT BUTTON CLICKED 
-    if request.method == "POST" and "entry_edit" in request.POST:
-        primary_key = request.POST.get('entry_edit')
-        editing_entry = get_object_or_404(Entry, id=primary_key)
+#     # FEATURE EDIT BUTTON CLICKED 
+#     if request.method == "POST" and "entry_edit" in request.POST:
+#         primary_key = request.POST.get('entry_edit')
+#         editing_entry = get_object_or_404(Entry, id=primary_key)
 
-        form = EntryList(instance=editing_entry)
-        context["editing_entry"] = editing_entry
-        context["form"] = form
-        context["entries"] = Entry.objects.select_related("author").all()
-        return render(request, "home.html", context | {'entries': entries})
+#         form = EntryList(instance=editing_entry)
+#         context["editing_entry"] = editing_entry
+#         context["form"] = form
+#         context["entries"] = Entry.objects.select_related("author").all()
+#         return render(request, "home.html", context | {'entries': entries})
 
-    context['form'] = form 
-    context["editing_entry"] = editing_entry
-    # context["entries"] = Entry.objects.select_related("author").all()
+#     context['form'] = form 
+#     context["editing_entry"] = editing_entry
+#     # context["entries"] = Entry.objects.select_related("author").all()
  
 
-    return render(request, "home.html", context | {'entries': entries})
+#     return render(request, "home.html", context | {'entries': entries})
 
 '''
 For displaying an error message if a user is not approved yet
@@ -575,13 +564,8 @@ def friends(request):
         "page_type": "friends",  # Used in template to hide buttons
     })
 
-'''
-function based Django view
-    - handles form submission from Django Template 
-    1. user will submit a comment via the form 
-    2. view will process form, and save comment to db
 
-'''
+
 @login_required
 def add_comment(request):
     if request.method == "POST": # user clicks add comment button in modal
@@ -600,6 +584,25 @@ def add_comment(request):
         else:
             return JsonResponse({'success': False})
     return JsonResponse({'success':True})
+
+''' 
+view displays the entry as well as comments below it
+'''
+#! WIP
+# @login_required
+# def entry_detail(request):
+       # serialize comments for each entry
+    # entry_comments = {}
+    # for entry in entries:
+    #     if entry.visibility == 'FRIENDS':
+    #         allowed = set(friends_fqids + [str(user_author.id)])
+    #         filtered_comments = entry.comments.filter(author__id__in=allowed)
+    #     else:
+    #         filtered_comments = entry.comment.all()
+    #     serialized_comments = CommentSerializer(filtered_comments, many=True).data
+    #     entry_comments[entry.id] = serialized_comments
+
+
 
 @api_view(['POST'])
 def inbox(request, author_id):

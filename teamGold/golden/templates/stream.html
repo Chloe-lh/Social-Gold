@@ -35,15 +35,15 @@
         {% endif %}
 
         <footer class="mt-2 text-sm text-gray-600 flex space-x-4">
-          <span>Likes: {{ entry.likes.count }}</span>
+            <button class="like-btn" data-entry-id="{{entry.id}}">
+              <img src="{% static 'golden/icons/like-icon.png'}">
+            </button>
+            <span>{{ entry.like.count }}</span>
           <!-- when someone presses the comment button, go to the entry_detail page-->
             <button class="comment-btn" data-entry-id="{{ entry.id }}" data-entry-url="{% url 'entry_detail' entry.id}">
                 <img src="{% static 'golden/icons/comment-icon.png' %}">
               </button>
             <span>{{ entry.comment.count }} </span>
-            <button class="like-btn" data-entry-id="{{entry.id}}">
-              <img src="{% static 'golden/icons/like-icon.png'}">
-            <span>{{ entry.like.count }}</span>
         </footer>
       </article>
     {% empty %}

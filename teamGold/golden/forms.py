@@ -22,14 +22,15 @@ class ProfileForm(forms.ModelForm):
             'web': forms.URLInput(attrs={'class': 'form-input'}),
             'description': forms.Textarea(attrs={'class': 'form-input', 'rows': 4, 'cols': 50}),
         }
-'''
 
-'''
 class CommentForm(forms.ModelForm):
     content = forms.CharField(widget=forms.TextInput)
     class Meta:
         model = Comment
         fields = ['content']
+        widgets = {
+            'content': forms.Textarea(),
+        }
 
 class EntryList(forms.ModelForm):
     class Meta:

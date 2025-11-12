@@ -572,11 +572,9 @@ def friends(request):
         "page_type": "friends",  # Used in template to hide buttons
     })
 
-
-
 @login_required
 def add_comment(request):
-    if request.method == "POST": # user clicks add comment button in modal
+    if request.method == "POST": # user clicks add comment button in entry_details
         form = CommentForm(request.POST)
         # get entry id from html
         entry_id = request.POST.get('entry_id')
@@ -584,14 +582,14 @@ def add_comment(request):
             comment = form.save(commit=False) # dont save unless user presses add comment
             # create a unique id/URL for each comment
             comment.id = f"{settings.SITE_URL}/api/Comment/{uuid.uuid4()}"
-            comment.author = Author.objects.get(id=request.user.id)
+            comment.author = Author.from_user(request.user)
             comment.entry = get_object_or_404(Entry, id=entry_id)
             comment.published = timezone.now()
             comment.save()
-            return JsonResponse({'success': True})
-        else:
-            return JsonResponse({'success': False})
-    return JsonResponse({'success':True})
+            # Redirect using the saved Entry instance's UUID suffix
+            entry = comment.entry
+            return redirect('entry_detail', entry_uuid=entry.get_uuid())
+    
 
 ''' 
 view displays the entry as well as comments below it
@@ -616,7 +614,7 @@ def entry_detail(request, entry_uuid):
 
     # Fetch comments for the entry (all comments if viewer is allowed)
     comments_qs = entry.comment.select_related('author').order_by('published')
-    
+
     serialized_comments = CommentSerializer(comments_qs, many=True).data
     entry_comments = { entry.id: serialized_comments }
 
@@ -662,22 +660,6 @@ def handle_comment(data,author):
 def handle_follow(data,author):
     return
 
-def entry_detail(request, entry_uuid):
-
-    # Look for the entry whose full ID ends with this UUID
-    entry = get_object_or_404(Entry, id__endswith=str(entry_uuid))
-
-    # Restrict access based on visibility
-    if entry.visibility == 'FRIENDS-ONLY':
-        # Only the author or authorized users (like followers) can access
-        if request.user != entry.author:
-            raise Http404("This entry is private.")
-
-    context = {
-        'entry': entry
-    }
-
-    return render(request, 'entry_detail.html', {'entry': entry})
 
 @login_required
 @require_author 

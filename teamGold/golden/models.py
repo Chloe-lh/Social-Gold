@@ -164,6 +164,22 @@ class Entry(models.Model):
     def __str__(self):
         return f"Entry by {self.author} ({self.visibility})"
 
+    def get_uuid(self):
+        """Return the UUID suffix from the entry's FQID `id`.
+
+        Templates call `entry.get_uuid` to build local URLs (the URLconf
+        uses a `<uuid:entry_uuid>` segment). If `id` is empty or does not
+        contain slashes, return an empty string to avoid broken reverses.
+        """
+        if not self.id:
+            return ""
+        try:
+            return str(self.id).rstrip('/').split('/')[-1]
+        except Exception:
+            return ""
+
+    
+
 class EntryImage(models.Model):
     """
     Multiple images can be associated with a single Entry.

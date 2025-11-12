@@ -32,7 +32,7 @@
 
         <footer class="mt-2 text-sm text-gray-600 flex space-x-4">
           <!-- when someone presses the comment button, go to the entry_detail page-->
-            <button class="comment-btn" data-entry-id="{{ entry.id }}" data-entry-url="{% url 'entry_detail' entry.id}">
+              <button class="comment-btn" data-entry-id="{{ entry.id }}" data-entry-url="{% if entry.get_uuid %}{% url 'entry_detail' entry.get_uuid %}{% else %}#{% endif %}">
                 <img src="{% static 'golden/icons/comment-icon.png' %}">
               </button>
             <span>{{ entry.comment.count }} </span>
@@ -52,45 +52,30 @@
                 <div>No comment.</div>
             {% endfor %}
         </section>
-        <form method="post" action="">
-            {% csrf_token %}
-            {{ comment_form.as_p }}
-            <button type="submit" class="btn">Add comment</button>
-        </form>
+        <form id="commentForm" method="post" action="{% url 'add_comment' %}">
+        {% csrf_token %}
+        <input type="hidden" name="entry_id" value="{{ entry.id }}">
+        {{ comment_form.as_p }}
+        <button type="submit" class="btn">Add comment</button>
+      </form>
       </article>
 {% endblock %}
 
 <script>
     var entryComments = JSON.parse(document.getElementById('entry-comments').textContent);
-
-      // AJAX submit comment form
-    document.getElementById('commentForm').addEventListener('submit', function(event){
-        event.preventDefault();
-        const formData = new FormData(this);
-        // fetch - Javascript API used to send HTTP/AJAX requests from browser
-        //  to Django API endpoints (/api/Comment/<entry_id>)
-        // this = form element
-        // action = URL
-        fetch(this.action, {
-            method: "POST",
-            headers: {
-                "X-CSRFToken": formData.get('csrfmiddlewaretoken'),
-            },
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if(data.success){
-                window.location.reload();
-                modal.close();
-            }else{
-                alert(data.error || "Failed to add comment");
-            }
-        });
+    
+    const form = document.getElementById('commentForm');
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      const formData = new FormData(form);
+      fetch(form.action, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': formData.get('csrfmiddlewaretoken') },
+        body: formData
+      }).then(r => r.json()).then(data => {
+        if (data.success) window.location.reload();
+        else alert('Failed to add comment');
+      });
     });
-
-
-
-
 
 </script>

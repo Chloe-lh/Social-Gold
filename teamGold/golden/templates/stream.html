@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 {% load static %}
 
+{% block head %}
+<link rel="stylesheet" href="{% static 'golden/css/global.css' %}">
+  
+{% endblock %}
+
 {% block content %}
 <div class="container mx-auto p-6">
   <h1 class="text-2xl font-semibold mb-4">Stream</h1>
@@ -11,7 +16,7 @@
             data-entry-id="{{ entry.id }}">
         <header class="flex items-center justify-between mb-2">
           <div>
-            <a href="#" class="font-medium hover:underline">{{ entry.author.display_name }}</a>
+            <a href="#" class="font-medium hover:underline">{{ entry.author }}</a>
             <span class="text-xs text-gray-500"> • {{ entry.published|date:"Y-m-d H:i" }}</span>
           </div>
           <div class="text-xs text-gray-400">
@@ -40,7 +45,7 @@
             </button>
             <span>{{ entry.like.count }}</span>
           <!-- when someone presses the comment button, go to the entry_detail page-->
-            <button class="comment-btn" data-entry-id="{{ entry.id }}" data-entry-url="{% url 'entry_detail' entry.id}">
+              <button class="comment-btn" data-entry-id="{{ entry.id }}" data-entry-url="{% if entry.get_uuid %}{% url 'entry_detail' entry.get_uuid %}{% else %}#{% endif %}">
                 <img src="{% static 'golden/icons/comment-icon.png' %}">
               </button>
             <span>{{ entry.comment.count }} </span>
@@ -84,4 +89,3 @@ document.addEventListener("DOMContentLoaded", function() {
   });
 </script>
 {% endblock %}
-

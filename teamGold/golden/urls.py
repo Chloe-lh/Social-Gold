@@ -12,22 +12,22 @@ from .apiViews import (
 These URL Patterns registers all views 
 '''
 urlpatterns = [
-    path("", views.home, name="home"),
+    path("", views.stream_view, name="stream"),
     path("new_post/", views.new_post, name="new_post"),
     path("login/", views.CustomLoginView.as_view(template_name = "login.html"), name="login"),
     path("signup/", views.signup, name="signup"),
-    path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
 
+    path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
     path('profile/', views.profile_view, name='profile'),
+    path('search/', views.profile_view, name='profile'),
     # profile should contain: main profile that contains a list of the author's entries
     # profile also contains the following: followers, following, and requests
     path('profile/followers/', views.followers, name='followers'),
     path('profile/following/', views.following, name='following'),
     path("profile/follow_requests/", views.follow_requests, name="follow_requests"),
-
     path('entry/<uuid:entry_uuid>/', views.entry_detail, name='entry_detail'),
-    
-    # TODO: change the id to be the entry id, whatever we decide to use later
+    path('stream/', views.stream_view, name="stream-link"),
+    # TODO: change the id to be the id, whatever we decide to use later
     # TODO: entries can have comment page number queries (Or we just allow infinite scroll for comments..?)
     # TODO: entries should have comments feature if there is a logged in user
 

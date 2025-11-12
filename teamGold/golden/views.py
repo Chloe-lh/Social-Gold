@@ -210,6 +210,14 @@ def stream_view(request):
 
 #     return render(request, "home.html", context | {'entries': entries})
 
+@login_required
+def index(request):
+    objects = Author.objects.values()
+    print("USERS:")
+    for obj in objects:
+        print(obj['username']) 
+    return render(request, "index.html")
+
 '''
 For displaying an error message if a user is not approved yet
 '''
@@ -589,19 +597,36 @@ def add_comment(request):
 view displays the entry as well as comments below it
 '''
 #! WIP
-# @login_required
-# def entry_detail(request):
-       # serialize comments for each entry
-    # entry_comments = {}
-    # for entry in entries:
-    #     if entry.visibility == 'FRIENDS':
-    #         allowed = set(friends_fqids + [str(user_author.id)])
-    #         filtered_comments = entry.comments.filter(author__id__in=allowed)
-    #     else:
-    #         filtered_comments = entry.comment.all()
-    #     serialized_comments = CommentSerializer(filtered_comments, many=True).data
-    #     entry_comments[entry.id] = serialized_comments
+@login_required
+def entry_detail(request, entry_uuid):
+    try:
+        entry = Entry.objects.get(id=entry_uuid)
+    except Entry.DoesNotExist:
+        entry = get_object_or_404(Entry, id__endswith=str(entry_uuid))
+    
+    viewer = Author.from_user(request.user)
+        # Enforce visibility (deny if FRIENDS-only and viewer isn't allowed)
+    if entry.visibility == "FRIENDS":
+        # entry.author.friends is a dict of FQID -> info (per your model)
+        allowed_fqids = set(entry.author.friends.keys()) if entry.author.friends else set()
+        # allow the author themself too
+        allowed_fqids.add(str(entry.author.id))
+        if not viewer or str(viewer.id) not in allowed_fqids:
+            return HttpResponseForbidden("This post is visible to friends only.")
 
+    # Fetch comments for the entry (all comments if viewer is allowed)
+    comments_qs = entry.comment.select_related('author').order_by('published')
+    
+    serialized_comments = CommentSerializer(comments_qs, many=True).data
+    entry_comments = { entry.id: serialized_comments }
+
+    context = {
+        'entry': entry,
+        'comments': comments_qs,
+        'comment_form': CommentForm(),
+        'entry_comments_json': json.dumps(entry_comments),
+    }
+    return render(request, 'entry_detail.html', context)
 
 
 @api_view(['POST'])

@@ -1,14 +1,12 @@
 {% extends "base.html" %}
 {% load static %}
-
 {% block head %}
-<link rel="stylesheet" href="{% static 'golden/css/global.css' %}">
-  
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'golden/css/entry.css' %}">
 {% endblock %}
-
 {% block content %}
 <div class="container mx-auto p-6">
-  <h1 class="text-2xl font-semibold mb-4">Stream</h1>
+  <h3>Stream</h3>
 
   <section class="space-y-4">
     {% for entry in entries %}

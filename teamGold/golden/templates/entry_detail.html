@@ -1,13 +1,14 @@
 {% extends "base.html" %}
 {% load static %}
 {% block head %}
+{{ block.super }}
 <link rel="stylesheet" href="{% static 'golden/css/entry.css' %}">
 {% endblock %}
 {% block content %}
 
 <!-- Opened when user presses comment button, shows entry plus comments below-->
 <div class="container mx-auto p-6">
-  <h1 class="text-2xl font-semibold mb-4">Entry Details</h1>
+  <h3>Entry Details</h3>
     <section id="entry-details">
     <article class="entry cursor-pointer hover:bg-gray-100 p-4 rounded-lg" data-entry-id="{{ entry.id }}">
         <header class="flex items-center justify-between mb-2">
@@ -24,7 +25,7 @@
         </header>
 
         {% if entry.title %}
-          <h2 class="text-lg font-semibold mb-1">{{ entry.title }}</h2>
+        <h2 class="text-lg font-semibold mb-1">{{ entry.title }}</h2>
         {% endif %}
         <div class="entry-body">{{ entry.content|safe }}</div>
         {% for image in entry.images.all %}
@@ -44,7 +45,7 @@
         </footer>
       </section>
         <section id="entry-comments">
-            <h3>Comments {{comments.count}}</h3>
+            <h2>Comments {{comments.count}}</h2>
             {% for comment in comments %}
             <div class="single-comment">
                 <strong>{{ comment.author.username }}</strong>

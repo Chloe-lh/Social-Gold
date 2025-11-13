@@ -1,9 +1,14 @@
 {% extends "base.html" %}
 {% load static %}
-<!-- Opened when user presses comment button, shows entry plus comments below-->
+{% block head %}
+<link rel="stylesheet" href="{% static 'golden/css/entry.css' %}">
+{% endblock %}
 {% block content %}
+
+<!-- Opened when user presses comment button, shows entry plus comments below-->
 <div class="container mx-auto p-6">
   <h1 class="text-2xl font-semibold mb-4">Entry Details</h1>
+    <section id="entry-details">
     <article class="entry cursor-pointer hover:bg-gray-100 p-4 rounded-lg" data-entry-id="{{ entry.id }}">
         <header class="flex items-center justify-between mb-2">
           <div>
@@ -31,15 +36,13 @@
         {% endif %}
 
         <footer class="mt-2 text-sm text-gray-600 flex space-x-4">
-          <!-- when someone presses the comment button, go to the entry_detail page-->
-              <button class="comment-btn" data-entry-id="{{ entry.id }}" data-entry-url="{% if entry.get_uuid %}{% url 'entry_detail' entry.get_uuid %}{% else %}#{% endif %}">
-                <img src="{% static 'golden/icons/comment-icon.png' %}">
-              </button>
-            <span>{{ entry.comment.count }} </span>
-            <button class="like-btn" data-entry-id="{{entry.id}}">
-              <img src="{% static 'golden/icons/like-icon.png'}">
-            <span>{{ entry.like.count }}</span>
+          <!-- comment button (navigates to detail — already on detail page) -->
+          <img src="{% static 'golden/icons/comment-icon.png' %}">
+          <span>{{ entry.comment.count }} </span>
+          <img src="{% static 'golden/icons/like-icon.png' %}" alt="Like">
+          <span>{{ entry.likes.count }}</span>
         </footer>
+      </section>
         <section id="entry-comments">
             <h3>Comments {{comments.count}}</h3>
             {% for comment in comments %}
@@ -47,35 +50,26 @@
                 <strong>{{ comment.author.username }}</strong>
                 <span>{{ comment.published|date:"Y-m-d H:i" }}</span>
                 <p>{{ comment.content|safe }}</p>
+                
+                <form method="post" action="{% url 'add_like' %}" style="display:inline">
+                  {% csrf_token %}
+                  <input type="hidden" name="object" value="{{ comment.id }}">
+                  <button type="submit" class="like-btn">
+                    <img src="{% static 'golden/icons/like-icon.png' %}" alt="Like">
+                  </button>
+                  <span>{{ comment.like_count }}</span>
+                </form>
             </div>
             {% empty %}
                 <div>No comment.</div>
             {% endfor %}
         </section>
         <form id="commentForm" method="post" action="{% url 'add_comment' %}">
-        {% csrf_token %}
-        <input type="hidden" name="entry_id" value="{{ entry.id }}">
-        {{ comment_form.as_p }}
-        <button type="submit" class="btn">Add comment</button>
-      </form>
+          {% csrf_token %}
+          <input type="hidden" name="entry_id" value="{{ entry.id }}">
+          {{ comment_form.as_p }}
+          <button type="submit" class="btn">Add comment</button>
+        </form>
       </article>
 {% endblock %}
 
-<script>
-    var entryComments = JSON.parse(document.getElementById('entry-comments').textContent);
-    
-    const form = document.getElementById('commentForm');
-    form.addEventListener('submit', function (event) {
-      event.preventDefault();
-      const formData = new FormData(form);
-      fetch(form.action, {
-        method: 'POST',
-        headers: { 'X-CSRFToken': formData.get('csrfmiddlewaretoken') },
-        body: formData
-      }).then(r => r.json()).then(data => {
-        if (data.success) window.location.reload();
-        else alert('Failed to add comment');
-      });
-    });
-
-</script>

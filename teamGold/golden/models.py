@@ -232,6 +232,9 @@ class Comment(models.Model):
     reply_to = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='replies')
     published = models.DateTimeField(auto_now_add=True)
 
+    def like_count(self):
+        return Like.objects.filter(object=self.id).count()
+
 '''
 Another person create their own node by setting up their own server and running our Django project
 as a separate instance. They get a unique url that they should add to their node info

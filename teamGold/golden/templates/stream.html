@@ -40,10 +40,14 @@
         {% endif %}
 
         <footer class="mt-2 text-sm text-gray-600 flex space-x-4">
-            <button class="like-btn" data-entry-id="{{entry.id}}">
-              <img src="{% static 'golden/icons/like-icon.png'}">
-            </button>
-            <span>{{ entry.like.count }}</span>
+            <form method="post" action="{% url 'add_like' %}" style="display:inline">
+              {% csrf_token %}
+              <input type="hidden" name="object" value="{{ entry.id }}">
+              <button type="submit" class="like-btn">
+                <img src="{% static 'golden/icons/like-icon.png' %}" alt="Like">
+              </button>
+            </form>
+            <span>{{ entry.likes.count }}</span>
           <!-- when someone presses the comment button, go to the entry_detail page-->
               <button class="comment-btn" data-entry-id="{{ entry.id }}" data-entry-url="{% if entry.get_uuid %}{% url 'entry_detail' entry.get_uuid %}{% else %}#{% endif %}">
                 <img src="{% static 'golden/icons/comment-icon.png' %}">
@@ -86,6 +90,12 @@ document.addEventListener("DOMContentLoaded", function() {
           if (url) window.location.href = url;
         });
     });
+    document.querySelectorAll('.like-btn').forEach(btn => {
+      btn.addEventListener("click", function(e){
+        e.stopPropagation();
+
+      })
+    })
   });
 </script>
 {% endblock %}

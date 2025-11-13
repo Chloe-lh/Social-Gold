@@ -589,6 +589,63 @@ def add_comment(request):
             # Redirect using the saved Entry instance's UUID suffix
             entry = comment.entry
             return redirect('entry_detail', entry_uuid=entry.get_uuid())
+
+
+@login_required
+def toggle_like(request):
+    """Minimal like/unlike form POSTs.
+
+    Expects POST field `object` containing the target object's FQID
+    (Entry.id or Comment.id). Redirects back to the referring page.
+    """
+    if request.method != 'POST':
+        return redirect('stream')
+
+    object_fqid = request.POST.get('object')
+    if not object_fqid:
+        return redirect(request.META.get('HTTP_REFERER', 'stream'))
+
+    author = Author.from_user(request.user)
+    if author is None:
+        return redirect('login')
+
+     # Try to resolve Entry first (full FQID or suffix). If not Entry, check Comment.
+    entry_obj = None
+    comment_obj = None
+    try:
+        entry_obj = Entry.objects.get(id=object_fqid)
+    except Entry.DoesNotExist:
+        try:
+            entry_obj = Entry.objects.get(id__endswith=object_fqid)
+        except Entry.DoesNotExist:
+            entry_obj = None
+
+    if not entry_obj:
+        try:
+            comment_obj = Comment.objects.get(id=object_fqid)
+        except Comment.DoesNotExist:
+            try:
+                comment_obj = Comment.objects.get(id__endswith=object_fqid)
+            except Comment.DoesNotExist:
+                comment_obj = None
+
+    # Toggle in a transaction to keep Like rows and Entry.likes in sync
+    with transaction.atomic():
+        existing = Like.objects.filter(author=author, object=(entry_obj.id if entry_obj else (comment_obj.id if comment_obj else object_fqid))).first()
+        if existing:
+            existing.delete()
+            if entry_obj:
+                entry_obj.likes.remove(author)
+            # For comments we don't have a comment_obj.likes; counts come from Like table.
+        else:
+            existing = Like.objects.filter(author=author, object=(entry_obj.id if entry_obj else (comment_obj.id if comment_obj else object_fqid))).first()
+            if not existing:
+                like_id = f"{settings.SITE_URL.rstrip('/')}/api/Like/{uuid.uuid4()}"
+                Like.objects.create(id=like_id, author=author, object=(entry_obj.id if entry_obj else (comment_obj.id if comment_obj else object_fqid)), published=timezone.now())
+                if entry_obj:
+                    entry_obj.likes.add(author)
+
+    return redirect(request.META.get('HTTP_REFERER', 'stream'))
     
 
 ''' 

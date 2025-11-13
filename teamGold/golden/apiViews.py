@@ -244,11 +244,40 @@ class LikeAPIView(APIView):
     authentication_classes = [BasicAuthentication]
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, id):
+    def get(self, request, entry_id):
         try:
             obj = Like.objects.get(pk=id)
         except Like.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
+        
+        likes_qs = Like.objects.filter(object=entry_id).order_by('-published')
+        try:
+            page_size = int(request.query_params.get('size', 5))
+        except Exception:
+            page_size = 5
+        try:
+            page_number = int(request.query_params.get('page', 1))
+        except Exception:
+            page_number = 1
+
+        paginator = Paginator(likes_qs, page_size)
+        page_obj = paginator.get_page(page_number)
+
+        serialized = LikeSerializer(page_obj.object_list, many=True).data
+
+        host = request.build_absolute_uri('/').rstrip('/')
+        collection_id = f"{host}/api/Entry/{entry_id}/likes/"
+
+        collection = {
+            "type": "likes",
+            "id": collection_id,
+            "web": collection_id.replace('/api/', '/'),
+            "page_number": page_number,
+            "size": page_size,
+            "count": paginator.count,
+            "src": serialized,
+        }
+
         return Response(LikeSerializer(obj).data, status=status.HTTP_200_OK)
 
 
@@ -265,8 +294,6 @@ class CommentLikeAPIView(APIView):
         comment_id = unquote(comment_id).rstrip('/')
 
         likes_qs = Like.objects.filter(object=comment_id).order_by('-published')
-        if not likes_qs.exists():
-            likes_qs = Like.objects.filter(object__endswith=comment_id).order_by('-published')
 
         # Pagination parameters
         try:

@@ -1,3 +1,4 @@
+import uuid
 from django.conf import settings
 import requests
 '''
@@ -20,6 +21,22 @@ def get_remote_author_profile(remote_node_url, author_id):
     if response.status_code == 200:
         return response.json()
     return None
+
+'''
+create fqid (id) for comment
+author.id is a already createdd fqid, so append to the end
+'''
+def generate_comment_fqid(author, entry):
+    comment_uuid = uuid.uuid4()
+    return f"{author.id}/commented/{comment_uuid}"
+
+# def generate_comment_like_fqid(author, comment):
+#     comment_uuid = uuid.uuid4()
+#     return f"{settings.LOCAL_NODE_URL}/api/authors/{author.uid}/commented/{comment_uuid}"
+
+# def generate_entry_like_fqid(author, entry):
+#     like_uuid = uuid.uuid4()
+#     return f"{settings.LOCAL_NODE_URL}/api/authors/{author.uid}"
 
 '''
 checks if a node is remote by checking if its URL (id) is different from 

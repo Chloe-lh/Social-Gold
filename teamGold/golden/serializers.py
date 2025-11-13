@@ -12,12 +12,13 @@ in a HTTP request and vice versa
 class NodeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Node
-        fields = '__all__' 
+        fields = '__all__'
 
 class AuthorSerializer(serializers.ModelSerializer):
+    type = serializers.CharField(default="author")
     class Meta:
         model = Author
-        fields = '__all__'
+        fields = ["type","id","host","displayName","github","profileImage","web"] 
 
 class EntrySerializer(serializers.ModelSerializer):
     class Meta:
@@ -30,28 +31,18 @@ class LikeSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class CommentSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Comment
-        fields = '__all__'
-
-""" 
-This comment section shows an alternative, more detailed CommentSerializer
-that includes custom representations. 
-
-class CommentSerializer(serializers.ModelSerializer):
     author_username = serializers.CharField(source='author.username', read_only=True)
-
+    author = AuthorSerializer(read_only=True)
     class Meta:
         model = Comment
-        fields = [
-            'id',                 
-            'author_username',   
-            'entry',              
+        fields = [              
+            'entry',  
+            'author'              
             'content',          
-            'contentType',
-            'published'
+            'content_Type',
+            'published',
+            "likes"
         ]
-"""    
 
 class FollowSerializer(serializers.ModelSerializer):
     class Meta:

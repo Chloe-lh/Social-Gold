@@ -17,11 +17,16 @@ from django.core.paginator import Paginator
 
 # LOCAL IMPORTS
 from golden.models import Author, Entry, Comment, Like, Follow, Node, EntryImage
+from golden import services
+
+# SWAGGER
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
 
 # SERIALIZERS IMPORTS
 from .serializers import (
     AuthorSerializer, EntrySerializer, NodeSerializer,
-    FollowSerializer, LikeSerializer, CommentSerializer, EntryImageSerializer
+    FollowSerializer, LikeSerializer, CommentSerializer, EntryImageSerializer, AuthorSerializer
 )
 
 '''
@@ -32,13 +37,7 @@ as JSON data for other API nodes
     - our node handles the request and serializers authors data to JSON
     - Entry related class based API views also have POST, PUT, DELETE API  
 
-   some info:
-   - class based API views 
-        - complex endpoints
-        - ei. sending profile data
-   - function based API views
-        - minimal logic
-        - ei. sending a notification
+    - REST endpoints 
 '''
  
 
@@ -154,7 +153,7 @@ class EntryCommentAPIView(APIView):
     GET /api/Entry/<entry_id>/comments/ is for all comments on an entry
     POST /api/Entry/<entry_id>/comments/ is for creating a new comment
     DELETE /api/Entry/<entry_id>/comments/ is for delete one or all comments 
-    TODO: DELETE API IS NOT TESTED YET
+    TODO: DELETE API IS NOT TESTED YET - we might not need it tbh
     """
     authentication_classes = [BasicAuthentication]
     permission_classes = [IsAuthenticated]
@@ -164,17 +163,56 @@ class EntryCommentAPIView(APIView):
         serializer = CommentSerializer(comments, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    def post(self, request, entry_id):
-        try:
-            entry = Entry.objects.get(id=entry_id)
-        except Entry.DoesNotExist:
-            print("DEBUG delete(): Entry not found for id=", entry_id)
-            return Response({'error': 'Entry not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = CommentSerializer(data=request.data)
+    @swagger_auto_schema(
+        method='POST',
+        operation_description='Adding a comment to an entry, send comment to other users inbox',
+        request_body=CommentSerializer,
+        responses={
+            200: openapi.Response(
+                description="Comment Created"
+            ),
+            400: openapi.Response(description="Comment creation failure")
+        }
+    )
+    def post(self, request, entry_id):
+        # normalize data
+        # validate request body
+        # save comment to database with unique FQID
+        # forward to inbox
+        # return response in JSON
+        entry_id = unquote(entry_id).rstrip("/") # decode fqid to url
+        entry = get_object_or_404(Entry, id=entry_id)
+        data = request.data.copy()
+        data["author"] = AuthorSerializer(request.user.author).data
+        data["type"] = "comment"
+        data["entry"] = entry.id #id == fqid
+        # generate FQID
+        #"id":"http://nodeaaaa/api/entryies/111/comments/130""
+        # id may be given in request -> could be remote node
+        comment_id = generate_
+        serializer = CommentSerializer(data=data)
+
         if serializer.is_valid():
-            serializer.save(entry=entry, author=request.user)
+            comment = serializer.save(
+                entry=entry, 
+                author=author, 
+                content=request.data.content,
+                content_type=request.content_type,
+                )
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        # get actor object (author) of user 
+        comment_object = {
+            "type":"comment",
+            "author":request.user.id,
+            "comment":comment.content,
+            "content_type":comment.content_type,
+            "published":comment.published.isoformat(),
+            "id":"", # full url (FQID)
+            "entry": entry_uid,
+        }
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, entry_id):
@@ -183,11 +221,7 @@ class EntryCommentAPIView(APIView):
         """
         entry_id = unquote(entry_id).rstrip("/")  # decode FQID back to full URL
 
-        try:
-            entry = Entry.objects.get(id=entry_id)
-        except Entry.DoesNotExist:
-            print("DEBUG delete(): Entry not found for id=", entry_id)
-            return Response({'error': 'Entry not found'}, status=status.HTTP_404_NOT_FOUND)
+        entry = get_object_or_404(Entry, entry_id)
 
         comment_id = request.query_params.get('id', None)
 
@@ -213,12 +247,8 @@ class NodeAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, id):
-        try:
-            obj = Node.objects.get(pk=id) 
-        except Node.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        return Response(NodeSerializer(obj).data, status=status.HTTP_200_OK)
-    
+        node = get_object_or_404(Node, id)
+        return Response(NodeSerializer(node).data, status=status.HTTP_200_OK)
 
 class FollowAPIView(APIView):
     """
@@ -229,12 +259,8 @@ class FollowAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, id):
-        try:
-            obj = Follow.objects.get(pk=id)  
-        except Follow.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        return Response(FollowSerializer(obj).data, status=status.HTTP_200_OK)
-    
+        follow = get_object_or_404(Follow, id)
+        return Response(NodeSerializer(follow).data, status=status.HTTP_200_OK)
 
 class LikeAPIView(APIView):
     """
@@ -245,11 +271,7 @@ class LikeAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, entry_id):
-        try:
-            obj = Like.objects.get(pk=id)
-        except Like.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        
+        like = get_object_or_404(Like, entry_id)
         likes_qs = Like.objects.filter(object=entry_id).order_by('-published')
         try:
             page_size = int(request.query_params.get('size', 5))
@@ -278,7 +300,7 @@ class LikeAPIView(APIView):
             "src": serialized,
         }
 
-        return Response(LikeSerializer(obj).data, status=status.HTTP_200_OK)
+        return Response(LikeSerializer(like).data, status=status.HTTP_200_OK)
 
 
 class CommentLikeAPIView(APIView):

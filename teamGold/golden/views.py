@@ -20,6 +20,7 @@ from golden import models
 from golden.models import Entry, EntryImage, Author, Comment, Like, Follow
 from .forms import CustomUserForm, CommentForm, ProfileForm, EntryList
 from golden.serializers import CommentSerializer
+from golden import services
 
 # Import login authentication stuff
 from django.contrib.auth.decorators import login_required
@@ -91,124 +92,6 @@ def stream_view(request):
 
     # Render the stream page extending base.html
     return render(request, 'stream.html', context)
-
-
-# @login_required
-# @require_author 
-# def home(request):
-#     """
-#     @require_author is linked with deorators.py to ensure user distinction
-#     """
-#     if request.current_author is None:
-#         return redirect('signup')
-    
-#     context = {}
-#     form = EntryList()
-#     editing_entry = None # because by default, users are not in editing mode 
-#     entries = Entry.objects.all().order_by('-is_posted')
-#     context['entries'] = entries
-
-#     # FEATURE POST AN ENTRY
-#     if request.method == "POST" and "entry_post" in request.POST:
-#         entry_id = f"{settings.SITE_URL}/api/entries/{uuid.uuid4()}"  #****** we need to change this to dynamically get the node num
-
-#         # Markdown conversion 
-#         markdown_content = request.POST['content']
-#         html_content = markdown.markdown(markdown_content)
-
-#         with transaction.atomic(): 
-#             entry = Entry.objects.create(
-#                 id=entry_id,
-#                 author=request.current_author,
-#                 content=html_content,
-#                 visibility=request.POST.get('visibility', 'PUBLIC')
-#             )
-        
-
-#         images = request.FILES.getlist('images')
-#         for idx, image in enumerate(images):
-#             EntryImage.objects.create(
-#                 entry=entry, image=image, order=idx)
-                    
-#         return redirect('home')
-    
-#     # FEATURE DELETE AN ENTRY 
-#     if request.method == "POST" and "entry_delete" in request.POST:
-#         primary_key = request.POST.get('entry_delete')
-#         entry = Entry.objects.get(id=primary_key)
-
-#         # also for testing purposes 
-#         if entry.author.id != request.current_author.id:
-#             return HttpResponseForbidden("This isn't yours")
-
-#         entry.delete()
-#         return redirect('home')
-    
-#     # FEATURE UPDATE AN EDITED ENTRY
-#     if request.method == "POST" and "entry_update" in request.POST:
-#         primary_key = request.POST.get("entry_update")
-#         editing_entry = get_object_or_404(Entry, id=primary_key)
-
-#         # for testing 
-#         if editing_entry.author.id != request.current_author.id:
-#             return HttpResponseForbidden("No editing")
-        
-#         raw_md = request.POST.get("content", "")
-#         visibility = request.POST.get("visibility", editing_entry.visibility)
-
-#         # difference between adding a new image and remove an image 
-#         new_images = request.FILES.getlist("images")
-#         remove_images = request.POST.getlist("remove_images")
-#         remove_ids = []
-#         for x in remove_images:
-#             try:
-#                 remove_ids.append(int(x))
-#             except (TypeError, ValueError):
-#                 pass 
-
-#         with transaction.atomic():
-#             editing_entry.content = markdown.markdown(raw_md)
-#             editing_entry.visibility = visibility
-#             editing_entry.contentType = "text/html"
-#             editing_entry.save()
-
-#             if remove_ids:
-#                 EntryImage.objects.filter(entry=editing_entry, id__in=remove_ids).delete()
-
-#             # Append any newly uploaded images, preserving order
-#             if new_images:
-#                 current_max = editing_entry.images.count()
-#                 for idx, f in enumerate(new_images):
-#                     EntryImage.objects.create(
-#                         entry=editing_entry,
-#                         image=f,
-#                         order=current_max + idx
-#                     )
-
-#         context = {}
-#         context['form'] = EntryList()  
-#         context['editing_entry'] = None 
-#         context['entries'] = Entry.objects.select_related("author").all()
-#         context['comment_form'] = CommentForm()
-#         return render(request, "home.html", context | {'entries': entries})
-
-#     # FEATURE EDIT BUTTON CLICKED 
-#     if request.method == "POST" and "entry_edit" in request.POST:
-#         primary_key = request.POST.get('entry_edit')
-#         editing_entry = get_object_or_404(Entry, id=primary_key)
-
-#         form = EntryList(instance=editing_entry)
-#         context["editing_entry"] = editing_entry
-#         context["form"] = form
-#         context["entries"] = Entry.objects.select_related("author").all()
-#         return render(request, "home.html", context | {'entries': entries})
-
-#     context['form'] = form 
-#     context["editing_entry"] = editing_entry
-#     # context["entries"] = Entry.objects.select_related("author").all()
- 
-
-#     return render(request, "home.html", context | {'entries': entries})
 
 @login_required
 def index(request):
@@ -571,7 +454,10 @@ def friends(request):
         "query": query,
         "page_type": "friends",  # Used in template to hide buttons
     })
-
+'''
+    minimal comment form POSTs for local comments
+    expects CommentForm object from HTML in Entry_details
+'''
 @login_required
 def add_comment(request):
     if request.method == "POST": # user clicks add comment button in entry_details
@@ -593,7 +479,7 @@ def add_comment(request):
 
 @login_required
 def toggle_like(request):
-    """Minimal like/unlike form POSTs.
+    """ Minimal like/unlike form POSTs.
 
     Expects POST field `object` containing the target object's FQID
     (Entry.id or Comment.id). Redirects back to the referring page.
@@ -712,7 +598,12 @@ def handle_create(data, author):
     return
 def handle_like(data,author):
     return
+'''
+Receives Create/Comment activity, parse it and produce payload accepted by 
+CommentSerializer
+'''
 def handle_comment(data,author):
+
     return
 def handle_follow(data,author):
     return

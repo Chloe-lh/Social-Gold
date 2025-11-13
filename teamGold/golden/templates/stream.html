@@ -51,6 +51,12 @@
                 <img src="{% static 'golden/icons/comment-icon.png' %}">
               </button>
             <span>{{ entry.comment.count }} </span>
+
+          <button class="share-btn" data-entry-url="{% if entry.get_uuid %}{% url 'entry_detail' entry.get_uuid %}{% else %}#{% endif %}">
+            <img src="{% static 'golden/icons/share-icon.png' %}" alt="Share" title="Copy link" style="width: 20px; height: 20px;">
+          </button>
+
+
         </footer>
       </article>
     {% empty %}
@@ -94,6 +100,24 @@ document.addEventListener("DOMContentLoaded", function() {
 
       })
     })
+  });
+
+  document.querySelectorAll('.share-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+
+      // Get the URL for this entry
+      const entryUrl = this.dataset.entryUrl;
+      const fullUrl = window.location.origin + entryUrl;
+
+      // Copy to clipboard
+      navigator.clipboard.writeText(fullUrl).then(() => {
+        // Optional: small confirmation popup
+        alert("Link copied to clipboard!");
+      }).catch(err => {
+        console.error("Failed to copy link:", err);
+      });
+    });
   });
 </script>
 {% endblock %}

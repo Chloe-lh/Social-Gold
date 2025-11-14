@@ -1,13 +1,12 @@
-/* this file contains all the global variables and common styling */
+/* This file contains all the global variables and common styling */
 
 /* fonts */
 @font-face { font-family: 'BlackMango'; src: url(fonts/BlackMango-Black.ttf) format('opentype'); }
 @font-face { font-family: 'Montserrat-Bold'; src: url(fonts/Montserrat-Bold.ttf) format('opentype'); }
 @font-face { font-family: 'Montserrat-Medium'; src: url(fonts/Montserrat-Medium.ttf) format('opentype'); }
 
-/* theme colours */
 :root {
-    /* Colour Pallet */
+    /* primary colour pallet */
     --background-colour: #1D1D1D;
     --off-background: #2C2C2C;
     --contrast-background: #DDDBD2;
@@ -20,17 +19,17 @@
 
 html[data-theme="light"] {
     /* redefine colours for light theme */
-    --background-colour: #801010;
-    --off-background: #2C2C2C;
-    --contrast-background: #DDDBD2;
-    --off-contrast-background: #A5A491;
+    --background-colour: #FFFCEC;
+    --off-background: #F2B43B;
+    --contrast-background: #EFD7A9;
+    --off-contrast-background: #6A4E00;
     --primary-colour: #F2B43B;
     --contrast-colour-1: #753997;
     --contrast-colour-2: #006BA6;
     --contrast-colour-3: #FC5D47;
 }
 
-/* implement shared component styles here */
+/* implementation of shared component styles here */
 html, body {
     width: 100%;
     height: 100%;

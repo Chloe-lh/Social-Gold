@@ -49,7 +49,6 @@ urlpatterns = [
     path("api/Entry/<path:id>/", apiViews.EntryAPIView.as_view(), name="get-entry"),
     path("api/Entry/<path:entry_id>/comments/", EntryCommentAPIView.as_view(), name="entry-comments"),
 
-
     # ! Thee two serve the same purpose, but the first is for getting images, the second is for uploading images to an entry
     path("api/EntryImage/<int:id>/", apiViews.EntryImageAPIView.as_view(), name="get-entry-image"),
     path("api/Entry/<path:entry_id>/images/", EntryImageAPIView.as_view(), name="entryimage-upload"),

@@ -55,7 +55,6 @@
       <button class="tab-btn" data-tab="followers">followers</button>
       <button class="tab-btn" data-tab="following">following</button>
       <button class="tab-btn" data-tab="requests">requests</button>
-      <button class="tab-btn" data-tab="friends">friends</button>
       <button class="tab-btn" data-tab="search">search</button>
     </nav>
 
@@ -66,13 +65,11 @@
       {% if entries %}
         {% for entry in entries %}
           <article class="entry">
-            <p><strong>@{{ author.username }}</strong> · {{ entry.published|date:"Y/m/d" }}</p>
-            <div class="content">
+            <p><strong>@{{ author.username }}</strong> {{ entry.published|date:"H:i T l M d, Y" }}</p>
               {% for img in entry.images.all %} 
                 <img src="{{ img.image.url }}" alt="entry image" class="entry-img">
               {% endfor %}
               {{ entry.content|safe }}
-            </div>
           </article>
         {% endfor %}
       {% else %}
@@ -84,14 +81,13 @@
     <section class="tab-panel" data-tab-panel="followers">
       {% if followers %}
         {% for f in followers %}
-          <div class="author-list-item" style="display:flex; justify-content:space-between; align-items:center;">
-            <span>{{ f.username }}</span>
-            <form method="POST" style="display:inline;">
-              {% csrf_token %}
-              <button type="submit" name="remove_follower" value="{{ f.id }}" class="action-btn reject-btn">Remove</button>
-            </form>
-          </div>
-          <hr>
+          <section class="author-list-item follower-row">
+            <span class="follower-username">{{ f.username }}</span>
+            {% if f in friends %}
+              <img src="{% static 'golden/icons/friends-icon.png' %}" alt="friend icon" class="friend-icon">
+            {% endif %}
+          </section>
+          <hr class="follower-divider">
         {% endfor %}
       {% else %}
         <p>You're a lonely loser.</p>
@@ -102,21 +98,32 @@
     <section class="tab-panel" data-tab-panel="following">
       {% if following %}
         {% for f in following %}
-          <div class="author-list-item" style="display:flex; justify-content:space-between; align-items:center;">
-            <span>{{ f.username }}</span>
-            <form method="POST" style="display:inline;">
+          <section class="author-list-item follower-row">
+            <span class="follower-username">{{ f.username }}</span>
+            {% if f in friends %}
+              <img src="{% static 'golden/icons/friends-icon.png' %}" alt="friend icon" class="friend-icon">
+            {% endif %}
+
+            <form method="POST" class="unfollow-form">
               {% csrf_token %}
-              <button type="submit" name="unfollow" value="{{ f.id }}" class="action-btn reject-btn">Remove</button>
+              <button type="submit" name="unfollow" value="{{ f.id }}" class="unfollow-btn">
+                <img src="{% static 'golden/icons/user-remove-icon.png' %}" alt="unfollow">
+              </button>
             </form>
-          </div>
-          <hr>
+          </section>
+          <hr class="follower-divider">
         {% endfor %}
       {% else %}
-        <p>Narcissist coded.</p>
+        <p>Narcassistic Coded.</p>
       {% endif %}
     </section>
 
     <!-- Request Tab Section -->
+    <!-- THIS IS IMPORTANT, PLEASE READ IF YOU ARE REFRACTORING THIS HTML FILE
+    The rejection (user-remove-icon & user-add-icon) need to be added in the same way the
+    following tab is currently handelling this feature. 
+    Comment by: Kenneth
+    -->
     <section class="tab-panel" data-tab-panel="requests">
     {% if follow_requests %}
       <ul style="list-style: none; padding: 0;">
@@ -142,33 +149,8 @@
         {% endfor %}
       </ul>
     {% else %}
-      <p>No follow requests.</p>
+      <p>You have no outgoing following requests.</p>
     {% endif %}
-    </section>
-
-    <!-- Friends Tab Section -->
-    <!-- THIS IS IMPORTANT TO PLEASE READ IF YOU ARE REFRACTORING THIS HTML FILE
-    This tab should not exist, and the concept of knowing your friends needs to be integrated 
-    in Followers/Following. Check Figma for the visual design on this concept. 
-    Comment by: Kenneth
-    -->
-    <section class="tab-panel" data-tab-panel="friends">
-      {% if friends %}
-        {% for f in friends %}
-          <div class="author-list-item" style="display:flex; justify-content:space-between; align-items:center;">
-            <span>{{ f.username }}</span>
-            <form method="POST" style="display:inline;">
-              {% csrf_token %}
-              <button type="submit" name="remove_friend" value="{{ f.id }}" class="action-btn reject-btn">
-                Unfriend
-              </button>
-            </form>
-          </div>
-          <hr>
-        {% endfor %}
-      {% else %}
-        <p>No friends yet.</p>
-      {% endif %}
     </section>
 
     <!-- Search Tab Section -->
@@ -179,8 +161,7 @@
     Comment by: Kenneth
     -->
     <section class="tab-panel" data-tab-panel="search">
-      <form method="GET" action="{% url 'search_authors' %}" 
-        style="display: flex; width: 100%; gap: 10px; margin-bottom: 20px; height: 48px;">
+      <form method="GET" action="">      
         <input type="text" name="q" class="search-bar" placeholder="Search by username" value="{{ query }}"
           style="flex: 1; padding: 0 20px; font-size: 1rem; box-sizing: border-box; height: 100%;
                  border: 1px solid #555; background: var(--colour-off-background); color: var(--colour-contrast);

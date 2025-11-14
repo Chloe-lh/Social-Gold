@@ -325,3 +325,62 @@ hr {
   color: var(--colour-contrast);
   transition: background 0.2s ease;
 }
+
+.follower-row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    gap: 12px;
+    position: relative;
+}
+
+.follower-username {
+    font-size: 1.4rem;
+    font-family: "BlackMango", serif;
+    color: var(--colour-yellow);
+}
+
+.remove-form {
+    margin-left: auto; 
+}
+
+.remove-btn {
+    background: transparent;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.remove-btn:hover img {
+    filter: brightness(0) saturate(100%) invert(35%) sepia(72%) saturate(7475%)
+            hue-rotate(351deg) brightness(101%) contrast(98%);
+}
+
+.follower-divider {
+    border: none;
+    border-top: 1px solid rgba(221,219,210,0.3);
+    margin: 0.3rem 0 0.6rem 0;
+}
+
+.unfollow-form {
+    margin-left: auto; 
+}
+
+
+.unfollow-btn {
+    background: transparent;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.unfollow-btn:hover img {
+    filter: brightness(0) saturate(100%) invert(35%) sepia(72%) saturate(7475%)
+            hue-rotate(351deg) brightness(101%) contrast(98%);
+}
+
+/* will clean, got lazy and gpt'ed it. 

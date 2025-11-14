@@ -276,7 +276,6 @@ def profile_view(request):
     author = Author.from_user(request.user)
 
     if request.method == "POST":
-        # 1️⃣ Approve / Reject follow requests
         if "follow_id" in request.POST and "action" in request.POST:
             follow_id = request.POST.get("follow_id")
             action = request.POST.get("action")
@@ -324,6 +323,7 @@ def profile_view(request):
             target.update_friends()
             author.update_friends()
             return redirect("profile")
+    
 
         if "remove_friend" in request.POST:
             target_id = request.POST.get("remove_friend")

@@ -19,7 +19,6 @@ urlpatterns = [
 
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
     path('profile/', views.profile_view, name='profile'),
-    path('search/', views.profile_view, name='profile'),
     # profile should contain: main profile that contains a list of the author's entries
     # profile also contains the following: followers, following, and requests
     path('profile/followers/', views.followers, name='followers'),

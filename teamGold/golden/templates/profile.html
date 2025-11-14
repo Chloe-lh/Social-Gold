@@ -45,7 +45,7 @@
 
   <!-- Profile Description -->
   <section class="description">
-    <p class="bio-description">{{ author.description|default:"This user hasn't added a bio yet." }}</p>
+    <p class="bio-description">{{ author.description|default:"This user does not have a bio."|safe }}</p>
   </section>
 
   <!-- Tab Sections -->

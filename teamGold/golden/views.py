@@ -8,7 +8,6 @@ from django.contrib.auth.backends import ModelBackend
 from django.db.models import Q
 
 # REST FRAMEWORKS 
-import markdown
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -273,6 +272,9 @@ class ApprovedUserBackend(ModelBackend):
 
 @login_required
 def profile_view(request):
+    """
+    This function deals the logic regarding profile.html 
+    """
     author = Author.from_user(request.user)
 
     if request.method == "POST":
@@ -357,7 +359,6 @@ def profile_view(request):
     else:
         form = ProfileForm(instance=author)
 
-    # --- BUILD CONTEXT DATA ---
     entries = Entry.objects.filter(author=author).order_by("-published")
     followers_info = author.followers_info or {}
     followers = Author.objects.filter(id__in=list(followers_info.keys())) if followers_info else []
@@ -365,6 +366,7 @@ def profile_view(request):
     follow_requests = Follow.objects.filter(object=author.id, state="REQUESTED")
     friends_data = author.friends or {}
     friends = Author.objects.filter(id__in=list(friends_data.keys())) if friends_data else []
+    author.description = markdown.markdown(author.description)
 
     context = {
         "author": author,
@@ -379,7 +381,6 @@ def profile_view(request):
     return render(request, "profile.html", context)
 
 FOLLOW_STATE_CHOICES = ["REQUESTED", "ACCEPTED", "REJECTED"]
-
 
 @login_required
 def search_authors(request):

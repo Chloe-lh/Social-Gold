@@ -174,3 +174,20 @@ ul {
     min-height: 100vh;
     overflow-y: auto;
 }
+
+.item a {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.item a img.icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+}
+
+#logout-link .icon {
+    width: 16px;
+    height: 16px;
+}

@@ -84,7 +84,7 @@
           <section class="author-list-item follower-row">
             <span class="follower-username">{{ f.username }}</span>
             {% if f in friends %}
-              <img src="{% static 'golden/icons/friends-icon.png' %}" alt="friend icon" class="friend-icon">
+              <img class="friend-icon" src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends">
             {% endif %}
           </section>
           <hr class="follower-divider">
@@ -101,13 +101,13 @@
           <section class="author-list-item follower-row">
             <span class="follower-username">{{ f.username }}</span>
             {% if f in friends %}
-              <img src="{% static 'golden/icons/friends-icon.png' %}" alt="friend icon" class="friend-icon">
+              <img class="friend-icon" src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends">
             {% endif %}
 
             <form method="POST" class="unfollow-form">
               {% csrf_token %}
               <button type="submit" name="unfollow" value="{{ f.id }}" class="unfollow-btn">
-                <img src="{% static 'golden/icons/user-remove-icon.png' %}" alt="unfollow">
+                <img src="{% static 'golden/icons/user-remove-icon.png' %}" alt="unfollow this person">
               </button>
             </form>
           </section>
@@ -119,11 +119,6 @@
     </section>
 
     <!-- Request Tab Section -->
-    <!-- THIS IS IMPORTANT, PLEASE READ IF YOU ARE REFRACTORING THIS HTML FILE
-    The rejection (user-remove-icon & user-add-icon) need to be added in the same way the
-    following tab is currently handelling this feature. 
-    Comment by: Kenneth
-    -->
     <section class="tab-panel" data-tab-panel="requests">
     {% if follow_requests %}
       <ul style="list-style: none; padding: 0;">
@@ -134,19 +129,22 @@
             <form method="POST" style="display:inline;">
               {% csrf_token %}
               <input type="hidden" name="follow_id" value="{{ req.id }}">
-              <input type="hidden" name="action" value="approve">
-              <button class="action-btn approve-btn">Approve</button>
+              <button class="action-btn approve-request-button" type="submit">
+                <img src="{% static 'golden/icons/user-add-icon.png' %}" alt="approve their request">
+              </button>
           </form>
 
           <form method="POST" style="display:inline;">
               {% csrf_token %}
               <input type="hidden" name="follow_id" value="{{ req.id }}">
-              <input type="hidden" name="action" value="reject">
-              <button class="action-btn reject-btn">Reject</button>
+              <button class="action-btn reject-request-button" type="submit">
+                <img src="{% static 'golden/icons/user-remove-icon.png' %}" alt="reject their request">
+              </button>
           </form>
           </div>
         </li>
         {% endfor %}
+        <hr class="follower-divider">
       </ul>
     {% else %}
       <p>You have no outgoing following requests.</p>
@@ -217,21 +215,48 @@ document.getElementById('edit-profile-btn').addEventListener('click', function()
     form.style.display = form.style.display === 'none' ? 'block' : 'none';
 });
 
+// Store active tab in sessionStorage when tab is clicked
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      sessionStorage.setItem("activeTab", btn.dataset.tab);
+    });
+  });
+
+  // Apply active tab from sessionStorage
+  const saved = sessionStorage.getItem("activeTab");
+  if (saved) {
+    const btn = document.querySelector(`[data-tab="${saved}"]`);
+    const panel = document.querySelector(`[data-tab-panel="${saved}"]`);
+
+    if (btn && panel) {
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+
+      btn.classList.add("active");
+      panel.classList.add("active");
+    }
+  }
+});
+
+
 // Tab Switching
 document.addEventListener("DOMContentLoaded", () => {
   const tabButtons = document.querySelectorAll(".tab-btn");
   const tabPanels = document.querySelectorAll(".tab-panel");
 
-  tabButtons.forEach(btn => {
-    btn.addEventListener("click", () => {
-      const target = btn.dataset.tab;
+  tabButtons.forEach(button => {
+    button.addEventListener("click", () => {
+      const target = button.dataset.tab;
       const targetPanel = document.querySelector(`[data-tab-panel="${target}"]`);
 
-      tabButtons.forEach(b => b.classList.remove("active"));
-      tabPanels.forEach(p => p.classList.remove("active"));
+      tabButtons.forEach(button => button.classList.remove("active"));
+      tabPanels.forEach(panel => panel.classList.remove("active"));
 
-      btn.classList.add("active");
-      if (targetPanel) targetPanel.classList.add("active");
+      button.classList.add("active");
+      if (targetPanel) {
+        targetPanel.classList.add("active");
+      }
     });
   });
 });

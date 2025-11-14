@@ -31,13 +31,18 @@ to inherit these properties
             {% else %}
                 <img class="profile-pic" src="{% static 'golden/media/profile_pics/default_profile.webp' %}" alt="Default Profile">
             {% endif %}
-            <p>username</p>
+            <p>name</p>
             <p>email</p>
             <p>github</p>
         </div>
 
         <ul class="menu">
-            <li class="item"><a href="#" id="logout-link">Log Out</a></li>
+            <li class="item">
+                <a href="#" id="logout-link">Logout
+                    <img src="{% static 'golden/icons/logout-icon.png' %}" alt="Log Out" class="icon">
+                    
+                </a>
+            </li>
         </ul>
     </section>
 

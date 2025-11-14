@@ -6,13 +6,13 @@ from django.db import transaction
 from django.http import HttpResponseForbidden
 from django.contrib.auth.backends import ModelBackend
 from django.db.models import Q
+from django.views.decorators.http import require_POST
 
 # REST FRAMEWORKS 
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status, generics
-
 
 # BASE GOLDEN
 from golden import models
@@ -28,18 +28,15 @@ from django.utils import timezone
 from django.contrib.auth.views import LoginView
 import uuid
 
-# view decorator
-from django.views.decorators.http import require_POST
-
-# Imports for entries
+# Imports for Entries
 from django.contrib.auth import get_user_model
 from .decorators import require_author
 import markdown
 
-#secuirity
+# Security
 from django.views.decorators.csrf import csrf_exempt
 
-#imports for AJAX
+# Imports for AJAX
 from django.http import JsonResponse
 import json
 
@@ -355,7 +352,7 @@ def profile_view(request):
             if form.is_valid():
                 form.save()
             return redirect("profile")
-
+        
     else:
         form = ProfileForm(instance=author)
 
@@ -429,6 +426,7 @@ def search_authors(request):
         "authors": authors,
         "query": query,
         "page_type": "search_authors",
+        "active_tab": "search",
     })
 
 

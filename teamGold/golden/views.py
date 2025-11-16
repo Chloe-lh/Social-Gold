@@ -1,18 +1,15 @@
 # BASE DJANGO 
 from django.shortcuts import render, redirect, get_object_or_404
-from django.urls import reverse
 from django.conf import settings
 from django.db import transaction
 from django.http import HttpResponseForbidden
 from django.contrib.auth.backends import ModelBackend
 from django.db.models import Q
-from django.views.decorators.http import require_POST
 
 # REST FRAMEWORKS 
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import status, generics
 
 # BASE GOLDEN
 from golden import models

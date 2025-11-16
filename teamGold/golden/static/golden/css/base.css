@@ -1,3 +1,11 @@
+/* ================================
+   GOLDEN UNIFIED CSS
+   Desktop (default) + Mobile (≤767px)
+================================ */
+
+/* ================================
+   DEFAULT DESKTOP STYLES
+================================ */
 body{
     display: flex;
     margin: 0;
@@ -24,16 +32,19 @@ body{
     flex-flow: column;
     justify-content: space-between;
 } 
+
 .side-nav ul{
     padding: 32px 8px 32px 32px;
     font-size: 20px;
     margin:0;
     list-style-type: none;
 }
+
 .side-nav ul li{
     margin-top: 20px;
     margin-bottom: 50px;
 }
+
 .side-toggle{
     display: none;
     position: fixed;
@@ -91,6 +102,7 @@ a {
     margin: 0;
     padding: 0;
 }
+
 .menu .item a {
     text-decoration: none;
     color: #f2b43b;
@@ -98,16 +110,17 @@ a {
     font-size: 1.2rem;
     transition: color 0.2s ease;
 }
+
 .menu .item a:hover {
     color: #fff9e9;
     text-shadow: 0 0 6px #f2b43b;
 }
-/* the button look */
+
 .top-nav .icon-btn {
     width: 44px;
     height: 44px;
     background: #2c2c2c;
-    border-radius: 1rem;        /* ← button-ish, make 50% for circle */
+    border-radius: 1rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -115,6 +128,7 @@ a {
     transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
     border: 1px solid rgba(242, 180, 59, 0.35);
 }
+
 .top-nav .icon-btn:hover,
 .top-nav .icon-btn:focus-visible {
     background: #f2b43b;
@@ -123,7 +137,6 @@ a {
     outline: none;
 }
 
-/* icon inside */
 .top-nav .icon-btn img {
     width: 22px;
     height: 22px;
@@ -135,25 +148,6 @@ a {
     height: 100%;
     padding: 0 60px 0 40px;
 }
-/*
-when viewed on a smaller screen, the side nav is not visible
-to open the side bar press a button
-*/
-/* TODO: we will worry about responsiveness later */
-/* @media (max-width:850px){
-    .side-nav{
-        left: -170px;
-    }
-    .side-nav.open{
-        left:0;
-    }
-    .side-toggle{
-        display:block;
-    }
-    .content{
-        margin-left:0;
-    }
-} */
 
 ul {
     text-align: right;
@@ -190,4 +184,420 @@ ul {
 #logout-link .icon {
     width: 16px;
     height: 16px;
+}
+
+/* ================================
+   MOBILE RESPONSIVE STYLES
+   Applies to screens ≤ 767px
+================================ */
+
+@media only screen and (max-width: 767px) {
+    /* ================================
+       LAYOUT - Break flex, hide side-nav
+    ================================ */
+    body {
+        display: block !important;
+        flex-direction: column !important;
+    }
+
+    /* Overlay backdrop when side-nav is open */
+    body::after {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 999;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s ease, visibility 0.3s ease;
+        pointer-events: none;
+    }
+
+    /* Show overlay when side-nav is open */
+    body:has(.side-nav.open)::after {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+    }
+
+    /* Side nav - hidden off-screen, slides in when hamburger clicked */
+    body section.side-nav,
+    body .side-nav,
+    section.side-nav,
+    .side-nav {
+        position: fixed !important;
+        left: -300px !important;
+        top: 0 !important;
+        height: 100vh !important;
+        width: 300px !important;
+        max-width: 80vw !important;
+        transition: left 0.3s ease !important;
+        z-index: 1000 !important;
+        background: var(--off-background) !important;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.5) !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        display: flex !important;
+    }
+
+    /* Side nav open state */
+    body section.side-nav.open,
+    body .side-nav.open,
+    section.side-nav.open,
+    .side-nav.open {
+        left: 0 !important;
+    }
+
+    /* Hamburger button - visible on mobile */
+    body button.side-toggle,
+    body .side-toggle,
+    button.side-toggle,
+    .side-toggle {
+        display: block !important;
+        visibility: visible !important;
+        position: fixed !important;
+        top: 1.25rem !important;
+        left: 1rem !important;
+        z-index: 999 !important;
+        background: transparent !important;
+        border: none !important;
+        color: var(--colour-contrast) !important;
+        padding: 0.25rem !important;
+        font-size: 1.5rem !important;
+        cursor: pointer !important;
+        opacity: 1 !important;
+        border-radius: 4px !important;
+    }
+
+    /* Top nav - hidden on mobile */
+    body nav.top-nav,
+    body .top-nav,
+    body .main nav.top-nav,
+    nav.top-nav,
+    .top-nav,
+    div.main nav.top-nav,
+    .main .top-nav {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        overflow: hidden !important;
+    }
+
+    /* Main content - full width */
+    body div.main,
+    body .main,
+    div.main,
+    .main {
+        flex: none !important;
+        margin-left: 0 !important;
+        padding-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        display: block !important;
+    }
+
+    /* Page content - adjusted padding for mobile */
+    body main.page-content,
+    body main.content,
+    body .page-content,
+    main.page-content,
+    main.content,
+    .page-content {
+        padding: 1rem !important;
+        padding-top: 5rem !important;
+        margin-left: 0 !important;
+        width: 100% !important;
+        background: var(--colour-background) !important;
+        flex: none !important;
+    }
+
+    /* ================================
+       PROFILE INFO - Keep in side-nav only
+    ================================ */
+    
+    /* Hide profile from main content */
+    body .profile-header,
+    .profile-header,
+    main.content .profile-header {
+        display: none !important;
+    }
+
+    /* Style profile info inside side-nav */
+    .side-nav #profile-information,
+    .side-nav .profile-header {
+        display: block !important;
+        text-align: center !important;
+        padding: 1rem 1.5rem !important;
+    }
+
+    .side-nav #navbar-header {
+        font-size: 2.5rem !important;
+        color: var(--colour-yellow) !important;
+        margin-bottom: 1.5rem !important;
+        text-align: center !important;
+    }
+
+    .side-nav .profile-pic,
+    .side-nav img.profile-pic {
+        width: 100px !important;
+        height: 100px !important;
+        border-radius: 50% !important;
+        border: 3px solid var(--colour-yellow) !important;
+        margin: 0 auto 1rem !important;
+        display: block !important;
+    }
+
+    .side-nav #profile-information p,
+    .side-nav .profile-info p {
+        color: var(--contrast-background) !important;
+        font-size: 0.95rem !important;
+        margin: 0.25rem 0 !important;
+        text-align: center !important;
+    }
+
+    /* Hide description from main area */
+    main.content .description {
+        display: none !important;
+    }
+
+    /* Keep description in side-nav if it exists */
+    .side-nav .description {
+        display: block !important;
+        padding: 0 1.5rem !important;
+        margin-bottom: 1rem !important;
+    }
+
+    .side-nav .description p {
+        font-size: 0.85rem !important;
+        color: var(--text-muted) !important;
+        font-style: italic !important;
+        text-align: center !important;
+    }
+
+    /* ================================
+       TABS - Vertical full-width buttons
+    ================================ */
+    .tabs-section {
+        margin-top: 1.5rem !important;
+    }
+
+    .tabs {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.75rem !important;
+        border-bottom: none !important;
+        margin-bottom: 1.5rem !important;
+    }
+
+    .tab-btn {
+        flex: none !important;
+        width: 100% !important;
+        height: 60px !important;
+        background: var(--colour-off-background) !important;
+        color: var(--colour-contrast) !important;
+        border: 1px solid rgba(221, 219, 210, 0.2) !important;
+        border-radius: 8px !important;
+        font-family: "BlackMango", serif !important;
+        font-size: 1.3rem !important;
+        text-transform: lowercase !important;
+    }
+
+    .tab-btn.active {
+        background: var(--colour-off-background) !important;
+        color: var(--colour-yellow) !important;
+        border: 1px solid var(--colour-yellow) !important;
+        border-bottom: 4px solid var(--colour-yellow) !important;
+        box-shadow: 0 0 12px rgba(242, 180, 59, 0.25) !important;
+    }
+
+    .tab-panels {
+        padding-top: 0 !important;
+    }
+
+    /* ================================
+       USER LISTS - Clean border style
+    ================================ */
+    .author-row {
+        background: transparent !important;
+        border: none !important;
+        border-bottom: 1px solid rgba(221, 219, 210, 0.2) !important;
+        border-radius: 0 !important;
+        padding: 1rem 0 !important;
+        margin-bottom: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+
+    .author-row:last-child {
+        border-bottom: none !important;
+    }
+
+    .follower-row {
+        display: flex !important;
+        align-items: center !important;
+        width: 100% !important;
+        gap: 0.5rem !important;
+    }
+
+    .follower-username,
+    .author-list-item {
+        font-family: "BlackMango", serif !important;
+        font-size: 1.3rem !important;
+        color: var(--colour-yellow) !important;
+        margin: 0 !important;
+        flex: 1 !important;
+        text-align: left !important;
+    }
+
+    .follower-divider,
+    hr {
+        display: none !important;
+    }
+
+    .remove-form,
+    .unfollow-form {
+        margin-left: auto !important;
+        flex-shrink: 0 !important;
+    }
+
+    .remove-btn,
+    .unfollow-btn,
+    .action-btn {
+        background: transparent !important;
+        border: none !important;
+        padding: 0.5rem !important;
+        min-width: 44px !important;
+        min-height: 44px !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    .remove-btn img,
+    .unfollow-btn img,
+    .action-btn img {
+        width: 24px !important;
+        height: 24px !important;
+    }
+
+    /* ================================
+       REQUESTS - Dual action buttons
+    ================================ */
+    .request-row {
+        background: transparent !important;
+        border: none !important;
+        border-bottom: 1px solid rgba(221, 219, 210, 0.2) !important;
+        border-radius: 0 !important;
+        padding: 1rem 0 !important;
+        margin-bottom: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+
+    .request-row:last-child {
+        border-bottom: none !important;
+    }
+
+    .request-actions {
+        display: flex !important;
+        gap: 0.5rem !important;
+        margin-left: auto !important;
+    }
+
+    /* ================================
+       EDIT PROFILE FORM
+    ================================ */
+    .edit-profile-button {
+        text-align: center !important;
+        margin-bottom: 1rem !important;
+    }
+
+    #edit-profile-form {
+        max-width: 100% !important;
+        padding: 1rem !important;
+        margin: 1rem 0 !important;
+    }
+
+    #edit-profile-form input[type="text"],
+    #edit-profile-form input[type="url"],
+    #edit-profile-form textarea,
+    #edit-profile-form input[type="file"] {
+        width: 100% !important;
+        font-size: 16px !important;
+        padding: 0.6rem !important;
+    }
+
+    #edit-profile-form textarea {
+        min-height: 100px !important;
+    }
+
+    #edit-profile-form button[type="submit"] {
+        width: 100% !important;
+        padding: 0.75rem !important;
+    }
+
+    /* ================================
+       ENTRIES/POSTS
+    ================================ */
+    .entry {
+        padding: 1rem !important;
+        margin-bottom: 1rem !important;
+        border-radius: 10px !important;
+    }
+
+    .entry > p {
+        font-size: 0.85rem !important;
+    }
+
+    .entry .content {
+        font-size: 0.93rem !important;
+        line-height: 1.6 !important;
+    }
+
+    .entry-img {
+        border-radius: 8px !important;
+        margin: 0.5rem 0 !important;
+    }
+
+    /* ================================
+       UTILITIES
+    ================================ */
+    img {
+        max-width: 100% !important;
+        height: auto !important;
+    }
+
+    * {
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+    }
+}
+
+/* ================================
+   EXTRA SMALL SCREENS (< 400px)
+================================ */
+@media only screen and (max-width: 400px) {
+    .profile-pic,
+    img.profile-pic {
+        width: 120px !important;
+        height: 120px !important;
+    }
+
+    .tab-btn {
+        height: 55px !important;
+        font-size: 1.2rem !important;
+    }
+
+    .follower-username,
+    .author-list-item {
+        font-size: 1.2rem !important;
+    }
+
+    main.content {
+        padding: 0.75rem !important;
+        padding-top: 3.5rem !important;
+    }
 }

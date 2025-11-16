@@ -4,6 +4,7 @@
 {% block head %}
 <link rel="stylesheet" href="{% static 'golden/css/global.css' %}">
 <link rel="stylesheet" href="{% static 'golden/css/profile.css' %}">
+<link rel="stylesheet" href="{% static 'golden/css/mobile-profile.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -27,7 +28,7 @@
       <input type="file" name="profileImage" accept="image/*"><br><br>
 
       <label for="description">Bio / About Me:</label><br>
-      <textarea name="description" rows="4" cols="50" placeholder="Write something about yourself...">
+      <textarea name="description" rows="4" cols="50">
         {{ user.description }}
       </textarea>
       <br><br>
@@ -70,7 +71,7 @@
           </article>
         {% endfor %}
       {% else %}
-        <p>You have no entries yet.</p>
+        <p>You have no entries, consider posting your first one!</p>
       {% endif %}
     </section>
 
@@ -111,7 +112,7 @@
           <hr class="follower-divider">
         {% endfor %}
       {% else %}
-        <p>Narcassistic Coded.</p>
+        <p>You are not following anyone.</p>
       {% endif %}
     </section>
 
@@ -193,7 +194,7 @@
       {% endfor %}
       </ul>
     {% else %}
-      <p>No users found.</p>
+      <p>No authors found.</p>
     {% endif %} 
   </section>
 </body>

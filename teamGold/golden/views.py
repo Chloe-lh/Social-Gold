@@ -273,6 +273,7 @@ def profile_view(request):
     This function deals the logic regarding profile.html 
     """
     author = Author.from_user(request.user)
+    form = ProfileForm(instance=author)
 
     if request.method == "POST":
         if "follow_id" in request.POST and "action" in request.POST:
@@ -353,8 +354,45 @@ def profile_view(request):
                 form.save()
             return redirect("profile")
         
+        if request.POST.get("action") == "follow" and "author_id" in request.POST:
+            target_id = request.POST.get("author_id")
+            target = get_object_or_404(Author, id=target_id)
+
+            # Check if a follow already exists
+            existing = Follow.objects.filter(
+                actor=author,
+                object=target.id,  # target.id is ALREADY the URL/FQID
+            ).first()
+
+            if not existing:
+                # Build a UNIQUE follow request ID (FQID)
+                follow_id = f"{author.id.rstrip('/')}/follow/{uuid.uuid4()}"
+                # Example output:
+                # https://golden.com/author/123/follow/9f1f247b-e8cf-4e91-8a61-e0c84bd2e4d1
+
+                Follow.objects.create(
+                    id=follow_id,
+                    actor=author,
+                    object=target.id,   # FQID of the target
+                    state="REQUESTED",
+                )
+
+            return redirect("profile")
+        
     else:
         form = ProfileForm(instance=author)
+
+    query = request.GET.get("q", "").strip()
+
+    if query:
+        authors = Author.objects.filter(username__icontains=query).exclude(id=author.id)
+    else:
+        authors = Author.objects.exclude(id=author.id)
+
+    # Attach follow state
+    for a in authors:
+        follow = Follow.objects.filter(actor=author, object=a.id).first()
+        a.follow_state = follow.state if follow else "NONE"
 
     entries = Entry.objects.filter(author=author).order_by("-published")
     followers_info = author.followers_info or {}
@@ -363,7 +401,18 @@ def profile_view(request):
     follow_requests = Follow.objects.filter(object=author.id, state="REQUESTED")
     friends_data = author.friends or {}
     friends = Author.objects.filter(id__in=list(friends_data.keys())) if friends_data else []
+    authors = Author.objects.exclude(id=author.id)
+    for a in authors:
+        follow = Follow.objects.filter(actor=author, object=a.id).first()
+        if follow:
+            a.follow_state = follow.state  # "REQUESTED", "ACCEPTED", "REJECTED"
+        else:
+            a.follow_state = "NONE"
+
     author.description = markdown.markdown(author.description)
+
+    for a in authors:
+        a.is_following = author.following.filter(id=a.id).exists()
 
     context = {
         "author": author,
@@ -373,6 +422,8 @@ def profile_view(request):
         "follow_requests": follow_requests,
         "friends": friends,
         "form": form,
+        "authors": authors,
+        "query": query,
     }
 
     return render(request, "profile.html", context)
@@ -380,6 +431,11 @@ def profile_view(request):
 FOLLOW_STATE_CHOICES = ["REQUESTED", "ACCEPTED", "REJECTED"]
 
 @login_required
+def search_authors(request):
+    authors = Author.objects.all()
+    return render(request, "profile.html", {"authors": authors})
+
+"""
 def search_authors(request):
     actor = Author.from_user(request.user)
 
@@ -428,7 +484,7 @@ def search_authors(request):
         "page_type": "search_authors",
         "active_tab": "search",
     })
-
+"""
 
 @login_required
 def followers(request):

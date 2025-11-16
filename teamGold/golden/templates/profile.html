@@ -10,9 +10,8 @@
 <body>
   <!-- Profile Header -->
   <section class="edit-profile-button">
-    <button id="edit-profile-btn" class="nav">
-        <img src="{% static 'golden/icons/edit-profile-icon.png' %}"/>
-        <span class="sr-only">Edit Profile</span>
+    <button id="edit-profile-button" class="nav" type="button" aria-label="Edit profile button">
+      <img src="{% static 'golden/icons/edit-profile-icon.png' %}" alt="" aria-hidden="true"/>
     </button>
   </section>
 
@@ -29,7 +28,7 @@
 
       <label for="description">Bio / About Me:</label><br>
       <textarea name="description" rows="4" cols="50" placeholder="Write something about yourself...">
-          {{ user.description }}
+        {{ user.description }}
       </textarea>
       <br><br>
 
@@ -51,14 +50,12 @@
   <!-- Tab Sections -->
   <section class="tabs-section"> 
     <nav class="tabs">
-      <button class="tab-btn active" data-tab="entries">entries</button>
+      <button class="tab-btn active" data-tab="entries">entries</button> 
       <button class="tab-btn" data-tab="followers">followers</button>
       <button class="tab-btn" data-tab="following">following</button>
       <button class="tab-btn" data-tab="requests">requests</button>
       <button class="tab-btn" data-tab="search">search</button>
     </nav>
-
-    <section class="tab-panels">
 
     <!-- Entries Tab Section -->
     <section class="tab-panel active" data-tab-panel="entries">
@@ -66,10 +63,10 @@
         {% for entry in entries %}
           <article class="entry">
             <p><strong>@{{ author.username }}</strong> {{ entry.published|date:"H:i T l M d, Y" }}</p>
-              {% for img in entry.images.all %} 
-                <img src="{{ img.image.url }}" alt="entry image" class="entry-img">
-              {% endfor %}
-              {{ entry.content|safe }}
+            {% for img in entry.images.all %} 
+              <img src="{{ img.image.url }}" alt="entry image" class="entry-img">
+            {% endfor %}
+            {{ entry.content|safe }}
           </article>
         {% endfor %}
       {% else %}
@@ -125,23 +122,23 @@
         {% for req in follow_requests %}
         <li class="request-row">
           <span>{{ req.actor.username }} wants to follow you</span>
-          <div>
             <form method="POST" style="display:inline;">
               {% csrf_token %}
               <input type="hidden" name="follow_id" value="{{ req.id }}">
+              <input type="hidden" name="action" value="approve">
               <button class="action-btn approve-request-button" type="submit">
-                <img src="{% static 'golden/icons/user-add-icon.png' %}" alt="approve their request">
+                  <img src="{% static 'golden/icons/user-add-icon.png' %}" alt="approve">
               </button>
-          </form>
-
-          <form method="POST" style="display:inline;">
-              {% csrf_token %}
+            </form>
+        
+            <form method="POST" style="display:inline;">
+            {% csrf_token %}
               <input type="hidden" name="follow_id" value="{{ req.id }}">
+              <input type="hidden" name="action" value="reject">
               <button class="action-btn reject-request-button" type="submit">
-                <img src="{% static 'golden/icons/user-remove-icon.png' %}" alt="reject their request">
+                  <img src="{% static 'golden/icons/user-remove-icon.png' %}" alt="reject">
               </button>
-          </form>
-          </div>
+            </form>
         </li>
         {% endfor %}
         <hr class="follower-divider">
@@ -158,59 +155,53 @@
     what they're looking for eh?
     Comment by: Kenneth
     -->
+    <!-- Search Tab Section -->
     <section class="tab-panel" data-tab-panel="search">
-      <form method="GET" action="">      
-        <input type="text" name="q" class="search-bar" placeholder="Search by username" value="{{ query }}"
-          style="flex: 1; padding: 0 20px; font-size: 1rem; box-sizing: border-box; height: 100%;
-                 border: 1px solid #555; background: var(--colour-off-background); color: var(--colour-contrast);
-                        border-radius: 6px;">
-          <button type="submit" 
-                  style="flex-shrink: 0; padding: 0 20px; font-size: 1rem; border: 2px solid #000;
-                        background: var(--colour-yellow); color: #000; border-radius: 6px; cursor: pointer; height: 100%;
-                        font-weight: 600;">
-              Search
-          </button>
-      </form>
+      {% if authors %}
+        <ul style="list-style: none; padding: 0; margin: 0;">
+          {% for a in authors %}
+            <li style="padding: 8px 12px; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center;">
 
-      <div class="author-list">
-          {% if authors %}
-              <ul style="list-style: none; padding: 0;">
-                  {% for author in authors %}
-                      {% if author != request.user %}
-                          <li class="author-row" 
-                              style="display: flex; justify-content: space-between; align-items: center;
-                                    background: var(--colour-off-background); border: 1px solid #333; 
-                                    border-radius: 6px; padding: 10px 15px; margin-bottom: 8px;
-                                    color: var(--colour-contrast); transition: background 0.2s ease;">
-                              <span>{{ author.username }}</span>
+              <span>{{ a.username }}</span>
 
-                              <form method="POST" action="{% url 'search_authors' %}" style="display:inline;">
-                                  {% csrf_token %}
-                                  <input type="hidden" name="author_id" value="{{ author.id }}">
-                                  {% if author.follow_state == "REQUESTED" %}
-                                      <button class="follow-btn" disabled>Requested</button>
-                                  {% elif author.follow_state == "ACCEPTED" %}
-                                      <button class="follow-btn" disabled>Following</button>
-                                  {% else %}
-                                      <button class="follow-btn">Follow</button>
-                                  {% endif %}
-                              </form>
-                          </li>
-                      {% endif %}
-                  {% endfor %}
-              </ul>
-          {% else %}
-              <p style="color: var(--text-muted);">No authors found.</p>
-          {% endif %}
-      </div>
+              {% if a.follow_state == "ACCEPTED" %}
+                <!-- already following: disabled button -->
+                <button class="follow-btn" disabled>
+                  <img src="{% static 'golden/icons/user-add-icon.png' %}" alt="already following">
+                </button>
+
+              {% elif a.follow_state == "REQUESTED" %}
+                <!-- request pending: show loading icon -->
+                <button class="follow-btn" disabled>
+                  <img src="{% static 'golden/icons/user-loading-icon.png' %}" alt="request sent">
+                </button>
+
+              {% elif a.follow_state == "REJECTED" or a.follow_state == "NONE" %}
+                <!-- can send a new follow request -->
+                <form method="POST" style="display:inline;">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="follow">
+                  <input type="hidden" name="author_id" value="{{ a.id }}">
+                  <button class="follow-btn" type="submit">
+                    <img src="{% static 'golden/icons/user-add-icon.png' %}" alt="follow this user">
+                  </button>
+                </form>
+
+              {% endif %}
+
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>No authors found.</p>
+      {% endif %}
     </section>
-    </section>
-  </section>
+
 </body>
 
 <script>
 // Edit Profile Form Toggle 
-document.getElementById('edit-profile-btn').addEventListener('click', function() {
+document.getElementById('edit-profile-button').addEventListener('click', function() {
     const form = document.getElementById('edit-profile-form');
     form.style.display = form.style.display === 'none' ? 'block' : 'none';
 });
@@ -238,7 +229,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 });
-
 
 // Tab Switching
 document.addEventListener("DOMContentLoaded", () => {

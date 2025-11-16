@@ -270,8 +270,34 @@ class ApprovedUserBackend(ModelBackend):
 @login_required
 def profile_view(request):
     """
-    This function deals the logic regarding profile.html 
+    This function deals the primary logic regarding profile.html.
+
+    Consists of five tabs and one button 
+    - Edit Profile Button 
+    - Entries Tab 
+    - Followers Tab
+    - Following Tab
+    - Requests Tab
+    - Search Tab
     """
+    def get_friends_context(author: Author):
+        """
+        Inner function to grab the author's friends JSON field specifically for profile.html
+        """
+        friends_data = author.friends or {}
+        friend_ids = set(friends_data.keys())  # keys are string FQIDs
+        friends = Author.objects.filter(id__in=friends_data.keys()) if friends_data else []
+        return friends_data, friend_ids, friends
+
+    def get_search_authors(author: Author, query: str):
+        """
+        Inner function to perform a search queryset specifically for profile.html
+        """
+        qs = Author.objects.exclude(id=author.id)
+        if query:
+            qs = qs.filter(username__icontains=query)
+        return qs
+
     author = Author.from_user(request.user)
     form = ProfileForm(instance=author)
 
@@ -323,13 +349,12 @@ def profile_view(request):
             target.update_friends()
             author.update_friends()
             return redirect("profile")
-    
 
         if "remove_friend" in request.POST:
             target_id = request.POST.get("remove_friend")
             target = get_object_or_404(Author, id=target_id)
 
-            # Remove each other from following and followers_info
+            # Removes each other from following and followers_info
             author.following.remove(target)
             target.following.remove(author)
             followers_info = author.followers_info or {}
@@ -358,14 +383,14 @@ def profile_view(request):
             target_id = request.POST.get("author_id")
             target = get_object_or_404(Author, id=target_id)
 
-            # Check if a follow already exists
+            # Checks if a follow already exists
             existing = Follow.objects.filter(
                 actor=author,
-                object=target.id,  # target.id is ALREADY the URL/FQID
+                object=target.id,
             ).first()
 
             if not existing:
-                # Build a UNIQUE follow request ID (FQID)
+                # Builds a UNIQUE follow request ID (FQID)
                 follow_id = f"{author.id.rstrip('/')}/follow/{uuid.uuid4()}"
                 # Example output:
                 # https://golden.com/author/123/follow/9f1f247b-e8cf-4e91-8a61-e0c84bd2e4d1
@@ -373,46 +398,33 @@ def profile_view(request):
                 Follow.objects.create(
                     id=follow_id,
                     actor=author,
-                    object=target.id,   # FQID of the target
+                    object=target.id,
                     state="REQUESTED",
                 )
-
-            return redirect("profile")
-        
+            return redirect("profile")   
     else:
         form = ProfileForm(instance=author)
 
+    friends_data, friend_ids, friends = get_friends_context(author)
     query = request.GET.get("q", "").strip()
+    authors = get_search_authors(author, query)
 
-    if query:
-        authors = Author.objects.filter(username__icontains=query).exclude(id=author.id)
-    else:
-        authors = Author.objects.exclude(id=author.id)
+    friends_data = author.friends or {}
+    friend_ids = set(friends_data.keys())
 
-    # Attach follow state
     for a in authors:
         follow = Follow.objects.filter(actor=author, object=a.id).first()
         a.follow_state = follow.state if follow else "NONE"
+        a.is_following = author.following.filter(id=a.id).exists()
+        a.is_friend = str(a.id) in friend_ids 
 
     entries = Entry.objects.filter(author=author).order_by("-published")
     followers_info = author.followers_info or {}
     followers = Author.objects.filter(id__in=list(followers_info.keys())) if followers_info else []
     following = author.following.all()
     follow_requests = Follow.objects.filter(object=author.id, state="REQUESTED")
-    friends_data = author.friends or {}
     friends = Author.objects.filter(id__in=list(friends_data.keys())) if friends_data else []
-    authors = Author.objects.exclude(id=author.id)
-    for a in authors:
-        follow = Follow.objects.filter(actor=author, object=a.id).first()
-        if follow:
-            a.follow_state = follow.state  # "REQUESTED", "ACCEPTED", "REJECTED"
-        else:
-            a.follow_state = "NONE"
-
     author.description = markdown.markdown(author.description)
-
-    for a in authors:
-        a.is_following = author.following.filter(id=a.id).exists()
 
     context = {
         "author": author,
@@ -429,11 +441,6 @@ def profile_view(request):
     return render(request, "profile.html", context)
 
 FOLLOW_STATE_CHOICES = ["REQUESTED", "ACCEPTED", "REJECTED"]
-
-@login_required
-def search_authors(request):
-    authors = Author.objects.all()
-    return render(request, "profile.html", {"authors": authors})
 
 """
 def search_authors(request):

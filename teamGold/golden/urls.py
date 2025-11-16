@@ -31,7 +31,7 @@ urlpatterns = [
     # TODO: entries should have comments feature if there is a logged in user
 
     # TODO: the following may be deleted/incorporated into another view
-    path('search/', views.search_authors, name='search_authors'),
+    #path('search/', views.search_authors, name='search_authors'),
     path("friends/", views.friends, name="friends"),
     path('add_comment/', views.add_comment, name = "add_comment"),
     path('add_like/', views.toggle_like, name='add_like'), # temporary

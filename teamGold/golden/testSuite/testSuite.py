@@ -498,6 +498,47 @@ class LikeAPITests(AuthenticatedAPITestCase):
         res = self.client.get(f"/api/Like/{fake_id}/")
         self.assertEqual(res.status_code, 404)
 
+class CommentAPITests(AuthenticatedAPITestCase):
+    def setUp(self):
+        super().setUp()
+        # create an entry to comment on (author may be different)
+        self.entry_author = Author.objects.create(
+            id=f"{settings.SITE_URL}/api/authors/{uuid.uuid4()}",
+            username='entry_author'
+        )
+        self.entry = Entry.objects.create(
+            id=f"{settings.SITE_URL}/api/entries/{uuid.uuid4()}",
+            author=self.entry_author,
+            content="test entry",
+            title="Test"
+        )
+
+    def test_post_comment_success(self):
+        url = f"/api/Entry/{self.entry.id}/comments"
+        payload = {"content":"Testing comment API", "contentType":"text/plain"}
+        res = self.client.post(url, payload, format="json")
+        self.assertEqual(res.status_code, 200)
+    
+    def test_post_comment_failure(self):
+        url = f"/api/Entry/{self.entry.id}/comments"
+        payload = {"content":""}
+        res = self.client.post(url, payload, format="json")
+        self.assertEqual(res.status_code, 400)
+    
+    def test_get_comments(self):
+        Comment.objects.create(
+            id=f"{settings.SITE_URL.rstrip('/')}/api/comments/{uuid.uuid4()}",
+            author=self.api_user,
+            entry=self.entry,
+            content="Existing comment",
+            published=timezone.now()
+        )
+        url = f"/api/Entry/{self.entry.id}/comments/"
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+        
+
+
 # ============================================================
 # Note Related Test Suites
 # ============================================================

@@ -9,15 +9,17 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 
 # PYTHON IMPORTS
-from urllib.parse import unquote
+from urllib.parse import unquote, urlparse
 import uuid
+import requests
+import json
 from django.conf import settings
 from django.utils import timezone
 from django.core.paginator import Paginator
 
 # LOCAL IMPORTS
 from golden.models import Author, Entry, Comment, Like, Follow, Node, EntryImage
-from golden import services
+from golden.services import generate_comment_fqid, resolve_or_create_author
 
 # SWAGGER
 from drf_yasg.utils import swagger_auto_schema
@@ -26,7 +28,7 @@ from drf_yasg import openapi
 # SERIALIZERS IMPORTS
 from .serializers import (
     AuthorSerializer, EntrySerializer, NodeSerializer,
-    FollowSerializer, LikeSerializer, CommentSerializer, EntryImageSerializer, AuthorSerializer
+    FollowSerializer, LikeSerializer, CommentSerializer, EntryImageSerializer
 )
 
 '''
@@ -36,10 +38,16 @@ as JSON data for other API nodes
     - remote node sends a GET request to our API endpoint (http:://golden.node.com/api/profile/<id>)
     - our node handles the request and serializers authors data to JSON
     - Entry related class based API views also have POST, PUT, DELETE API  
-
     - REST endpoints 
+
+inbox info (comment/like/follow):
+    If the entry’s author is local to your node:
+    - send the Object (comment/like/follow) to the inboxes of all followers of that author.
+    - remote authors will also be able to see it
+If the entry’s author is remote:
+    - push the Object to the parent node’s inbox (POST /api/authors/{AUTHOR_FQID}/inbox).
+    - That remote node will then handle
 '''
- 
 
 class ProfileAPIView(APIView):
     """
@@ -158,6 +166,16 @@ class EntryCommentAPIView(APIView):
     authentication_classes = [BasicAuthentication]
     permission_classes = [IsAuthenticated]
 
+
+    
+    @swagger_auto_schema(
+        operation_description='Gets all comments for an entry.',
+        responses={
+            200: openapi.Response(description="OK"),
+            404: openapi.Response(description="Not found"),
+            400: openapi.Response(description="Bad request"),
+        }
+    )
     def get(self, request, entry_id):
         comments = Comment.objects.filter(entry_id=entry_id).order_by('-published')
         serializer = CommentSerializer(comments, many=True)
@@ -165,55 +183,97 @@ class EntryCommentAPIView(APIView):
 
 
     @swagger_auto_schema(
-        method='POST',
-        operation_description='Adding a comment to an entry, send comment to other users inbox',
+        operation_summary='Adding a comment to an entry',
+        operation_description='Client sends a POST request to comment on an entry',
         request_body=CommentSerializer,
         responses={
-            200: openapi.Response(
-                description="Comment Created"
-            ),
-            400: openapi.Response(description="Comment creation failure")
+            201: openapi.Response(description="Comment Created"),
+            404: openapi.Response(description="Not found"),
+            400: openapi.Response(description="Comment creation failure"),
         }
     )
     def post(self, request, entry_id):
         # normalize data
         # validate request body
         # save comment to database with unique FQID
-        # forward to inbox
+        # forward to inbox (if remote)
         # return response in JSON
         entry_id = unquote(entry_id).rstrip("/") # decode fqid to url
         entry = get_object_or_404(Entry, id=entry_id)
+       
+        if request.content_type != 'application/json':
+            return Response({'detail': 'Content-Type must be application/json'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # server side fields
         data = request.data.copy()
-        data["author"] = AuthorSerializer(request.user.author).data
+        # author will be a nested object
+        # we need to look it up on our local database or resolve it to a remote author
+        incoming = request.data.get('author')   # could be str, dict, or missing
+    
+        try:
+            author = resolve_or_create_author(incoming, create_if_missing = True)
+        except Author.DoesNotExist:
+            return Response({'detail':'Author not found'}, status=400)
+
+        data["entry"] = entry.id #id == fqid
+        data["author"] = author
         data["type"] = "comment"
         data["entry"] = entry.id #id == fqid
-        # generate FQID
-        #"id":"http://nodeaaaa/api/entryies/111/comments/130""
-        # id may be given in request -> could be remote node
-        comment_id = generate_
+        # generate FQID (service expects (author, entry))
+        # e.g. "id":"http://nodeaaaa/api/authors/<author_uuid>/commented/<uuid>"
+        comment_id = generate_comment_fqid(author, entry)
+        data["id"] = comment_id
+        data["published"] = timezone.now().isoformat()
+
+        # create comment instance in database
+        # serializer maps data->json fields
+        try:
+            print("DEBUG: Comment payload (data) =", json.dumps(data, indent=2, default=str))
+        except Exception:
+            # fallback if data contains non-JSONable objects
+            print("DEBUG: Comment payload (repr) =", repr(data))
+
         serializer = CommentSerializer(data=data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        comment = serializer.save(author=author)
 
-        if serializer.is_valid():
-            comment = serializer.save(
-                entry=entry, 
-                author=author, 
-                content=request.data.content,
-                content_type=request.content_type,
+        # if the entry author is remote, attempt to POST the comment
+        # to that node's inbox. Determine the parent node by matching the author's host.
+        try:
+            # Serialize the saved comment for sending
+            comment_object = CommentSerializer(comment).data
+
+            # parse host from the entry's author's id (FQID)
+            actor_id = getattr(entry.author, 'id', None)
+            if actor_id:
+                parsed = urlparse(actor_id)
+                actor_host = f"{parsed.scheme}://{parsed.netloc}"
+                parent_node = Node.objects.filter(id__startswith=actor_host).first()
+            else:
+                parent_node = None
+
+            if parent_node and parent_node.id.rstrip('/') != settings.LOCAL_NODE_URL.rstrip('/'):
+                inbox_url = parent_node.id.rstrip('/') + '/inbox'
+                auth = None
+                if getattr(parent_node, 'auth_user', None):
+                    auth = (parent_node.auth_user, parent_node.auth_pass)
+
+                resp = requests.post(
+                    inbox_url,
+                    json=comment_object,
+                    auth=auth,
+                    headers={'Content-Type': 'application/json'},
+                    timeout=5,
                 )
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        
-        # get actor object (author) of user 
-        comment_object = {
-            "type":"comment",
-            "author":request.user.id,
-            "comment":comment.content,
-            "content_type":comment.content_type,
-            "published":comment.published.isoformat(),
-            "id":"", # full url (FQID)
-            "entry": entry_uid,
-        }
+                if not (200 <= resp.status_code < 300):
+                    print(f"Failed to send comment to parent node {inbox_url}: {resp.status_code}")
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            # never fail the API call because of network issues; comment was saved locally
+            print(f"Error when attempting to forward comment: {e}")
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def delete(self, request, entry_id):
         """
@@ -237,7 +297,16 @@ class EntryCommentAPIView(APIView):
             print(f"DEBUG: Deleted {deleted} comments for entry {entry_id}")
             return Response({'deleted_count': deleted}, status=status.HTTP_204_NO_CONTENT)
 
-
+# @swagger_auto_schema(
+#     method='GET',
+#     operation_summary='Retrieve Node information',
+#     operation_description='Returns node metadata by id',
+#     responses={
+#         200: openapi.Response(description="OK"),
+#         404: openapi.Response(description="Not found"),
+#         400: openapi.Response(description="Bad request"),
+#     }
+# )
 class NodeAPIView(APIView):
     """
     This API view handles GET requests to retrieve node data by ID.

@@ -18,7 +18,8 @@ class AuthorSerializer(serializers.ModelSerializer):
     type = serializers.CharField(default="author")
     class Meta:
         model = Author
-        fields = ["type","id","host","displayName","github","profileImage","web"] 
+        # match serializer fields to actual Author model fields
+        fields = ["type", "id", "host", "name", "github", "profileImage", "web"]
 
 class EntrySerializer(serializers.ModelSerializer):
     class Meta:
@@ -30,19 +31,28 @@ class LikeSerializer(serializers.ModelSerializer):
         model = Like
         fields = '__all__'
 
+'''
+added ability to have a nested Author object
+'''
 class CommentSerializer(serializers.ModelSerializer):
-    author_username = serializers.CharField(source='author.username', read_only=True)
-    author = AuthorSerializer(read_only=True)
+    # Accept author and entry as their FQID strings (slug fields) so incoming
+    # POSTs can provide the URL identifier. This maps the provided id to the
+    # corresponding Author/Entry instances.
+    author = serializers.SlugRelatedField(slug_field='id', queryset=Author.objects.all())
+    entry = serializers.SlugRelatedField(slug_field='id', queryset=Entry.objects.all())
+
     class Meta:
         model = Comment
-        fields = [              
-            'entry',  
-            'author'              
-            'content',          
-            'content_Type',
+        fields = [
+            'id',
+            'type',
+            'author',
+            'entry',
+            'content',
+            'contentType',
             'published',
-            "likes"
         ]
+
 
 class FollowSerializer(serializers.ModelSerializer):
     class Meta:

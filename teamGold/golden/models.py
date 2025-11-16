@@ -265,6 +265,9 @@ class Node(models.Model):
         blank=True
     )
 
+    # for checking for online nodes
+    is_active = models.BooleanField(default=False)
+
     # Remote nodes this node knows about & can communicate with
     remote_nodes = models.JSONField(default=list, blank=True)
     # Later this could become its own table for more features

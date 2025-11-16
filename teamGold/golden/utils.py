@@ -1,4 +1,3 @@
-# appname/utils.py
 import requests
 from requests.auth import HTTPBasicAuth
 from .models import Author, Node

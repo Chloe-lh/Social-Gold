@@ -16,7 +16,7 @@
   
   <section class="feed-section">
     {% for entry in entries %}
-      <article data-entry-id="{{ entry.id }}">
+      <article data-entry-id="{{ entry.id }}" class="entry">
         <header class="article-header">
           <!-- TODO: not sure what the a is for? -->
           <a href="#">{{ entry.author }}</a>

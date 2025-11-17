@@ -2,6 +2,8 @@ from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import PermissionsMixin
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
+from django.conf import settings
+import uuid
 
 '''
 Relationship Summary
@@ -31,21 +33,28 @@ FOLLOW_STATE_CHOICES = [
 ]
 
 class MyUserManager(BaseUserManager):
-    def create_user(self, email, password=None, **extra_fields):
+
+    def _generate_fqid(self):
+        return f"{settings.SITE_URL}/api/authors/{uuid.uuid4()}"
+
+    def create_user(self, username, email=None, password=None, **extra_fields):
         if not email:
             raise ValueError("Email required")
+        if not username:
+            raise ValueError("Username required")
         email = self.normalize_email(email)
-        user = self.model(email=email, **extra_fields)
+        user = self.model(username=username, email=email, **extra_fields)
+        user.id = self._generate_fqid()
         user.set_password(password)
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, email, password=None, **extra_fields):
+    def create_superuser(self, username, email, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_admin", True)
         extra_fields.setdefault("is_approved", True)
         extra_fields.setdefault("is_superuser", True)
-        return self.create_user(email, password, **extra_fields)
+        return self.create_user(username, email, password, **extra_fields)
 
 class Author(AbstractBaseUser, PermissionsMixin):
     id = models.URLField(primary_key=True, unique = True)
@@ -68,8 +77,7 @@ class Author(AbstractBaseUser, PermissionsMixin):
         'self', symmetrical=False, 
         related_name='followers_set', 
         blank=True)
-    followers_info = models.JSONField(default=dict, blank=True)
-    friends = models.JSONField(default=dict, blank=True)
+    friends = property(lambda self: self.following.filter(id__in=self.followers_set.values_list("id", flat=True)))
     objects = MyUserManager()
     description = models.TextField(blank=True)
 
@@ -97,24 +105,12 @@ class Author(AbstractBaseUser, PermissionsMixin):
         Updates the `friends` JSONField to contain mutual followers.
         Keys = friend's FQID, Values = info (username, etc)
         """
-        following_ids = set(self.following.values_list('id', flat=True))
-        followers_ids = set(self.followers_info.keys())
-        mutual_ids = following_ids.intersection(followers_ids)
+        return self.friends
 
-        # Build dict with info for each friend
-        new_friends = {}
-        for friend_id in mutual_ids:
-            try:
-                friend = Author.objects.get(id=friend_id)
-                new_friends[friend_id] = {
-                    "username": friend.username,
-                    #"profileImage": friend.profileImage,
-                }
-            except Author.DoesNotExist:
-                continue
-
-        self.friends = new_friends
-        self.save(update_fields=['friends'])
+    def save(self, *args, **kwargs):
+        if not self.id:
+            self.id = f"{settings.SITE_URL}/api/authors/{uuid.uuid4()}"
+        super().save(*args, **kwargs)
 
 class Entry(models.Model):
     """
@@ -145,7 +141,7 @@ class Entry(models.Model):
     origin = models.URLField(blank=True)     # original node that created the entry
 
     # We store a string like 'PUBLIC', but display a readable version in admin/UI.
-    visibility = models.CharField(max_length=10, choices=VISIBILITY_CHOICES, default='PUBLIC')
+    visibility = models.CharField(max_length=10, choices=VISIBILITY_CHOICES, default='PUBLIC', db_index=True)
     published = models.DateTimeField(auto_now_add=True) # auto_now_add=True means it is only set ONCE on creation.
 
     # auto_now_add=True means it is only set ONCE on creation.
@@ -277,8 +273,12 @@ class Node(models.Model):
     is_active = models.BooleanField(default=False)
 
     # Remote nodes this node knows about & can communicate with
-    remote_nodes = models.JSONField(default=list, blank=True)
+    # remote_nodes = models.JSONField(default=list, blank=True)
     # Later this could become its own table for more features
+
+class KnownNode(models.Model):
+    parent = models.ForeignKey(Node, related_name="known_nodes", on_delete=models.CASCADE)
+    url = models.URLField()
 
     def __str__(self):
         return self.title
@@ -300,7 +300,7 @@ class Like(models.Model):
         related_name='likes'   # likes authored by this author
     )
     # the full FQID of the object liked (entry or comment or other)
-    object = models.URLField()
+    object = models.URLField(db_index=True)
     published = models.DateTimeField()
 
     def __str__(self):
@@ -321,10 +321,11 @@ class Follow(models.Model):
         to_field='id',
         db_column='actor_id',
         on_delete=models.CASCADE,
-        related_name='outgoing_follow_requests'
+        related_name='outgoing_follow_requests',
+        db_index=True
     )
     object = models.URLField()  # FQID of the author being followed
-    state = models.CharField(max_length=20, choices=FOLLOW_STATE_CHOICES, default="REQUESTING")
+    state = models.CharField(max_length=20, choices=FOLLOW_STATE_CHOICES, default="REQUESTING", db_index=True)
     published = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

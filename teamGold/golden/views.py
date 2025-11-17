@@ -1,6 +1,5 @@
 # BASE DJANGO 
 from django.shortcuts import render, redirect, get_object_or_404
-from django.urls import reverse
 from django.conf import settings
 from django.db import transaction
 from django.http import HttpResponseForbidden
@@ -8,19 +7,17 @@ from django.contrib.auth.backends import ModelBackend
 from django.db.models import Q
 
 # REST FRAMEWORKS 
-import markdown
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework import status, generics
-
+from rest_framework.permissions import IsAuthenticated
 
 # BASE GOLDEN
 from golden import models
 from golden.models import Entry, EntryImage, Author, Comment, Like, Follow
 from .forms import CustomUserForm, CommentForm, ProfileForm, EntryList
 from golden.serializers import CommentSerializer
-from golden import services
+from golden.utils import get_or_create_foreign_author, post_to_remote_inbox, build_accept_activity
 
 # Import login authentication stuff
 from django.contrib.auth.decorators import login_required
@@ -30,18 +27,15 @@ from django.utils import timezone
 from django.contrib.auth.views import LoginView
 import uuid
 
-# view decorator
-from django.views.decorators.http import require_POST
-
-# Imports for entries
+# Imports for Entries
 from django.contrib.auth import get_user_model
 from .decorators import require_author
 import markdown
 
-#secuirity
+# Security
 from django.views.decorators.csrf import csrf_exempt
 
-#imports for AJAX
+# Imports for AJAX
 from django.http import JsonResponse
 import json
 
@@ -61,7 +55,7 @@ def stream_view(request):
     follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
     followed_author_fqids = [f.object for f in follows]
 
-    # etermine authors who are "friends" (mutual follows)
+    # Determine authors who are "friends" (mutual follows)
     friends_fqids = []
     for f in follows:
         try:
@@ -131,7 +125,6 @@ def signup(request):
         # we don't want to create a user if the inputs are not valid since that can raise errors
         if form.is_valid():
             user = form.save(commit=False)
-            user.id = f"{settings.SITE_URL}/api/authors/{uuid.uuid4()}"
             user.save()
             #if not next_page:
                 #next_page = "/golden/"
@@ -156,10 +149,38 @@ class ApprovedUserBackend(ModelBackend):
 
 @login_required
 def profile_view(request):
+    """
+    This function deals the primary logic regarding profile.html.
+
+    Consists of five tabs and one button 
+    - Edit Profile Button 
+    - Entries Tab 
+    - Followers Tab
+    - Following Tab
+    - Requests Tab
+    - Search Tab
+    """
+    def get_friends_context(author: Author):
+        """
+        Inner function to grab the author's friends JSON field specifically for profile.html
+        """
+        friends_qs = author.friends  # this is already a queryset due to the property
+        friend_ids = set(f.id for f in friends_qs)  # set of FQIDs
+        return friends_qs, friend_ids
+
+    def get_search_authors(author: Author, query: str):
+        """
+        Inner function to perform a search queryset specifically for profile.html
+        """
+        qs = Author.objects.exclude(id=author.id)
+        if query:
+            qs = qs.filter(username__icontains=query)
+        return qs
+
     author = Author.from_user(request.user)
+    form = ProfileForm(instance=author)
 
     if request.method == "POST":
-        # 1️⃣ Approve / Reject follow requests
         if "follow_id" in request.POST and "action" in request.POST:
             follow_id = request.POST.get("follow_id")
             action = request.POST.get("action")
@@ -170,16 +191,8 @@ def profile_view(request):
                 follow_request.save()
 
                 follower = follow_request.actor
-                followers_info = author.followers_info or {}
-                followers_info[str(follower.id)] = follower.username
-                author.followers_info = followers_info
-                author.save(update_fields=["followers_info"])
-
                 follower.following.add(author)
                 follower.save()
-
-                author.update_friends()
-                follower.update_friends()
 
             elif action == "reject":
                 follow_request.state = "REJECTED"
@@ -190,13 +203,8 @@ def profile_view(request):
         if "remove_follower" in request.POST:
             target_id = request.POST.get("remove_follower")
             target = get_object_or_404(Author, id=target_id)
-            followers_info = author.followers_info or {}
-            followers_info.pop(str(target.id), None)
-            author.followers_info = followers_info
-            author.save(update_fields=["followers_info"])
+            author.following.remove(target)
             Follow.objects.filter(actor=target, object=author.id).delete()
-            target.update_friends()
-            author.update_friends()
             return redirect("profile")
 
         if "unfollow" in request.POST:
@@ -204,28 +212,15 @@ def profile_view(request):
             target = get_object_or_404(Author, id=target_id)
             author.following.remove(target)
             Follow.objects.filter(actor=author, object=target.id).delete()
-            target.update_friends()
-            author.update_friends()
             return redirect("profile")
 
         if "remove_friend" in request.POST:
             target_id = request.POST.get("remove_friend")
             target = get_object_or_404(Author, id=target_id)
 
-            # Remove each other from following and followers_info
+            # Removes each other from following and followers_info
             author.following.remove(target)
             target.following.remove(author)
-            followers_info = author.followers_info or {}
-            followers_info.pop(str(target.id), None)
-            author.followers_info = followers_info
-            author.save(update_fields=["followers_info"])
-            target_info = target.followers_info or {}
-            target_info.pop(str(author.id), None)
-            target.followers_info = target_info
-            target.save(update_fields=["followers_info"])
-
-            author.update_friends()
-            target.update_friends()
             Follow.objects.filter(actor=author, object=target.id).delete()
             Follow.objects.filter(actor=target, object=author.id).delete()
 
@@ -236,18 +231,48 @@ def profile_view(request):
             if form.is_valid():
                 form.save()
             return redirect("profile")
+        
+        if request.POST.get("action") == "follow" and "author_id" in request.POST:
+            target_id = request.POST.get("author_id")
+            target = get_object_or_404(Author, id=target_id)
 
+            # Checks if a follow already exists
+            existing = Follow.objects.filter(
+                actor=author,
+                object=target.id,
+            ).first()
+
+            if not existing:
+                # Builds a UNIQUE follow request ID (FQID)
+                follow_id = f"{author.id.rstrip('/')}/follow/{uuid.uuid4()}"
+                # Example output:
+                # https://golden.com/author/123/follow/9f1f247b-e8cf-4e91-8a61-e0c84bd2e4d1
+
+                Follow.objects.create(
+                    id=follow_id,
+                    actor=author,
+                    object=target.id,
+                    state="REQUESTED",
+                )
+            return redirect("profile")   
     else:
         form = ProfileForm(instance=author)
 
-    # --- BUILD CONTEXT DATA ---
+    friends_qs, friend_ids = get_friends_context(author)
+    query = request.GET.get("q", "").strip()
+    authors = get_search_authors(author, query)
+
+    for a in authors:
+        follow = Follow.objects.filter(actor=author, object=a.id).first()
+        a.follow_state = follow.state if follow else "NONE"
+        a.is_following = author.following.filter(id=a.id).exists()
+        a.is_friend = str(a.id) in friend_ids 
+
     entries = Entry.objects.filter(author=author).order_by("-published")
-    followers_info = author.followers_info or {}
-    followers = Author.objects.filter(id__in=list(followers_info.keys())) if followers_info else []
+    followers = author.followers_set.all()
     following = author.following.all()
     follow_requests = Follow.objects.filter(object=author.id, state="REQUESTED")
-    friends_data = author.friends or {}
-    friends = Author.objects.filter(id__in=list(friends_data.keys())) if friends_data else []
+    author.description = markdown.markdown(author.description)
 
     context = {
         "author": author,
@@ -255,16 +280,17 @@ def profile_view(request):
         "followers": followers,
         "following": following,
         "follow_requests": follow_requests,
-        "friends": friends,
+        "friends": friends_qs,
         "form": form,
+        "authors": authors,
+        "query": query,
     }
 
     return render(request, "profile.html", context)
 
 FOLLOW_STATE_CHOICES = ["REQUESTED", "ACCEPTED", "REJECTED"]
 
-
-@login_required
+"""
 def search_authors(request):
     actor = Author.from_user(request.user)
 
@@ -311,8 +337,9 @@ def search_authors(request):
         "authors": authors,
         "query": query,
         "page_type": "search_authors",
+        "active_tab": "search",
     })
-
+"""
 
 @login_required
 def followers(request):
@@ -323,29 +350,21 @@ def followers(request):
         follower_id = request.POST.get('author_id')
         follower = get_object_or_404(Author, id=follower_id)
 
-        # Remove from followers_info and following
-        actor.followers_info.pop(follower.id, None)
-        actor.save()
-
         follower.following.remove(actor)
         follower.save()
 
         # Delete Follow object if exists
         Follow.objects.filter(actor=follower, object=actor.id).delete()
-
-        # Update friends
-        actor.update_friends()
-        follower.update_friends()
-
         return redirect(request.META.get('HTTP_REFERER', 'followers'))
 
     # GET request: show followers
-    followers_ids = actor.followers_info.keys()
-    authors = Author.objects.filter(id__in=followers_ids)
+    followers_qs = actor.followers_set.all()
+    # authors = Author.objects.filter(id__in=followers_ids)
 
     query = request.GET.get('q', '')
     if query:
-        authors = authors.filter(username__icontains=query)
+        # authors = authors.filter(username__icontains=query)
+        followers_qs = followers_qs.filter(username__icontains=query)
 
     return render(request, "search.html", {
         "authors": authors,
@@ -373,29 +392,17 @@ def following(request):
             actor.following.remove(target_author)
             #actor.save(update_fields=["following"])
 
-        if hasattr(target_author, "followers_info") and isinstance(target_author.followers_info, dict):
-            # Convert the actor’s ID (FQID) to string key if needed
-            actor_id_str = str(actor.id)
-
-            if actor_id_str in target_author.followers_info:
-                del target_author.followers_info[actor_id_str]
-                target_author.save(update_fields=["followers_info"])
-
-        # Update friends
-        actor.update_friends()
-        target_author.update_friends()
-
         return redirect(request.META.get('HTTP_REFERER', 'following'))
 
     # GET request: show following
-    authors = actor.following.all()
+    following_qs = actor.following.all()
 
     query = request.GET.get('q', '')
     if query:
-        authors = authors.filter(username__icontains=query)
+        following_qs = authors.filter(username__icontains=query)
 
     return render(request, "search.html", {
-        "authors": authors,
+        "authors": following_qs,
         "query": query,
         "page_type": "following",
     })
@@ -413,16 +420,10 @@ def follow_requests(request):
         if action == "approve":
             follow_request.state = "ACCEPTED"
             follow_request.save()
-            # Update ManyToMany
             follower_author = follow_request.actor
-            actor.followers_info[follower_author.id] = follower_author.username
-            actor.save()
             follower_author.following.add(actor)
             follower_author.save()
 
-            # Update friends
-            actor.update_friends()
-            follower_author.update_friends()
         elif action == "reject":
             follow_request.state = "REJECTED"
             follow_request.save()
@@ -441,16 +442,15 @@ def friends(request):
     actor = Author.from_user(request.user)
 
     # Friends are mutual connections: actor is following them AND they are following actor
-    friends_ids = actor.friends.keys()
-    authors = Author.objects.filter(id__in=friends_ids)
+    friends_qs = actor.friends
 
     # Optional: filter by search query
     query = request.GET.get('q', '')
     if query:
-        authors = authors.filter(username__icontains=query)
+        friends_qs = friends_qs.filter(username__icontains=query)
 
     return render(request, "search.html", {
-        "authors": authors,
+        "authors": friends_qs,
         "query": query,
         "page_type": "friends",  # Used in template to hide buttons
     })
@@ -547,12 +547,9 @@ def entry_detail(request, entry_uuid):
     
     viewer = Author.from_user(request.user)
         # Enforce visibility (deny if FRIENDS-only and viewer isn't allowed)
+    # VISIBILITY CHECK (NEW VERSION)
     if entry.visibility == "FRIENDS":
-        # entry.author.friends is a dict of FQID -> info (per your model)
-        allowed_fqids = set(entry.author.friends.keys()) if entry.author.friends else set()
-        # allow the author themself too
-        allowed_fqids.add(str(entry.author.id))
-        if not viewer or str(viewer.id) not in allowed_fqids:
+        if viewer != entry.author and viewer not in entry.author.friends:
             return HttpResponseForbidden("This post is visible to friends only.")
 
     # Fetch comments for the entry (all comments if viewer is allowed)
@@ -589,25 +586,143 @@ def inbox(request, author_id):
     elif activity_type == "comment":
         return handle_comment(data, author)
     elif activity_type == "follow":
-        return handle_follow(data, author)
+        return handle_follow(request.data, author)
+    elif activity_type == "update":
+        return handle_update(data, author)
+    elif activity_type in ("accept", "reject"):
+        return handle_incoming_accept_reject(request.data, author)
     else:
         return Response({"error": "Unsupported type"}, status=400)
     
+def handle_update(data, author):
+    """
+    Processes the remote update activity for an Entry.
+    Handels user stories #22 and #35 
+    """
+    object_id = data.get("object", {})
+
+    if not isinstance(object_id, dict):
+        return Response({"error": "Invalid update object"}, status=400)
+
+    entry_id = object_id.get("id")
+    if not entry_id:
+        return Response({"error": "Missing object.id in update"}, status=400)
+
+    # Finds an existing Entry to prevent the creation of new entries since this is editing (PUT).
+    try:
+        entry = Entry.objects.get(id=entry_id)
+    except Entry.DoesNotExist:
+        return Response({"error": "Entry not found"}, status=404)
+
+    # Update fields that remote nodes are allowed to overwrite
+    updated = False
+
+    if "title" in object_id:
+        entry.title = object_id["title"]
+        updated = True
+
+    if "content" in object_id:
+        entry.content = object_id["content"]
+        updated = True
+
+    if "contentType" in object_id:
+        entry.contentType = object_id["contentType"]
+        updated = True
+
+    if "visibility" in object_id:
+        entry.visibility = object_id["visibility"]
+        updated = True
+        # So that admin can still see what was deleted
+        if entry.visibility == "DELETED":
+            entry.content = ""
+
+    if updated:
+        entry.is_updated = timezone.now()
+        entry.save()
+
+    return Response({"status": "Entry updated"}, status=200)
+
+# TODO 
 def handle_create(data, author):
-    
     return
+# TODO 
 def handle_like(data,author):
     return
-'''
-Receives Create/Comment activity, parse it and produce payload accepted by 
-CommentSerializer
-'''
+# TODO 
 def handle_comment(data,author):
-
-    return
-def handle_follow(data,author):
     return
 
+def handle_follow(data, author):
+    follow_id = data.get("id")
+    actor_id = data.get("actor", {}).get("id")
+    object_id = data.get("object")
+    if not follow_id or not actor_id or not object_id:
+        return Response({"error": "Invalid follow object"}, status=400)
+
+    actor = get_or_create_foreign_author(actor_id)
+
+    follow_obj, created = Follow.objects.get_or_create(
+        id=follow_id,
+        defaults={
+            "actor": actor,
+            "object": object_id,
+            "summary": data.get("summary", ""),
+            "state": "REQUESTING",
+        }
+    )
+
+    if not created:
+        follow_obj.summary = data.get("summary", follow_obj.summary)
+        follow_obj.save()
+
+    return Response({"status": "Follow request stored"}, status=201)
+
+@api_view(["PUT"])
+@permission_classes([IsAuthenticated])  # require a logged-in local user
+def accept_follow(request, author_id):
+    # request.user must correspond to local author; validate that
+    follow_id = request.data.get("follow_id")
+    if not follow_id:
+        return Response({"error": "follow_id required"}, status=400)
+    try:
+        follow_obj = Follow.objects.get(id=follow_id)
+    except Follow.DoesNotExist:
+        return Response({"error": "Follow not found"}, status=404)
+
+    # ensure the follow is targeting this author
+    if follow_obj.object != request.build_absolute_uri(f"api/authors/{author_id}/"):
+        return Response({"error": "Follow does not target this author"}, status=400)
+
+    follow_obj.state = "ACCEPTED"
+    follow_obj.save()
+
+    # send Accept back
+    remote_actor_url = follow_obj.actor.id  # e.g., https://remote/api/authors/xyz/
+    local_actor_url = follow_obj.object      # our author URL
+    payload = build_accept_activity(local_actor_url, remote_actor_url, summary="Accepted follow")
+    # determine Node
+    node = Node.objects.filter(id__contains=follow_obj.actor.id).first()  # simplistic
+    inbox_url = f"{remote_actor_url}inbox/"
+    post_to_remote_inbox(inbox_url, payload, node=node)
+
+    return Response({"status": "Follow accepted"}, status=200)
+
+@api_view(["PUT"])
+@permission_classes([IsAuthenticated])
+def reject_follow(request, author_id):
+    follow_id = request.data.get("follow_id")
+    if not follow_id:
+        return Response({"error": "follow_id required"}, status=400)
+    try:
+        follow_obj = Follow.objects.get(id=follow_id)
+    except Follow.DoesNotExist:
+        return Response({"error": "Follow not found"}, status=404)
+
+    follow_obj.state = "REJECTED"
+    follow_obj.save()
+    # similar to accept: build reject payload and post_to_remote_inbox
+
+    return Response({"status": "Follow rejected"}, status=200)
 
 @login_required
 @require_author 
@@ -630,7 +745,6 @@ def new_post(request):
     ]
     entry_heading = random.choice(headings)
 
-    
     context = {}
     form = EntryList()
     editing_entry = None # because by default, users are not in editing mode 
@@ -654,7 +768,6 @@ def new_post(request):
                 visibility=request.POST.get('visibility', 'PUBLIC')
             )
         
-
         images = request.FILES.getlist('images')
         for idx, image in enumerate(images):
             EntryImage.objects.create(
@@ -738,5 +851,4 @@ def new_post(request):
     context["editing_entry"] = editing_entry
     # context["entries"] = Entry.objects.select_related("author").all()
  
-
     return render(request, "new_post.html", context | {'entries': entries})

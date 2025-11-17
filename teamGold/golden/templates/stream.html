@@ -1,69 +1,78 @@
 {% extends "base.html" %}
 {% load static %}
 {% block head %}
-{{ block.super }}
-<link rel="stylesheet" href="{% static 'golden/css/entry.css' %}">
+<link rel="stylesheet" href="{% static 'golden/css/stream.css' %}">
+  
 {% endblock %}
 {% block content %}
-<div class="container mx-auto p-6">
-  <h3>Stream</h3>
-
-  <section class="space-y-4">
+<section>
+  <hgroup>
+    <h2>MY FEED</h2>
+    <!-- TODO: icon here -->
+  </hgroup>
+  
+  <section class="feed-section">
     {% for entry in entries %}
-      <article class="entry cursor-pointer hover:bg-gray-100 p-4 rounded-lg"
-            data-entry-id="{{ entry.id }}">
-        <header class="flex items-center justify-between mb-2">
-          <div>
-            <a href="#" class="font-medium hover:underline">{{ entry.author }}</a>
-            <span class="text-xs text-gray-500"> • {{ entry.published|date:"Y-m-d H:i" }}</span>
-          </div>
-          <div class="text-xs text-gray-400">
+      <article data-entry-id="{{ entry.id }}" class="entry">
+        <header class="article-header">
+          <!-- TODO: not sure what the a is for? -->
+          <a href="#">{{ entry.author }}</a>
+          <p>{{ entry.published|date:"Y-m-d H:i" }}</p>
+          <!-- <p>
             {% if entry.visibility == "PUBLIC" %}Public
             {% elif entry.visibility == "UNLISTED" %}Unlisted
             {% elif entry.visibility == "FRIENDS" %}Friends
             {% endif %}
-          </div>
+          </p> -->
         </header>
 
-        {% if entry.title %}
-          <h2 class="text-lg font-semibold mb-1">{{ entry.title }}</h2>
-        {% endif %}
-        <div class="entry-body">{{ entry.content|safe }}</div>
-        {% for image in entry.images.all %}
-        <img src="{{ image.image.url }}" alt="Entry image" class="mt-2 rounded-lg max-w-full">
-        {% endfor %}
+        <!-- Entry content section -->
+        <div class="entry-body">
+          <!-- entry title -->
+          {% if entry.title %}
+            <h3 class="text-lg font-semibold mb-1">{{ entry.title }}</h3>
+          {% endif %}
 
-        {% if entry.is_updated and entry.is_updated != entry.published %}
-          <footer class="mt-2 text-xs text-gray-500">Edited: {{ entry.is_updated|date:"Y-m-d H:i" }}</footer>
-        {% endif %}
+          <!-- only display the first two images in square form -->
+          <div style="display: flex;">
+            {% for image in entry.images.all|slice:":2" %}
+              <img src="{{ image.image.url }}" alt="Entry image" class="entry-image">
+            {% endfor %}
+          </div>
 
-        <footer class="mt-2 text-sm text-gray-600 flex space-x-4">
+          <!-- entry content -->
+          {{ entry.content|safe }}
+
+          <!-- edit date -->
+          {% if entry.is_updated and entry.is_updated != entry.published %}
+            <p class="updated-footer">Edited: {{ entry.is_updated|date:"Y-m-d H:i" }}</p>
+          {% endif %}
+        </div>
+
+        <footer style="padding-top: 5px;">
             <form method="post" action="{% url 'add_like' %}" style="display:inline">
               {% csrf_token %}
               <input type="hidden" name="object" value="{{ entry.id }}">
-              <button type="submit" class="like-btn">
-                <img src="{% static 'golden/icons/like-icon.png' %}" alt="Like">
+              <!-- TODO: add a like checker -->
+              <button type="submit" class="like-btn" alt="Like Entry">
+                <img src="{% static 'golden/icons/like-icon.png' %}"><span>{{ entry.likes.count }} Stars</span>
               </button>
             </form>
-            <span>{{ entry.likes.count }}</span>
           <!-- when someone presses the comment button, go to the entry_detail page-->
-              <button class="comment-btn" data-entry-id="{{ entry.id }}" data-entry-url="{% if entry.get_uuid %}{% url 'entry_detail' entry.get_uuid %}{% else %}#{% endif %}">
-                <img src="{% static 'golden/icons/comment-icon.png' %}">
+              <button class="comment-btn" alt="Comment" data-entry-id="{{ entry.id }}" data-entry-url="{% if entry.get_uuid %}{% url 'entry_detail' entry.get_uuid %}{% else %}#{% endif %}">
+                <img src="{% static 'golden/icons/comment-icon.png' %}"><span>{{ entry.comment.count }} Comments</span>
               </button>
-            <span>{{ entry.comment.count }} </span>
 
-          <button class="share-btn" data-entry-url="{% if entry.get_uuid %}{% url 'entry_detail' entry.get_uuid %}{% else %}#{% endif %}">
-            <img src="{% static 'golden/icons/share-icon.png' %}" alt="Share" title="Copy link" style="width: 20px; height: 20px;">
+          <button class="share-btn" alt="Copy Link" data-entry-url="{% if entry.get_uuid %}{% url 'entry_detail' entry.get_uuid %}{% else %}#{% endif %}">
+            <img src="{% static 'golden/icons/share-icon.png' %}">
           </button>
-
-
         </footer>
       </article>
     {% empty %}
       <p class="text-gray-600">No posts to show.</p>
     {% endfor %}
   </section>
-</div>
+</section>
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {

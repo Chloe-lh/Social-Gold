@@ -105,6 +105,15 @@ class EntryAPIView(APIView):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    def delete(self, request, id):
+        """Delete an entry."""
+        try:
+            entry = Entry.objects.get(pk=id)
+            entry.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Entry.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
 
 class EntryImageAPIView(APIView):
     """

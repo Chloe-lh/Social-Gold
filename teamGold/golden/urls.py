@@ -34,7 +34,7 @@ urlpatterns = [
     path("friends/", views.friends, name="friends"),
     path('add_comment/', views.add_comment, name = "add_comment"),
     path('add_like/', views.toggle_like, name='add_like'), # temporary
-    path("admin/", views.profile_view, name="admin"), # You need to change the views.new_post to the actual admin view when it's created 
+    path("node_admin/", views.profile_view, name="node_admin"), # You need to change the views.new_post to the actual admin view when it's created 
 
     # API end points
     # API views will be visible in /swagger/
@@ -54,8 +54,7 @@ urlpatterns = [
     path("api/author/<uuid:author_id>/inbox/", views.inbox, name="inbox"),
     path('api/authors/<uuid:author_id>/followers/accept/', views.accept_follow, name='accept_follow'),
     path('api/authors/<uuid:author_id>/followers/reject/', views.reject_follow, name='reject_follow'),
-    path("api/entries/<uuid:entry_id>/", views.handle_update, name="entry_update")
-    path("authors/<uuid:author_id>/outbox/", apiViews.OutboxAPIView.as_view(), name="outbox"),
+    path("api/entries/<uuid:entry_id>/", views.handle_update, name="entry_update"),
 ]
     
 

@@ -29,6 +29,7 @@ to inherit these properties
             {% if request.user.is_authenticated and request.user.profileImage %}
                 <img class="profile-pic" src="{{ request.user.profileImage.url }}" alt="Profile">
                 <p>{{ request.user.username }}</p>
+                <p>{{ request.user.name }}</p>
                 <p>{{ request.user.email }}</p>
                 <p>{{ request.user.github }}</p>
             {% else %}
@@ -56,7 +57,7 @@ to inherit these properties
             {% endif %}
             <ul class="menu">
                 <li class="item">
-                    <a href="{% url 'admin' %}" class="icon-btn" aria-label="admin"> 
+                    <a href="{% url 'node_admin' %}" class="icon-btn" aria-label="node_admin"> 
                         <img src="{% static 'golden/icons/admin-icon.png' %}"/>
                     </a>
                 </li>

@@ -82,7 +82,7 @@
           <section class="author-list-item follower-row">
             <span class="follower-username">{{ f.username }}</span>
             {% if f in friends %}
-              <img class="friend-icon" src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends">
+              <img class="friend-icon" src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
             {% endif %}
           </section>
           <hr class="follower-divider">
@@ -99,7 +99,7 @@
           <section class="author-list-item follower-row">
             <span class="follower-username">{{ f.username }}</span>
             {% if f in friends %}
-              <img class="friend-icon" src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends">
+              <img class="friend-icon" src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
             {% endif %}
 
             <form method="POST" class="unfollow-form">
@@ -167,17 +167,17 @@
 
           {% if a.is_friend %}
             <button class="follow-btn" disabled>
-              <img src="{% static 'golden/icons/friends-icon.png' %}" alt="friends">
+              <img src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
             </button>
 
           {% elif a.follow_state == "REQUESTED" %}
             <button class="follow-btn" disabled>
-              <img src="{% static 'golden/icons/user-loading-icon.png' %}" alt="pending">
+              <img src="{% static 'golden/icons/user-loading-icon.png' %}" alt="pending" title="Author needs to accept you silly."> 
             </button>
 
           {% elif a.follow_state == "ACCEPTED" %}
             <button class="follow-btn" disabled>
-              <img src="{% static 'golden/icons/user-following-icon.png' %}" alt="following">
+              <img src="{% static 'golden/icons/user-following-icon.png' %}" alt="following" title="You are following this author!">
             </button>
 
           {% else %}

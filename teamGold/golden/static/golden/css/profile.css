@@ -381,5 +381,40 @@ hr {
             hue-rotate(351deg) brightness(101%) contrast(98%);
 }
 
-/* will clean, got lazy and gpt'ed it. 
+/* will clean, got lazy and gpt'ed it. */
 
+.friend-icon-wrapper::after {
+    content: "You are friends!";
+    position: absolute;
+    left: 50%;
+    bottom: 130%;
+    transform: translateX(-50%);
+    padding: 4px 8px;
+    font-size: 12px;
+    background: #333;
+    color: #fff;
+    border-radius: 3px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+    z-index: 10;
+}
+
+.friend-icon-wrapper::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 120%;
+    transform: translateX(-50%);
+    border-width: 4px;
+    border-style: solid;
+    border-color: #333 transparent transparent transparent;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.friend-icon-wrapper:hover::after,
+.friend-icon-wrapper:hover::before {
+    opacity: 1;
+}

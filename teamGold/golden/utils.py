@@ -42,7 +42,7 @@ def send_new_entry(entry):
     results = []
 
     for follow in followers:
-        follower = follow.actor 
+        follower = follow.actor
 
         if follower.host.startswith(settings.SITE_URL):
             continue

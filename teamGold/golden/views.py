@@ -764,19 +764,74 @@ def inbox(request, author_id):
         return handle_comment(data, author)
     elif activity_type == "follow":
         return handle_follow(request.data, author)
+    elif activity_type == "update":
+        return handle_update(data, author)
     elif activity_type in ("accept", "reject"):
         return handle_incoming_accept_reject(request.data, author)
     else:
         return Response({"error": "Unsupported type"}, status=400)
     
+def handle_update(data, author):
+    """
+    Processes the remote update activity for an Entry.
+    Handelling user stories #22 and #35 
+    """
+
+    object_id = data.get("object", {})
+
+    if not isinstance(object_id, dict):
+        return Response({"error": "Invalid update object"}, status=400)
+
+    entry_id = object_id.get("id")
+    if not entry_id:
+        return Response({"error": "Missing object.id in update"}, status=400)
+
+    # Finds an existing Entry to prevent the creation of new entries since this is editing (PUT).
+    try:
+        entry = Entry.objects.get(id=entry_id)
+    except Entry.DoesNotExist:
+        return Response({"error": "Entry not found"}, status=404)
+
+    # Update fields that remote nodes are allowed to overwrite
+    # (adjust this list to your policy)
+    updated = False
+
+    if "title" in object_id:
+        entry.title = object_id["title"]
+        updated = True
+
+    if "content" in object_id:
+        entry.content = object_id["content"]
+        updated = True
+
+    if "contentType" in object_id:
+        entry.contentType = object_id["contentType"]
+        updated = True
+
+    if "visibility" in object_id:
+        entry.visibility = object_id["visibility"]
+        updated = True
+        # Admin can still see what was deleted
+        if entry.visibility == "DELETED":
+            entry.content = ""
+
+    if updated:
+        entry.is_updated = timezone.now()
+        entry.save()
+
+    return Response({"status": "Entry updated"}, status=200)
+
+# TODO 
 def handle_create(data, author):
-    
     return
+# TODO 
 def handle_like(data,author):
     return
+# TODO 
 def handle_comment(data,author):
     return
-def handle_follow(data,author):
+
+def handle_follow(data, author):
     follow_id = data.get("id")
     actor_id = data.get("actor", {}).get("id")
     object_id = data.get("object")

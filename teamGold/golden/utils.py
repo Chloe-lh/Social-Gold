@@ -29,3 +29,32 @@ def build_accept_activity(local_actor_url, remote_actor_url, summary=""):
         "actor": {"id": local_actor_url},
         "object": {"id": remote_actor_url}
     }
+
+# TODO 
+def send_new_entry(entry):
+    """
+    Sends a newly created entry to all remote followers and friends.
+    UserStory #20
+    """
+    author = entry.author
+
+    # Followers where this author is the "object"
+    followers = Follow.objects.filter(object=author.id, state="ACCEPTED")
+
+    for follow in followers:
+        follower = follow.actor
+
+        if follower.host.startswith(settings.SITE_URL):
+            continue
+
+        # Determine node for auth (matching host)
+        node = Node.objects.filter(id__contains=follower.host).first()
+
+        activity = {
+            "@context": "https://www.w3.org/ns/activitystreams",
+            "type": "Create",
+            "actor": {"id": author.id},
+            "object": entry.to_activitypub_dict(),
+        }
+
+    return activity

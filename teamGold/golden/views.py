@@ -773,40 +773,45 @@ def inbox(request, author_id):
 def handle_update(data, author):
     """
     Processes the remote update activity for an Entry.
-    Handels user stories #22 and #35 
+    Handles user stories #22 and #35.
     """
-    object_id = data.get("object", {})
 
-    if not isinstance(object_id, dict):
+    update_type = data.get("type")
+    if not update_type or str(update_type).lower() != "update":
+        return Response({"error": "Invalid or missing type for update"}, status=400)
+
+    # Extract and validate the object payload
+    obj = data.get("object")
+    if not isinstance(obj, dict):
         return Response({"error": "Invalid update object"}, status=400)
 
-    entry_id = object_id.get("id")
+    entry_id = obj.get("id")
     if not entry_id:
         return Response({"error": "Missing object.id in update"}, status=400)
 
-    # Finds an existing Entry to prevent the creation of new entries since this is editing (PUT).
+    # Find existing Entry (Update MUST NOT create new entries)
     try:
         entry = Entry.objects.get(id=entry_id)
     except Entry.DoesNotExist:
         return Response({"error": "Entry not found"}, status=404)
 
-    # Update fields that remote nodes are allowed to overwrite
+    # Update only the fields remote nodes are allowed to overwrite
     updated = False
 
-    if "title" in object_id:
-        entry.title = object_id["title"]
+    if "title" in obj:
+        entry.title = obj["title"]
         updated = True
 
-    if "content" in object_id:
-        entry.content = object_id["content"]
+    if "content" in obj:
+        entry.content = obj["content"]
         updated = True
 
-    if "contentType" in object_id:
-        entry.contentType = object_id["contentType"]
+    if "contentType" in obj:
+        entry.contentType = obj["contentType"]
         updated = True
 
-    if "visibility" in object_id:
-        entry.visibility = object_id["visibility"]
+    if "visibility" in obj:
+        entry.visibility = obj["visibility"]
         updated = True
         # So that admin can still see what was deleted
         if entry.visibility == "DELETED":
@@ -818,9 +823,45 @@ def handle_update(data, author):
 
     return Response({"status": "Entry updated"}, status=200)
 
-# TODO 
+# ! WIP 
 def handle_create(data, author):
-    return
+    if data.get("type", "").lower() != "create":
+        return Response({"error": "Invalid or missing type for create"}, status=400)
+
+    actor = data.get("actor")
+    if not actor:
+        return Response({"error": "Missing actor in create"}, status=400)
+
+    obj = data.get("object")
+    if not isinstance(obj, dict):
+        return Response({"error": "Invalid create object"}, status=400)
+
+    entry_id = obj.get("id")
+    if not entry_id:
+        return Response({"error": "Missing object.id in create"}, status=400)
+
+    # Prevents duplication creation
+    if Entry.objects.filter(id=entry_id).exists():
+        return Response({"error": "Entry already exists"}, status=409)
+
+    # Required fields for creation (adjust if your model requires more)
+    title = obj.get("title", "")
+    content = obj.get("content", "")
+    contentType = obj.get("contentType", "text/plain")
+    visibility = obj.get("visibility", "PUBLIC")
+
+    entry = Entry.objects.create(
+        id=entry_id,
+        author=author,    
+        title=title,
+        content=content,
+        contentType=contentType,
+        visibility=visibility,
+        is_updated=timezone.now(),
+    )
+
+    return Response({"status": "Entry created", "id": entry.id,}, status=201,)
+
 # TODO 
 def handle_like(data,author):
     return

@@ -14,7 +14,7 @@ from rest_framework.permissions import IsAuthenticated
 
 # BASE GOLDEN
 from golden import models
-from golden.models import Entry, EntryImage, Author, Comment, Like, Follow
+from golden.models import Entry, EntryImage, Author, Comment, Like, Follow, Node
 from .forms import CustomUserForm, CommentForm, ProfileForm, EntryList
 from golden.serializers import CommentSerializer, EntryInboxSerializer, LikeInboxSerializer, CommentsInfoSerializer, FollowRequestInboxSerializer
 from golden.utils import get_or_create_foreign_author, post_to_remote_inbox, build_accept_activity
@@ -41,6 +41,7 @@ import json
 
 # For Website Design
 import random
+import requests
 
 # TODO: Do we still need this?
 @login_required
@@ -161,6 +162,27 @@ def profile_view(request):
     - Requests Tab
     - Search Tab
     """
+
+    def get_remote_authors(node):
+    """
+    Fetch all authors from a remote node.
+    """
+    api_url = f"{node.id}/api/authors/"  # Build API URL from node.id
+
+    try:
+        response = requests.get(
+            api_url,
+            timeout=5,
+            auth=(node.auth_user, node.auth_pass) if node.auth_user else None
+        )
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("items", [])
+    except requests.exceptions.RequestException:
+        pass
+
+    return []
+
     def get_friends_context(author: Author):
         """
         Inner function to grab the author's friends JSON field specifically for profile.html
@@ -173,10 +195,35 @@ def profile_view(request):
         """
         Inner function to perform a search queryset specifically for profile.html
         """
-        qs = Author.objects.exclude(id=author.id)
+        results = []
+
+        # Local authors
+        local_qs = Author.objects.exclude(id=author.id)
         if query:
-            qs = qs.filter(username__icontains=query)
-        return qs
+            local_qs = local_qs.filter(username__icontains=query)
+
+        for a in local_qs:
+            results.append({
+                "id": a.id,
+                "username": a.username,
+                "host": a.host,
+                "is_local": True
+            })
+
+        # Remote authors
+        nodes = Node.objects.filter(is_active=True).exclude(id=author.host)  # exclude local node
+
+        for node in nodes:
+            remote_authors = get_remote_authors(node)
+            for ra in remote_authors:
+                if query.lower() in ra.get("username", "").lower():
+                    results.append({
+                        "id": ra.get("id"),
+                        "username": ra.get("username"),
+                        "host": ra.get("host"),
+                        "is_local": False
+                    })
+        return results
 
     author = Author.from_user(request.user)
     form = ProfileForm(instance=author)
@@ -264,10 +311,17 @@ def profile_view(request):
     authors = get_search_authors(author, query)
 
     for a in authors:
-        follow = Follow.objects.filter(actor=author, object=a.id).first()
-        a.follow_state = follow.state if follow else "NONE"
-        a.is_following = author.following.filter(id=a.id).exists()
-        a.is_friend = str(a.id) in friend_ids 
+    if a.get("is_local"):
+        # Django Author object
+        follow = Follow.objects.filter(actor=author, object=a["id"]).first()
+        a["follow_state"] = follow.state if follow else "NONE"
+        a["is_following"] = author.following.filter(id=a["id"]).exists()
+        a["is_friend"] = str(a["id"]) in friend_ids
+    else:
+        # Remote authors — assume not following/friends by default
+        a["follow_state"] = "NONE"
+        a["is_following"] = False
+        a["is_friend"] = False 
 
     entries = Entry.objects.filter(author=author).order_by("-published")
     followers = author.followers_set.all()

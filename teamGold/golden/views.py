@@ -69,7 +69,7 @@ def stream_view(request):
     # Query entries according to visibility rules
 
     entries = Entry.objects.filter(
-        Q(author=user_author) |
+        (Q(author=user_author) & ~Q(visibility="DELETED")) |
         Q(visibility='PUBLIC') |  # Public entries: everyone can see
         Q(visibility='UNLISTED', author__id__in=followed_author_fqids) |  # Unlisted: only followers
         Q(visibility='FRIENDS', author__id__in=friends_fqids)  # Friends-only: only friends
@@ -414,7 +414,7 @@ def profile_view(request):
             a["is_following"] = False
             a["is_friend"] = False 
 
-    entries = Entry.objects.filter(author=author).order_by("-published")
+    entries = Entry.objects.filter(Q(author=author) & ~Q(visibility='DELETED')).order_by("-published")
     followers = author.followers_set.all()
     following = author.following.all()
     follow_requests = Follow.objects.filter(object=author.id, state="REQUESTED")
@@ -709,13 +709,20 @@ def toggle_like(request):
 ''' 
 view displays the entry as well as comments below it
 '''
-#! WIP
+#! TODO: WIP
 @login_required
 def entry_detail(request, entry_uuid):
     try:
         entry = Entry.objects.get(id=entry_uuid)
     except Entry.DoesNotExist:
         entry = get_object_or_404(Entry, id__endswith=str(entry_uuid))
+    
+    if entry.visibility == 'DELETED':
+        # TODO: entry deleted page?
+        # return Response({"error": "Entry Deleted Permanently"}, status=410)
+        
+        # If the entry is deleted, we don't want to allow users to bug into the entry page with the url
+        return redirect('stream')
     
     viewer = Author.from_user(request.user)
         # Enforce visibility (deny if FRIENDS-only and viewer isn't allowed)
@@ -865,7 +872,7 @@ def new_post(request):
     context = {}
     form = EntryList()
     editing_entry = None # because by default, users are not in editing mode 
-    entries = Entry.objects.all().order_by('-is_posted')
+    entries = Entry.objects.filter(Q(author=request.current_author) & ~Q(visibility='DELETED')).order_by('-is_posted')
     context['entries'] = entries
     context['entry_heading'] = entry_heading
 
@@ -901,7 +908,8 @@ def new_post(request):
         if entry.author.id != request.current_author.id:
             return HttpResponseForbidden("This isn't yours")
 
-        entry.delete()
+        entry.visibility = 'DELETED'
+        entry.save()
         return redirect('new_post')
     
     # FEATURE UPDATE AN EDITED ENTRY
@@ -948,7 +956,7 @@ def new_post(request):
         context = {}
         context['form'] = EntryList()  
         context['editing_entry'] = None 
-        context['entries'] = Entry.objects.select_related("author").all()
+        context['entries'] = Entry.objects.select_related("author").filter(~Q(visibility='DELETED'))
         context['comment_form'] = CommentForm()
         
         return render(request, "new_post.html", context | {'entries': entries})
@@ -961,7 +969,7 @@ def new_post(request):
         form = EntryList(instance=editing_entry)
         context["editing_entry"] = editing_entry
         context["form"] = form
-        context["entries"] = Entry.objects.select_related("author").all()
+        context["entries"] = Entry.objects.select_related("author").filter(~Q(visibility='DELETED'))
         return render(request, "new_post.html", context | {'entries': entries})
 
     context['form'] = form 

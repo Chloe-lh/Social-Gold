@@ -1,0 +1,470 @@
+/* ================================
+   GOLDEN MOBILE CSS
+   Ultra-specific selectors to override base.css
+   Mobile-responsive styles for screens ≤ 768px
+================================ */
+
+/* ================================
+   CRITICAL: VIEWPORT META TAG REQUIRED
+   Add to your profile.html head:
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+================================ */
+
+/* ================================
+   MOBILE: BASE LAYOUT OVERRIDES
+================================ */
+@media (max-width: 767px) {
+    /* Force side nav to be hidden/collapsible */
+    body section.side-nav,
+    section.side-nav {
+        position: fixed !important;
+        left: -280px !important;
+        top: 0 !important;
+        height: 100vh !important;
+        width: 280px !important;
+        transition: left 0.3s ease !important;
+        z-index: 1000 !important;
+        background: var(--colour-background) !important;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.5) !important;
+        overflow-y: auto !important;
+    }
+
+    body section.side-nav.open,
+    section.side-nav.open {
+        left: 0 !important;
+    }
+
+    /* Show and style hamburger toggle */
+    body button.side-toggle,
+    button.side-toggle {
+        display: block !important;
+        position: fixed !important;
+        top: 1.25rem !important;
+        left: 1rem !important;
+        z-index: 999 !important;
+        background: transparent !important;
+        border: none !important;
+        color: var(--colour-contrast) !important;
+        padding: 0.25rem !important;
+        font-size: 1.5rem !important;
+        cursor: pointer !important;
+        line-height: 1 !important;
+    }
+
+    /* Hide desktop top nav completely */
+    body .main nav.top-nav,
+    .main nav.top-nav,
+    div.main nav.top-nav,
+    nav.top-nav {
+        display: none !important;
+    }
+
+    /* Main content takes full width */
+    body .main,
+    body div.main,
+    .main,
+    div.main {
+        margin-left: 0 !important;
+        width: 100% !important;
+        padding-left: 0 !important;
+    }
+
+    /* Page content spacing */
+    body .main main.page-content,
+    .main main.page-content,
+    body main.content,
+    main.content,
+    main.page-content {
+        padding: 1rem !important;
+        padding-top: 4rem !important;
+        background: var(--colour-background) !important;
+        min-height: 100vh !important;
+        width: 100% !important;
+        margin: 0 !important;
+    }
+}
+
+/* ================================
+   MOBILE: HEADER - Add GOLDEN title
+================================ */
+@media (max-width: 768px) {
+    /* Create mobile header */
+    body main.content::before,
+    main.content::before {
+        content: 'GOLDEN' !important;
+        display: block !important;
+        font-family: "BlackMango", serif !important;
+        font-size: 2rem !important;
+        color: var(--colour-yellow) !important;
+        text-align: center !important;
+        margin-bottom: 1.5rem !important;
+        margin-top: 0 !important;
+        letter-spacing: 0.05em !important;
+        padding-top: 0 !important;
+    }
+}
+
+/* ================================
+   MOBILE: TABS - FULL WIDTH BUTTONS
+================================ */
+@media (max-width: 768px) {
+    body .tabs-section,
+    .tabs-section {
+        margin-top: 1.5rem !important;
+    }
+
+    /* Force tabs to be vertical buttons */
+    body .tabs,
+    .tabs-section .tabs,
+    .tabs {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0.75rem !important;
+        border-bottom: none !important;
+        margin-bottom: 1.5rem !important;
+        overflow-x: visible !important;
+        overflow-y: visible !important;
+    }
+
+    /* Individual tab buttons */
+    body .tabs .tab-btn,
+    .tabs .tab-btn,
+    button.tab-btn,
+    .tab-btn {
+        flex: none !important;
+        width: 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
+        height: 60px !important;
+        background: var(--colour-off-background) !important;
+        color: var(--colour-contrast) !important;
+        border: 1px solid rgba(221, 219, 210, 0.2) !important;
+        border-radius: 8px !important;
+        font-family: "BlackMango", serif !important;
+        font-size: 1.3rem !important;
+        text-transform: lowercase !important;
+        cursor: pointer !important;
+        transition: all 0.2s ease !important;
+        display: block !important;
+        margin: 0 !important;
+        padding: 0.5rem 1rem !important;
+    }
+
+    body .tabs .tab-btn:hover,
+    body .tabs .tab-btn:active,
+    .tab-btn:hover,
+    .tab-btn:active {
+        background: #353535 !important;
+    }
+
+    body .tabs .tab-btn.active,
+    .tab-btn.active {
+        background: var(--colour-off-background) !important;
+        color: var(--colour-yellow) !important;
+        border: 1px solid var(--colour-yellow) !important;
+        border-bottom: 4px solid var(--colour-yellow) !important;
+        box-shadow: 0 0 12px rgba(242, 180, 59, 0.25) !important;
+    }
+
+    body .tab-panels,
+    .tab-panels {
+        padding-top: 0 !important;
+        width: 100% !important;
+    }
+
+    body .tab-panel,
+    .tab-panel {
+        width: 100% !important;
+    }
+}
+
+/* ================================
+   MOBILE: USER LISTS (CLEAN BORDERS)
+================================ */
+@media (max-width: 768px) {
+    /* Author/User rows with border-bottom style */
+    body .author-row,
+    .tab-panel .author-row,
+    .author-row,
+    body .follower-row,
+    .follower-row {
+        background: transparent !important;
+        border: none !important;
+        border-bottom: 1px solid rgba(221, 219, 210, 0.2) !important;
+        border-radius: 0 !important;
+        padding: 1rem 0 !important;
+        margin-bottom: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+    }
+
+    body .author-row:last-child,
+    .author-row:last-child {
+        border-bottom: none !important;
+    }
+
+    /* Username styling */
+    body .follower-username,
+    .follower-row .follower-username,
+    .author-row .follower-username,
+    .follower-username,
+    body .author-list-item,
+    .author-list-item {
+        font-family: "BlackMango", serif !important;
+        font-size: 1.3rem !important;
+        color: var(--colour-yellow) !important;
+        margin: 0 !important;
+        flex: 1 !important;
+        text-align: left !important;
+        display: block !important;
+    }
+
+    /* Hide dividers */
+    body hr,
+    .follower-divider,
+    hr {
+        display: none !important;
+    }
+
+    /* Action buttons */
+    body .remove-form,
+    body .unfollow-form,
+    .remove-form,
+    .unfollow-form {
+        margin-left: auto !important;
+        flex-shrink: 0 !important;
+    }
+
+    body .remove-btn,
+    body .unfollow-btn,
+    body .action-btn,
+    .remove-btn,
+    .unfollow-btn,
+    .action-btn {
+        background: transparent !important;
+        border: none !important;
+        padding: 0.5rem !important;
+        cursor: pointer !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        min-width: 44px !important;
+        min-height: 44px !important;
+        border-radius: 6px !important;
+        transition: background 0.2s ease !important;
+    }
+
+    body .remove-btn img,
+    body .unfollow-btn img,
+    body .action-btn img,
+    .remove-btn img,
+    .unfollow-btn img,
+    .action-btn img {
+        width: 24px !important;
+        height: 24px !important;
+    }
+}
+
+/* ================================
+   MOBILE: REQUESTS (DUAL BUTTONS)
+================================ */
+@media (max-width: 768px) {
+    body .request-row,
+    .tab-panel .request-row,
+    .request-row {
+        background: transparent !important;
+        border: none !important;
+        border-bottom: 1px solid rgba(221, 219, 210, 0.2) !important;
+        border-radius: 0 !important;
+        padding: 1rem 0 !important;
+        margin-bottom: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        flex-wrap: nowrap !important;
+    }
+
+    body .request-row:last-child,
+    .request-row:last-child {
+        border-bottom: none !important;
+    }
+
+    /* Action buttons container */
+    body .request-row .request-actions,
+    .request-actions {
+        display: flex !important;
+        gap: 0.5rem !important;
+        margin-left: auto !important;
+    }
+}
+
+/* ================================
+   MOBILE: PROFILE SECTION
+================================ */
+@media (max-width: 768px) {
+    /* Center profile elements */
+    body .profile-header,
+    .profile-header,
+    body #profile-information,
+    #profile-information {
+        text-align: center !important;
+        margin-bottom: 1.5rem !important;
+    }
+
+    /* Profile avatar */
+    body .profile-pic,
+    .profile-header .profile-pic,
+    #profile-information .profile-pic,
+    img.profile-pic {
+        width: 140px !important;
+        height: 140px !important;
+        border-radius: 50% !important;
+        border: 3px solid var(--colour-yellow) !important;
+        margin: 0 auto 1rem !important;
+        display: block !important;
+        object-fit: cover !important;
+    }
+
+    /* Profile info text */
+    body .profile-info p,
+    .profile-info p,
+    body #profile-information p,
+    #profile-information p {
+        color: var(--colour-off-contrast) !important;
+        font-size: 0.95rem !important;
+        margin: 0.3rem 0 !important;
+        text-align: center !important;
+    }
+
+    /* Description/bio */
+    body .description,
+    .description {
+        margin-top: 1rem !important;
+        margin-bottom: 1.5rem !important;
+    }
+
+    body .description p,
+    .description p {
+        font-size: 0.85rem !important;
+        line-height: 1.5 !important;
+        color: var(--text-muted) !important;
+        font-style: italic !important;
+        text-align: center !important;
+    }
+}
+
+/* ================================
+   MOBILE: EDIT PROFILE
+================================ */
+@media (max-width: 768px) {
+    body .edit-profile-button,
+    .edit-profile-button {
+        text-align: center !important;
+        margin-bottom: 1rem !important;
+        display: flex !important;
+        justify-content: center !important;
+    }
+
+    body .edit-profile-button .nav,
+    .edit-profile-button .nav {
+        display: inline-flex !important;
+        width: auto !important;
+    }
+
+    body #edit-profile-form,
+    #edit-profile-form {
+        max-width: 100% !important;
+        padding: 1rem !important;
+        margin: 1rem 0 !important;
+    }
+
+    body #edit-profile-form input[type="text"],
+    body #edit-profile-form input[type="url"],
+    body #edit-profile-form textarea,
+    body #edit-profile-form input[type="file"],
+    #edit-profile-form input[type="text"],
+    #edit-profile-form input[type="url"],
+    #edit-profile-form textarea,
+    #edit-profile-form input[type="file"] {
+        width: 100% !important;
+        font-size: 16px !important;
+        padding: 0.6rem !important;
+    }
+
+    body #edit-profile-form button[type="submit"],
+    #edit-profile-form button[type="submit"] {
+        width: 100% !important;
+        padding: 0.75rem !important;
+    }
+}
+
+/* ================================
+   MOBILE: ENTRIES/POSTS
+================================ */
+@media (max-width: 768px) {
+    body .entry,
+    .tab-panel .entry,
+    .entry {
+        padding: 1rem !important;
+        margin-bottom: 1rem !important;
+        border-radius: 10px !important;
+    }
+
+    body .entry > p,
+    .entry > p {
+        font-size: 0.85rem !important;
+    }
+
+    body .entry .content,
+    .entry .content {
+        font-size: 0.93rem !important;
+        line-height: 1.6 !important;
+    }
+}
+
+/* ================================
+   MOBILE: UTILITIES
+================================ */
+@media (max-width: 768px) {
+    body img,
+    img {
+        max-width: 100% !important;
+        height: auto !important;
+    }
+
+    * {
+        -webkit-text-size-adjust: 100% !important;
+        text-size-adjust: 100% !important;
+    }
+}
+
+/* ================================
+   MOBILE: SMALL SCREENS (< 400px)
+================================ */
+@media (max-width: 400px) {
+    body main.content::before,
+    main.content::before {
+        font-size: 1.75rem !important;
+    }
+
+    body .profile-pic,
+    img.profile-pic {
+        width: 120px !important;
+        height: 120px !important;
+    }
+
+    body .tab-btn,
+    .tab-btn {
+        height: 55px !important;
+        font-size: 1.2rem !important;
+    }
+
+    body .follower-username,
+    body .author-list-item,
+    .follower-username,
+    .author-list-item {
+        font-size: 1.2rem !important;
+    }
+}

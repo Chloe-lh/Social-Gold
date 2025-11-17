@@ -7,53 +7,63 @@ to inherit these properties
 
 <!DOCTYPE HTML> 
 {% load static %}
+<head> 
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<head>
-    <!-- load stylesheets -->
+    <!-- CSS Stylesheets -->
     <link rel="stylesheet" href="{% static 'golden/css/base.css' %}">
     <link rel="stylesheet" href="{% static 'golden/css/global.css' %}">
-  
-    <meta charset="utf-8">
-  
     {% block head %}{% endblock %}
-        
-</head>
+</head> 
 
 <body>
 
-    <!-- Side Nav -->
+    <!-- Sidebar Mobile Toggle Feature -->
     <button class="side-toggle" onclick="toggleSidebar()">☰</button>
-    <section class="side-nav">
+    
+    <!-- Side Navigation -->
+    <aside class="side-nav">
         <div id="profile-information">
             <h1 id="navbar-header">GOLDEN</h1>
             {% if request.user.is_authenticated and request.user.profileImage %}
                 <img class="profile-pic" src="{{ request.user.profileImage.url }}" alt="Profile">
+                <p>{{ request.user.username }}</p>
+                <p>{{ request.user.name }}</p>
+                <p>{{ request.user.email }}</p>
+                <p>{{ request.user.github }}</p>
             {% else %}
                 <img class="profile-pic" src="{% static 'golden/media/profile_pics/default_profile.webp' %}" alt="Default Profile">
+                <p>Guest</p>
             {% endif %}
-            <p>username</p>
-            <p>email</p>
-            <p>github</p>
         </div>
 
         <ul class="menu">
-            <li class="item"><a href="#" id="logout-link">Log Out</a></li>
+            <li class="item">
+                <a href="#" id="logout-link">Logout
+                    <img src="{% static 'golden/icons/logout-icon.png' %}" alt="Log Out" class="icon"> 
+                </a>
+            </li>
         </ul>
-    </section>
+    </aside>
 
-    <!-- Top Base Nav -->
+    <!-- Primary Content -->
     <div class="main">
         <nav class="top-nav">
-            <h2 id="one-breadcrumb">Hello, user</h2>
+            {% if request.user.is_authenticated %}
+                <h2 id="one-breadcrumb">Hello, {{ request.user.username }}</h2>
+            {% else %}
+                <h2 id="one-breadcrumb">Hello, Guest</h2>
+            {% endif %}
             <ul class="menu">
                 <li class="item">
-                    <a href="{% url 'admin' %}" class="icon-btn" aria-label="admin"> 
+                    <a href="{% url 'node_admin' %}" class="icon-btn" aria-label="node_admin"> 
                         <img src="{% static 'golden/icons/admin-icon.png' %}"/>
                     </a>
                 </li>
                 <li class="item">
                     <a href="{% url 'new_post' %}" class="icon-btn" aria-label="Add Post"> 
-                        <img src="{% static 'golden/icons/add-post-icon.png' %}"/>
+                        <img src="{% static 'golden/icons/entry-add-icon.png' %}"/>
                     </a>
                 </li>
                 <li class="item">
@@ -73,27 +83,36 @@ to inherit these properties
             {% csrf_token %}
         </form>
 
-    <!-- Child templates will over ride to display page content-->
-    <main class="page-content">{% block content %}{% endblock %} </main>
-    
+        <!-- Child templates will over ride to display page content-->
+        <main class="page-content">{% block content %}{% endblock %}</main>
     </div>
+</body>
 
 <script>
-        function toggleSidebar(){
-            document.querySelector('.side-nav').classList.toggle('open');
-        }
+    function toggleSidebar(){
+        document.querySelector('.side-nav').classList.toggle('open');
+    }
 
-        // Toggle the Side Nav-Bar
-        function toggleSidebar(){
-            document.querySelector('.side-nav').classList.toggle('open');
-        }
-        
-        // Logout Feature
-        document.getElementById('logout-link').addEventListener('click', function(e) {
-            e.preventDefault();
-            document.getElementById('logout-form').submit();
+    // Close sidebar when clicking outside (on the overlay)
+    document.addEventListener('DOMContentLoaded', function() {
+        document.body.addEventListener('click', function(e) {
+            const sideNav = document.querySelector('.side-nav');
+            const toggle = document.querySelector('.side-toggle');
+            
+            // If sidebar is open and click is outside sidebar and toggle button
+            if (sideNav.classList.contains('open') && 
+                !sideNav.contains(e.target) && 
+                !toggle.contains(e.target)) {
+                sideNav.classList.remove('open');
+            }
         });
+    });
+    
+    // Logout Feature
+    document.getElementById('logout-link').addEventListener('click', function(e) {
+        e.preventDefault();
+        document.getElementById('logout-form').submit();
+    });
 </script>
+</html>
 
-
-</body>

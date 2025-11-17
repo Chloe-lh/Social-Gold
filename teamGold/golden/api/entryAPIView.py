@@ -45,6 +45,8 @@ class EntryAPIView(APIView):
     def get(self, request, id):
         try:
             obj = Entry.objects.get(pk=id) 
+            if obj.visibility == 'DELETED':
+                return Response(status=status.HTTP_410_GONE)
         except Entry.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(EntrySerializer(obj).data, status=status.HTTP_200_OK)
@@ -61,6 +63,8 @@ class EntryAPIView(APIView):
         """Update an existing entry (partial or full)."""
         try:
             entry = Entry.objects.get(pk=id)
+            if entry.visibility == 'DELETED':
+                return Response(status=status.HTTP_410_GONE)
         except Entry.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
         serializer = EntrySerializer(entry, data=request.data, partial=True)
@@ -73,6 +77,8 @@ class EntryAPIView(APIView):
         """Delete an entry."""
         try:
             entry = Entry.objects.get(pk=id)
+            if entry.visibility == 'DELETED':
+                return Response(status=status.HTTP_410_GONE)
             entry.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Entry.DoesNotExist:
@@ -102,6 +108,8 @@ class EntryImageAPIView(APIView):
 
         try:
             entry = Entry.objects.get(pk=entry_id)
+            if entry.visibility == 'DELETED':
+                return Response(status=status.HTTP_410_GONE)
         except Entry.DoesNotExist:
             return Response({'error': 'Entry not found'}, status=status.HTTP_404_NOT_FOUND)
 

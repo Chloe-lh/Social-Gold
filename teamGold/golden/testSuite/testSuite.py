@@ -908,7 +908,7 @@ class ForbiddenAuthorizationTests(APITestCase):
         res = self.client.get(f"/api/Profile/{self.author.id}/")
         self.assertIn(res.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
 
-    # ============================================================
+# ============================================================
 # Follow API
 # ============================================================
 

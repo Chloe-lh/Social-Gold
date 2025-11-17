@@ -391,9 +391,6 @@ def profile_view(request):
                     )
                 return redirect("profile")
 
-            # remote author
-            from urllib.parse import urlparse
-
             parsed = urlparse(target_id)
             remote_host = f"{parsed.scheme}://{parsed.netloc}"
             remote_uuid = target_id.rstrip("/").split("/")[-1]
@@ -409,8 +406,8 @@ def profile_view(request):
                 id=target_id,  # full FQID
                 defaults={
                     "username": remote_uuid,
-                    "displayName": remote_uuid,
                     "host": remote_host,
+                    "url": target_id,
                 }
             )
 
@@ -435,14 +432,14 @@ def profile_view(request):
                     "type": "author",
                     "id": author.id,
                     "host": author.host,
-                    "displayName": author.displayName,
+                    "displayName": author.username,
                     "profileImage": author.profileImage or ""
                 },
                 "object": {
                     "type": "author",
                     "id": target.id,
                     "host": target.host,
-                    "displayName": target.displayName,
+                    "displayName": target.username,
                     "profileImage": target.profileImage or ""
                 }
             }

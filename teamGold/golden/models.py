@@ -115,6 +115,28 @@ class Author(AbstractBaseUser, PermissionsMixin):
             self.host = settings.SITE_URL.rstrip('/')  # remove trailing slash just in case
         super().save(*args, **kwargs)
 
+    def to_activitypub_dict(self):
+        return {
+            "type": "entry",
+            "id": self.id,
+            "title": self.title or "",
+            "description": self.description or "",
+            "contentType": self.contentType,
+            "content": self.content,
+            "published": self.published.isoformat(),
+            "visibility": self.visibility,
+            "author": {
+                "id": self.author.id,
+                "host": self.author.host,
+                "displayName": self.author.username,
+                "profileImage": (
+                    self.author.profileImage.url 
+                    if self.author.profileImage 
+                    else ""
+                ),
+            },
+        }
+
 class Entry(models.Model):
     """
     This class is using a FULL URL (FQID) as the primary key instead of an integer.

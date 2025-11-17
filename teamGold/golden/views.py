@@ -17,7 +17,7 @@ from golden import models
 from golden.models import Entry, EntryImage, Author, Comment, Like, Follow, Node
 from .forms import CustomUserForm, CommentForm, ProfileForm, EntryList
 from golden.serializers import CommentSerializer, EntryInboxSerializer, LikeInboxSerializer, CommentsInfoSerializer, FollowRequestInboxSerializer, NodeSerializer
-from golden.utils import get_or_create_foreign_author, post_to_remote_inbox, build_accept_activity
+from golden.utils import get_or_create_foreign_author, post_to_remote_inbox, build_accept_activity, fetch_remote_entries, sync_remote_entry
 
 # Import login authentication stuff
 from django.contrib.auth.decorators import login_required
@@ -43,50 +43,98 @@ import json
 import random
 import requests
 
-# TODO: Do we still need this?
 @login_required
 def stream_view(request):
-    # Get the Author object for the logged-in user
+    # current user as Author
     user_author = request.user
 
     # only a local node uses stream_view
     remote_node = False
-
-    # Get all accepted follows (authors this user follows)
     follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
     followed_author_fqids = [f.object for f in follows]
 
-    # Determine authors who are "friends" (mutual follows)
     friends_fqids = []
     for f in follows:
         try:
-            # Check if the followed author also follows the user
-            reciprocal = Follow.objects.get(actor__id=f.object, object=user_author.id, state='ACCEPTED')
+            reciprocal = Follow.objects.get(
+                actor__id=f.object,
+                object=user_author.id,
+                state='ACCEPTED'
+            )
             friends_fqids.append(f.object)
         except Follow.DoesNotExist:
             continue
 
-    # Query entries according to visibility rules
+    remote_node = False
+    remote_entries = []
 
-    entries = Entry.objects.filter(
+    remote_nodes = Node.objects.filter(is_active=True)
+    for node in remote_nodes:
+
+        # get raw remote JSON entries
+        raw_items = fetch_remote_entries(node)
+
+        for item in raw_items:
+            author_data = item.get("author", {})
+            remote_author_id = author_data.get("id")
+
+            if not remote_author_id:
+                continue
+
+            # only fetch entries from authors the user follows
+            is_following = Follow.objects.filter(
+                actor=user_author,
+                object=remote_author_id,
+                state="ACCEPTED"
+            ).exists()
+
+            if not is_following:
+                continue
+
+            # convert JSON → local Entry model instance
+            entry = sync_remote_entry(item, node)
+            if entry:
+                remote_entries.append(entry)
+
+    local_entries = Entry.objects.filter(
         (Q(author=user_author) & ~Q(visibility="DELETED")) |
-        Q(visibility='PUBLIC') |  # Public entries: everyone can see
-        Q(visibility='UNLISTED', author__id__in=followed_author_fqids) |  # Unlisted: only followers
-        Q(visibility='FRIENDS', author__id__in=friends_fqids)  # Friends-only: only friends
-    ).order_by('-is_updated', '-is_posted')  # Most recent first
+        Q(visibility='PUBLIC') |
+        Q(visibility='UNLISTED', author__id__in=followed_author_fqids) |
+        Q(visibility='FRIENDS', author__id__in=friends_fqids)
+    )
+    visible_remote = []
 
-    # Prepare context for the template
+    for e in remote_entries:
+
+        # user is already following this author
+        if e.visibility == "PUBLIC":
+            visible_remote.append(e)
+            continue
+
+        # allowed for followers
+        if e.visibility == "UNLISTED":
+            visible_remote.append(e)
+            continue
+
+        # only if mutual acceptance
+        is_mutual = (
+            Follow.objects.filter(actor=user_author, object=e.author.id, state="ACCEPTED").exists() and
+            Follow.objects.filter(actor=e.author, object=user_author.id, state="ACCEPTED").exists()
+        )
+        if e.visibility == "FRIENDS" and is_mutual:
+            visible_remote.append(e)
+
+    entries = list(local_entries) + visible_remote
+    entries.sort(key=lambda x: x.is_posted, reverse=True)
     context = {
         'entries': entries,
         'user_author': user_author,
         'followed_author_fqids': followed_author_fqids,
         'friends_fqids': friends_fqids,
-        'comment_form' : CommentForm(),
-        # 'entry_comments_json': json.dumps(entry_comments),
-        'remote_node':remote_node,
+        'comment_form': CommentForm(),
+        'remote_node': remote_node,
     }
 
-    # Render the stream page extending base.html
     return render(request, 'stream.html', context)
 
 @login_required

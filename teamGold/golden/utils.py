@@ -65,3 +65,34 @@ def send_new_entry(entry):
         results.append((follower.id, success))
 
     return results
+
+def user_follows_author(local_author, target_author):
+    return Follow.objects.filter(
+        actor=local_author,
+        object=target_author.id,
+        state="ACCEPTED"
+    ).exists()
+
+def sync_remote_entries(node, local_user_author):
+    items = fetch_remote_entries(node)
+    synced_entries = []
+
+    for item in items:
+        author_data = item.get("author", {})
+        author_id = author_data.get("id")
+
+        if not author_id:
+            continue
+
+        if not Follow.objects.filter(
+            actor=local_user_author,
+            object=author_id,
+            state="ACCEPTED"
+        ).exists():
+            continue
+
+        entry = sync_remote_entry(item, node)
+        if entry:
+            synced_entries.append(entry)
+
+    return synced_entries

@@ -46,8 +46,6 @@ urlpatterns = [
     path("api/Follow/<path:id>/", FollowAPIView.as_view(), name="get-follow"),
     path("api/Author/<path:author_id>/friends/", AuthorFriendsView.as_view()),
     path("api/Like/<path:id>/", LikeAPIView.as_view(), name="get-like"),
-    # Backwards-compatible Entry comments alias must come before the generic Entry route
-    path("api/Entry/<path:entry_id>/comments/", EntryCommentAPIView.as_view(), name="entry-comments-alias"),
     path("api/Entry/<path:id>/", EntryAPIView.as_view(), name="get-entry"),
 
     # --------------------------- COMMENTS ---------------------------
@@ -75,8 +73,8 @@ urlpatterns = [
     path("api/Entry/<path:entry_id>/images/", EntryImageAPIView.as_view(), name="entryimage-upload"),
 
     path("api/author/<uuid:author_id>/inbox/", views.inbox, name="inbox"),
-    #path('api/authors/<uuid:author_id>/followers/accept/', views.accept_follow, name='accept_follow'),
-    #path('api/authors/<uuid:author_id>/followers/reject/', views.reject_follow, name='reject_follow'),
+    path('api/authors/<uuid:author_id>/followers/accept/', views.accept_follow, name='accept_follow'),
+    path('api/authors/<uuid:author_id>/followers/reject/', views.reject_follow, name='reject_follow'),
     path("api/entries/<uuid:entry_id>/", views.handle_update, name="entry_update"),
 ]
     

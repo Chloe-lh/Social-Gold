@@ -20,15 +20,18 @@ from django.core.paginator import Paginator
 # LOCAL IMPORTS
 from golden.models import Author, Entry, Comment, Like, Follow, Node, EntryImage
 from golden.services import generate_comment_fqid, resolve_or_create_author, paginate
+from golden.utils import post_to_remote_inbox, get_or_create_foreign_author
 
 # SWAGGER
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
 # SERIALIZERS IMPORTS
-from .serializers import (
+from golden.serializers import (
     AuthorSerializer, EntrySerializer, NodeSerializer,
-    FollowSerializer, LikeSerializer, CommentSerializer, EntryImageSerializer
+    FollowSerializer, LikeSerializer, CommentSerializer, EntryImageSerializer,
+    EntryInboxSerializer, CommentsInfoSerializer, LikeInboxSerializer,
+    FollowRequestInboxSerializer
 )
 
 '''
@@ -102,7 +105,7 @@ class EntryAPIView(APIView):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+    
     def delete(self, request, id):
         """Delete an entry."""
         try:
@@ -111,7 +114,6 @@ class EntryAPIView(APIView):
             return Response(status=status.HTTP_204_NO_CONTENT)
         except Entry.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
-
 
 class EntryImageAPIView(APIView):
     """
@@ -173,7 +175,7 @@ class NodeAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, id):
-        node = get_object_or_404(Node, id)
+        node = get_object_or_404(Node, id) # ! IS THIS NOT id=id?
         return Response(NodeSerializer(node).data, status=status.HTTP_200_OK)
 
 class FollowAPIView(APIView):
@@ -185,7 +187,7 @@ class FollowAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, id):
-        follow = get_object_or_404(Follow, id)
+        follow = get_object_or_404(Follow, id) # ! IS THIS NOT id=id?
         return Response(NodeSerializer(follow).data, status=status.HTTP_200_OK)
 
 class AuthorFriendsView(APIView):
@@ -210,3 +212,62 @@ class AuthorFriendsView(APIView):
 class InboxView(APIView):
     def get(self, request, author_id): pass
     def post(self, request): pass
+
+# ! HELPER FUNCTIONS
+def distribute_entry_activity(entry, action="create"):
+    """
+    Distribute entry to remote followers based on visibility.
+    action: "create", "update", or "delete"
+    """
+    author = entry.author
+    
+    followers = Follow.objects.filter(object=author.id, state="ACCEPTED").select_related('actor')
+
+    for follow in followers:
+        follower = follow.actor
+        
+        if follower.host and follower.host.startswith(settings.SITE_URL):
+            continue
+        
+        should_send_entry = False
+        if entry.visibility in ["PUBLIC", "UNLISTED"]:
+            should_send_entry = True
+        elif entry.visibility == "FRIENDS":
+            # Only send to friends (mutual followers)
+            if follower in author.friends:
+                should_send_entry = True
+        
+        if should_send_entry:
+            send_entry_activity(follower, entry, action)
+
+# ! HELPER FUNCTIONS
+def send_entry_activity(recipient, entry, action):
+    try:
+        entry_data = EntryInboxSerializer(entry).data
+        
+        if action == "delete":
+            entry_data['visibility'] = "DELETED"
+            activity = {
+                "type": "Update",
+                "actor": {"id": entry.author.id},
+                "object": entry_data
+            }
+        elif action == "update":
+            activity = {
+                "type": "Update",
+                "actor": {"id": entry.author.id},
+                "object": entry_data
+            }
+        else: 
+            activity = {
+                "type": "Create",
+                "actor": {"id": entry.author.id},
+                "object": entry_data
+            }
+
+        inbox_url = recipient.id.rstrip('/') + '/inbox/'
+        node = Node.objects.filter(host__icontains=urlparse(recipient.id).netloc).first()
+        post_to_remote_inbox(inbox_url, activity, node=node)
+        
+    except Exception as e:
+        print(f"Failed to send {recipient.id}: {e}")

@@ -153,3 +153,38 @@ def sync_remote_entry(item, node):
 
     return entry
 
+def send_update_activity(entry):
+    """
+    Sends an ActivityPub 'Update' activity to all remote followers.
+    Used when a local Entry is edited.
+    """
+    author = entry.author
+    followers = Follow.objects.filter(object=author, state="ACCEPTED").select_related("actor")
+
+    activity = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Update",
+        "actor": {"id": author.id},
+        "object": entry.to_activitypub_dict(),
+    }
+
+    results = []
+
+    for follow in followers:
+        follower = follow.actor
+
+        # Skip local followers
+        if follower.host.startswith(settings.SITE_URL):
+            continue
+
+        node = Node.objects.filter(id__contains=follower.host).first()
+
+        # Get inbox for remote follower
+        inbox_url = getattr(follower, "inbox", None)
+        if not inbox_url:
+            inbox_url = follower.id.rstrip("/") + "/inbox/"
+
+        success = post_to_remote_inbox(inbox_url, activity, node=node)
+        results.append((follower.id, success))
+
+    return results

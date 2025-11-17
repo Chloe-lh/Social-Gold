@@ -163,6 +163,18 @@ def profile_view(request):
     - Search Tab
     """
 
+    @api_view(['GET'])
+    def remote_authors_list(request):
+        authors = Author.objects.all()
+        results = []
+        for a in authors:
+            results.append({
+                "id": a.id,
+                "displayName": a.username,
+                "host": a.host,
+            })
+        return Response({"type": "authors", "items": results})
+
     def get_remote_authors(node):
         """
         Fetch all authors from a remote node.

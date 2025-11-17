@@ -78,6 +78,8 @@ urlpatterns = [
     #path('api/authors/<uuid:author_id>/followers/accept/', views.accept_follow, name='accept_follow'),
     #path('api/authors/<uuid:author_id>/followers/reject/', views.reject_follow, name='reject_follow'),
     path("api/entries/<uuid:entry_id>/", views.handle_update, name="entry_update"),
+
+    path('api/authors/', views.remote_authors_list, name='remote-authors-list')
 ]
     
 

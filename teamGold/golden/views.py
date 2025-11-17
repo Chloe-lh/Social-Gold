@@ -436,6 +436,32 @@ def profile_view(request):
 
 FOLLOW_STATE_CHOICES = ["REQUESTED", "ACCEPTED", "REJECTED"]
 
+@login_required
+def public_profile_view(request, author_id):
+    """
+    View for displaying another author's profile.
+
+    Only shows basic author info (name, github, email, etc.) and list of their entries.
+    Tabs and editing are removed.
+    """
+
+    # Get author
+    author = get_object_or_404(Author, id=author_id)
+
+    # Convert description to HTML
+    author.description = markdown.markdown(author.description)
+
+    # Get entries for this author
+    entries = Entry.objects.filter(author=author).order_by("-published")
+
+    context = {
+        "author": author,
+        "entries": entries,
+        # We can add sidebar info like GitHub, email, website
+    }
+
+    return render(request, "public_profile.html", context)
+
 """
 def search_authors(request):
     actor = Author.from_user(request.user)

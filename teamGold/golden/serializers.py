@@ -201,16 +201,14 @@ class EntryInboxSerializer(serializers.Serializer):
 
 
     def validate_type(self, value):
-        if value.lower() != "entry":
+        if value.lower() not in ("entry", "post"):
             raise serializers.ValidationError("type must be 'entry'")
         return value
-    
+        
     def create(self, validated_data):
-        # pull out nested author
         author_data = validated_data.pop("author")
         author_id = author_data.get("id")
 
-        # get or create the foreign author
         author, _ = Author.objects.get_or_create(
             id=author_id,
             defaults={

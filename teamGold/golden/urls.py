@@ -21,12 +21,13 @@ urlpatterns = [
     path("signup/", views.signup, name="signup"),
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
     path('profile/', views.profile_view, name='profile'),
+    path("authors/<path:author_id>/", views.public_profile_view, name="public-profile"),
     # profile should contain: main profile that contains a list of the author's entries
     # profile also contains the following: followers, following, and requests
     path('profile/followers/', views.followers, name='followers'),
     path('profile/following/', views.following, name='following'),
     path("profile/follow_requests/", views.follow_requests, name="follow_requests"),
-    path('entry/<uuid:entry_uuid>/', views.entry_detail, name='entry_detail'),
+    path('entry/<str:entry_uuid>/', views.entry_detail, name='entry_detail'),
     path('stream/', views.stream_view, name="stream-link"),
     # TODO: change the id to be the id, whatever we decide to use later
     # TODO: entries can have comment page number queries (Or we just allow infinite scroll for comments..?)
@@ -78,7 +79,6 @@ urlpatterns = [
     #path('api/authors/<uuid:author_id>/followers/accept/', views.accept_follow, name='accept_follow'),
     #path('api/authors/<uuid:author_id>/followers/reject/', views.reject_follow, name='reject_follow'),
     path("api/entries/<uuid:entry_id>/", views.handle_update, name="entry_update"),
-
     path('api/authors/', views.remote_authors_list, name='remote-authors-list')
 ]
     

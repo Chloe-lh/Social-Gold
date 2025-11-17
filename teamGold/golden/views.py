@@ -17,7 +17,7 @@ from golden import models
 from golden.models import Entry, EntryImage, Author, Comment, Like, Follow, Node
 from .forms import CustomUserForm, CommentForm, ProfileForm, EntryList
 from golden.serializers import CommentSerializer, EntryInboxSerializer, LikeInboxSerializer, CommentsInfoSerializer, FollowRequestInboxSerializer
-from golden.utils import get_or_create_foreign_author, post_to_remote_inbox, build_accept_activity
+from golden.utils import get_or_create_foreign_author, post_to_remote_inbox, build_accept_activity, send_new_entry, send_update_activity, send_delete_activity
 
 # Import login authentication stuff
 from django.contrib.auth.decorators import login_required
@@ -607,13 +607,9 @@ view displays the entry as well as comments below it
 #! WIP
 @login_required
 def entry_detail(request, entry_uuid):
-    try:
-        entry = Entry.objects.get(id=entry_uuid)
-    except Entry.DoesNotExist:
-        entry = get_object_or_404(Entry, id__endswith=str(entry_uuid))
-    
+    entry = Entry.objects.get(id__endswith=str(entry_uuid))
     viewer = Author.from_user(request.user)
-        # Enforce visibility (deny if FRIENDS-only and viewer isn't allowed)
+    # Enforce visibility (deny if FRIENDS-only and viewer isn't allowed)
     # VISIBILITY CHECK (NEW VERSION)
     if entry.visibility == "FRIENDS":
         if viewer != entry.author and viewer not in entry.author.friends:
@@ -632,7 +628,6 @@ def entry_detail(request, entry_uuid):
         'entry_comments_json': json.dumps(entry_comments),
     }
     return render(request, 'entry_detail.html', context)
-
 
 @api_view(['POST'])
 def inbox(request, author_id):
@@ -760,13 +755,14 @@ def new_post(request):
     context = {}
     form = EntryList()
     editing_entry = None # because by default, users are not in editing mode 
-    entries = Entry.objects.all().order_by('-is_posted')
+    entries = Entry.objects.exclude(visibility="DELETED").order_by('-is_posted')
     context['entries'] = entries
     context['entry_heading'] = entry_heading
 
     # FEATURE POST AN ENTRY
     if request.method == "POST" and "entry_post" in request.POST:
-        entry_id = f"https://node1.com/api/entries/{uuid.uuid4()}"  #****** we need to change this to dynamically get the node num
+        host = settings.SITE_URL.rstrip("/")
+        entry_id = f"{host}/api/entries/{uuid.uuid4()}"
 
         # Markdown conversion 
         markdown_content = request.POST['content']
@@ -784,7 +780,8 @@ def new_post(request):
         for idx, image in enumerate(images):
             EntryImage.objects.create(
                 entry=entry, image=image, order=idx)
-                    
+        
+        send_new_entry(entry)
         return redirect('new_post')
     
     # FEATURE DELETE AN ENTRY 
@@ -796,7 +793,12 @@ def new_post(request):
         if entry.author.id != request.current_author.id:
             return HttpResponseForbidden("This isn't yours")
 
-        entry.delete()
+        # Soft delete to allow the admin to still see
+        entry.visibility = "DELETED"
+        entry.content = ""
+        entry.save()
+        send_delete_activity(entry)
+
         return redirect('new_post')
     
     # FEATURE UPDATE AN EDITED ENTRY
@@ -826,6 +828,9 @@ def new_post(request):
             editing_entry.visibility = visibility
             editing_entry.contentType = "text/html"
             editing_entry.save()
+            
+            send_update_activity(editing_entry)
+
 
             if remove_ids:
                 EntryImage.objects.filter(entry=editing_entry, id__in=remove_ids).delete()
@@ -843,10 +848,11 @@ def new_post(request):
         context = {}
         context['form'] = EntryList()  
         context['editing_entry'] = None 
-        context['entries'] = Entry.objects.select_related("author").all()
+        context['entries'] = Entry.objects.exclude(visibility="DELETED").select_related("author")
         context['comment_form'] = CommentForm()
         
-        return render(request, "new_post.html", context | {'entries': entries})
+        return render(request, "new_post.html", context)
+        #return render(request, "new_post.html", context | {'entries': entries})
 
     # FEATURE EDIT BUTTON CLICKED 
     if request.method == "POST" and "entry_edit" in request.POST:
@@ -857,7 +863,9 @@ def new_post(request):
         context["editing_entry"] = editing_entry
         context["form"] = form
         context["entries"] = Entry.objects.select_related("author").all()
-        return render(request, "new_post.html", context | {'entries': entries})
+        
+        return render(request, "new_post.html", context)
+        #return render(request, "new_post.html", context | {'entries': entries})
 
     context['form'] = form 
     context["editing_entry"] = editing_entry

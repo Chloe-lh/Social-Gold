@@ -65,3 +65,49 @@ def send_new_entry(entry):
         results.append((follower.id, success))
 
     return results
+
+def send_update_activity(entry):
+    followers = Follow.objects.filter(
+        object=entry.author, state="ACCEPTED"
+    ).select_related("actor")
+
+    activity = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Update",
+        "actor": {"id": entry.author.id},
+        "object": entry.to_activitypub_dict(),
+    }
+
+    results = []
+    for follow in followers:
+        if follow.actor.host.startswith(settings.SITE_URL):
+            continue
+        node = Node.objects.filter(id__contains=follow.actor.host).first()
+        inbox = follow.actor.inbox or follow.actor.id.rstrip("/") + "/inbox/"
+        results.append((follow.actor.id, post_to_remote_inbox(inbox, activity, node)))
+    return results
+
+def send_delete_activity(entry):
+    followers = Follow.objects.filter(
+        object=entry.author, state="ACCEPTED"
+    ).select_related("actor")
+
+    activity = {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "type": "Update",   # ActivityPub uses Update to signal soft delete
+        "actor": {"id": entry.author.id},
+        "object": {
+            "id": entry.id,
+            "visibility": "DELETED",
+            "content": "",
+        }
+    }
+
+    results = []
+    for follow in followers:
+        if follow.actor.host.startswith(settings.SITE_URL):
+            continue
+        node = Node.objects.filter(id__contains=follow.actor.host).first()
+        inbox = follow.actor.inbox or follow.actor.id.rstrip("/") + "/inbox/"
+        results.append((follow.actor.id, post_to_remote_inbox(inbox, activity, node)))
+    return results

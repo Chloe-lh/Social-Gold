@@ -55,7 +55,7 @@ def stream_view(request):
     follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
     followed_author_fqids = [f.object for f in follows]
 
-    # etermine authors who are "friends" (mutual follows)
+    # Determine authors who are "friends" (mutual follows)
     friends_fqids = []
     for f in follows:
         try:
@@ -774,9 +774,8 @@ def inbox(request, author_id):
 def handle_update(data, author):
     """
     Processes the remote update activity for an Entry.
-    Handelling user stories #22 and #35 
+    Handels user stories #22 and #35 
     """
-
     object_id = data.get("object", {})
 
     if not isinstance(object_id, dict):
@@ -793,7 +792,6 @@ def handle_update(data, author):
         return Response({"error": "Entry not found"}, status=404)
 
     # Update fields that remote nodes are allowed to overwrite
-    # (adjust this list to your policy)
     updated = False
 
     if "title" in object_id:
@@ -811,7 +809,7 @@ def handle_update(data, author):
     if "visibility" in object_id:
         entry.visibility = object_id["visibility"]
         updated = True
-        # Admin can still see what was deleted
+        # So that admin can still see what was deleted
         if entry.visibility == "DELETED":
             entry.content = ""
 
@@ -924,7 +922,6 @@ def new_post(request):
     ]
     entry_heading = random.choice(headings)
 
-    
     context = {}
     form = EntryList()
     editing_entry = None # because by default, users are not in editing mode 
@@ -948,7 +945,6 @@ def new_post(request):
                 visibility=request.POST.get('visibility', 'PUBLIC')
             )
         
-
         images = request.FILES.getlist('images')
         for idx, image in enumerate(images):
             EntryImage.objects.create(
@@ -1032,5 +1028,4 @@ def new_post(request):
     context["editing_entry"] = editing_entry
     # context["entries"] = Entry.objects.select_related("author").all()
  
-
     return render(request, "new_post.html", context | {'entries': entries})

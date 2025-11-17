@@ -39,6 +39,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 import json
 
+from urllib.parse import urlparse
+
 # For Website Design
 import random
 import requests
@@ -373,29 +375,89 @@ def profile_view(request):
         
         if request.POST.get("action") == "follow" and "author_id" in request.POST:
             target_id = request.POST.get("author_id")
-            target = get_object_or_404(Author, id=target_id)
+            target = Author.objects.filter(id=target_id).first()
 
-            # Checks if a follow already exists
-            existing = Follow.objects.filter(
+            if target:
+                # Local follow
+                existing = Follow.objects.filter(actor=author, object=target.id).first()
+                if not existing:
+                    follow_fqid = f"{author.id.rstrip('/')}/follow/{uuid.uuid4()}"
+                    Follow.objects.create(
+                        id=follow_fqid,
+                        actor=author,
+                        object=target.id,
+                        state="REQUESTED"
+                    )
+                return redirect("profile")
+
+            # remote author
+            from urllib.parse import urlparse
+
+            parsed = urlparse(target_id)
+            remote_host = f"{parsed.scheme}://{parsed.netloc}"
+            remote_uuid = target_id.rstrip("/").split("/")[-1]
+
+            # Find NODE entry for this host
+            node = Node.objects.filter(id=remote_host).first()
+            if not node:
+                messages.error(request, "Remote node not registered.")
+                return redirect("profile")
+
+            # Create a shadow Author for remote user if not exists
+            target, created = Author.objects.get_or_create(
+                id=target_id,  # full FQID
+                defaults={
+                    "username": remote_uuid,
+                    "displayName": remote_uuid,
+                    "host": remote_host,
+                }
+            )
+
+            # Generate follow FQID
+            follow_fqid = f"{author.id.rstrip('/')}/follow/{uuid.uuid4()}"
+
+            # Store follow request locally
+            Follow.objects.create(
+                id=follow_fqid,
                 actor=author,
                 object=target.id,
-            ).first()
+                state="REQUESTED",
+            )
 
-            if not existing:
-                # Builds a UNIQUE follow request ID (FQID)
-                follow_id = f"{author.id.rstrip('/')}/follow/{uuid.uuid4()}"
-                # Example output:
-                # https://golden.com/author/123/follow/9f1f247b-e8cf-4e91-8a61-e0c84bd2e4d1
+            # Send FOLLOW REQUEST TO REMOTE INBOX
+            inbox_url = f"{remote_host}/api/authors/{remote_uuid}/inbox/"
 
-                Follow.objects.create(
-                    id=follow_id,
-                    actor=author,
-                    object=target.id,
-                    state="REQUESTED",
+            payload = {
+                "type": "follow",
+                "summary": f"{author.displayName} wants to follow {target.displayName}",
+                "actor": {
+                    "type": "author",
+                    "id": author.id,
+                    "host": author.host,
+                    "displayName": author.displayName,
+                    "profileImage": author.profileImage or ""
+                },
+                "object": {
+                    "type": "author",
+                    "id": target.id,
+                    "host": target.host,
+                    "displayName": target.displayName,
+                    "profileImage": target.profileImage or ""
+                }
+            }
+
+            try:
+                resp = requests.post(
+                    inbox_url,
+                    json=payload,
+                    timeout=5,
+                    auth=(node.auth_user, node.auth_pass)
                 )
-            return redirect("profile")   
-    else:
-        form = ProfileForm(instance=author)
+                print("REMOTE FOLLOW RESPONSE:", resp.status_code, resp.text)
+            except Exception as e:
+                print("ERROR SENDING REMOTE FOLLOW:", e)
+
+            return redirect("profile")
 
     friends_qs, friend_ids = get_friends_context(author)
     query = request.GET.get("q", "").strip()

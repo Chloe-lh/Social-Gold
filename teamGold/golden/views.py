@@ -282,9 +282,6 @@ def profile_view(request):
         """
         Inner function to grab the author's friends JSON field specifically for profile.html
         """
-        # friends_data = author.friends or {}
-        # friend_ids = set(friends_data.keys())  # keys are string FQIDs
-        # friends = Author.objects.filter(id__in=friends_data.keys()) if friends_data else []
         friends_qs = author.friends  # this is already a queryset due to the property
         friend_ids = set(f.id for f in friends_qs)  # set of FQIDs
         return friends_qs, friend_ids
@@ -312,14 +309,8 @@ def profile_view(request):
                 follow_request.save()
 
                 follower = follow_request.actor
-                # followers_info = author.followers_info or {}
-                # followers_info[str(follower.id)] = follower.username
-                # author.followers_info = followers_info
                 follower.following.add(author)
                 follower.save()
-
-                # author.update_friends()
-                # follower.update_friends()
 
             elif action == "reject":
                 follow_request.state = "REJECTED"
@@ -330,14 +321,8 @@ def profile_view(request):
         if "remove_follower" in request.POST:
             target_id = request.POST.get("remove_follower")
             target = get_object_or_404(Author, id=target_id)
-            # followers_info = author.followers_info or {}
-            # followers_info.pop(str(target.id), None)
-            # author.followers_info = followers_info
-            # author.save(update_fields=["followers_info"])
             author.following.remove(target)
             Follow.objects.filter(actor=target, object=author.id).delete()
-            # target.update_friends()
-            # author.update_friends()
             return redirect("profile")
 
         if "unfollow" in request.POST:
@@ -345,8 +330,6 @@ def profile_view(request):
             target = get_object_or_404(Author, id=target_id)
             author.following.remove(target)
             Follow.objects.filter(actor=author, object=target.id).delete()
-            # target.update_friends()
-            # author.update_friends()
             return redirect("profile")
 
         if "remove_friend" in request.POST:
@@ -356,17 +339,6 @@ def profile_view(request):
             # Removes each other from following and followers_info
             author.following.remove(target)
             target.following.remove(author)
-            # followers_info = author.followers_info or {}
-            # followers_info.pop(str(target.id), None)
-            # author.followers_info = followers_info
-            # author.save(update_fields=["followers_info"])
-            # target_info = target.followers_info or {}
-            # target_info.pop(str(author.id), None)
-            # target.followers_info = target_info
-            # target.save(update_fields=["followers_info"])
-
-            # author.update_friends()
-            # target.update_friends()
             Follow.objects.filter(actor=author, object=target.id).delete()
             Follow.objects.filter(actor=target, object=author.id).delete()
 
@@ -408,9 +380,6 @@ def profile_view(request):
     query = request.GET.get("q", "").strip()
     authors = get_search_authors(author, query)
 
-    # friends_data = author.friends or {}
-    # friend_ids = set(friends_data.keys())
-
     for a in authors:
         follow = Follow.objects.filter(actor=author, object=a.id).first()
         a.follow_state = follow.state if follow else "NONE"
@@ -418,11 +387,9 @@ def profile_view(request):
         a.is_friend = str(a.id) in friend_ids 
 
     entries = Entry.objects.filter(author=author).order_by("-published")
-    # followers_info = author.followers_info or {}
     followers = author.followers_set.all()
     following = author.following.all()
     follow_requests = Follow.objects.filter(object=author.id, state="REQUESTED")
-    # friends = Author.objects.filter(id__in=list(friends_data.keys())) if friends_data else []
     author.description = markdown.markdown(author.description)
 
     context = {
@@ -501,20 +468,11 @@ def followers(request):
         follower_id = request.POST.get('author_id')
         follower = get_object_or_404(Author, id=follower_id)
 
-        # Remove from followers_info and following
-        # actor.followers_info.pop(follower.id, None)
-        # actor.save()
-
         follower.following.remove(actor)
         follower.save()
 
         # Delete Follow object if exists
         Follow.objects.filter(actor=follower, object=actor.id).delete()
-
-        # Update friends
-        # actor.update_friends()
-        # follower.update_friends()
-
         return redirect(request.META.get('HTTP_REFERER', 'followers'))
 
     # GET request: show followers
@@ -552,18 +510,6 @@ def following(request):
             actor.following.remove(target_author)
             #actor.save(update_fields=["following"])
 
-        # if hasattr(target_author, "followers_info") and isinstance(target_author.followers_info, dict):
-            # Convert the actor’s ID (FQID) to string key if needed
-            # actor_id_str = str(actor.id)
-
-            # if actor_id_str in target_author.followers_info:
-                # del target_author.followers_info[actor_id_str]
-                # target_author.save(update_fields=["followers_info"])
-
-        # Update friends
-        # actor.update_friends()
-        # target_author.update_friends()
-
         return redirect(request.META.get('HTTP_REFERER', 'following'))
 
     # GET request: show following
@@ -592,16 +538,10 @@ def follow_requests(request):
         if action == "approve":
             follow_request.state = "ACCEPTED"
             follow_request.save()
-            # Update ManyToMany
             follower_author = follow_request.actor
-            # actor.followers_info[follower_author.id] = follower_author.username
-            # actor.save()
             follower_author.following.add(actor)
             follower_author.save()
 
-            # Update friends
-            # actor.update_friends()
-            # follower_author.update_friends()
         elif action == "reject":
             follow_request.state = "REJECTED"
             follow_request.save()
@@ -621,7 +561,6 @@ def friends(request):
 
     # Friends are mutual connections: actor is following them AND they are following actor
     friends_qs = actor.friends
-    # authors = Author.objects.filter(id__in=friends_ids)
 
     # Optional: filter by search query
     query = request.GET.get('q', '')

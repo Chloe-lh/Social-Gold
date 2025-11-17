@@ -78,8 +78,6 @@ class Author(AbstractBaseUser, PermissionsMixin):
         related_name='followers_set', 
         blank=True)
     friends = property(lambda self: self.following.filter(id__in=self.followers_set.values_list("id", flat=True)))
-    # followers_info = models.JSONField(default=dict, blank=True)
-    # friends = models.JSONField(default=dict, blank=True)
     objects = MyUserManager()
     description = models.TextField(blank=True)
 
@@ -143,7 +141,7 @@ class Entry(models.Model):
     origin = models.URLField(blank=True)     # original node that created the entry
 
     # We store a string like 'PUBLIC', but display a readable version in admin/UI.
-    visibility = models.CharField(max_length=10, choices=VISIBILITY_CHOICES, default='PUBLIC')
+    visibility = models.CharField(max_length=10, choices=VISIBILITY_CHOICES, default='PUBLIC', db_index=True)
     published = models.DateTimeField(auto_now_add=True) # auto_now_add=True means it is only set ONCE on creation.
 
     # auto_now_add=True means it is only set ONCE on creation.
@@ -291,7 +289,7 @@ class Like(models.Model):
         related_name='likes'   # likes authored by this author
     )
     # the full FQID of the object liked (entry or comment or other)
-    object = models.URLField()
+    object = models.URLField(db_index=True)
     published = models.DateTimeField()
 
     def __str__(self):
@@ -312,10 +310,11 @@ class Follow(models.Model):
         to_field='id',
         db_column='actor_id',
         on_delete=models.CASCADE,
-        related_name='outgoing_follow_requests'
+        related_name='outgoing_follow_requests',
+        db_index=True
     )
     object = models.URLField()  # FQID of the author being followed
-    state = models.CharField(max_length=20, choices=FOLLOW_STATE_CHOICES, default="REQUESTING")
+    state = models.CharField(max_length=20, choices=FOLLOW_STATE_CHOICES, default="REQUESTING", db_index=True)
     published = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

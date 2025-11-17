@@ -55,16 +55,13 @@ class LikeSerializer(serializers.ModelSerializer):
         if not validated_data.get('published'):
             validated_data['published'] = timezone.now()
 
-        comment = Comment.objects.create(
+        like = Like.objects.create(
             id=validated_data['id'],
             author=author,
             entry=entry,
-            content=validated_data.get('content', ''),
-            contentType=validated_data.get('contentType', Comment._meta.get_field('contentType').get_default()),
             published=validated_data.get('published'),
-            reply_to=validated_data.get('reply_to', None)
         )
-        return comment
+        return like
 
 class CommentSerializer(serializers.ModelSerializer):
     # Return the full nested author on reads; the view should supply an Author

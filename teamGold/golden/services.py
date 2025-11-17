@@ -158,16 +158,6 @@ def paginate(request, allowed):
     return page_obj
 
 
-# def generate_comment_like_fqid(author, comment):
-#     comment_uuid = uuid.uuid4()
-#     return f"{settings.LOCAL_NODE_URL}/api/authors/{author.uid}/commented/{comment_uuid}"
-
-# def generate_entry_like_fqid(author, entry):
-#     like_uuid = uuid.uuid4()
-#     return f"{settings.LOCAL_NODE_URL}/api/authors/{author.uid}"
-
-
-
 def get_host_node(url):
     host_node = Node.objects.get(host=url)
     if not host_node.is_active:

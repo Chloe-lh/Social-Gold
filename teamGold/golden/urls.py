@@ -2,11 +2,9 @@ from django.urls import path
 from django.contrib.auth import views as auth_views
 from . import apiViews, views
 
-# Added this because the above global wasn't working. 
-# Deciding to force import the one's not recognized.
-from .apiViews import (
-    EntryCommentAPIView, EntryImageAPIView, AuthorFriendsView
-)
+from .apiViews import EntryImageAPIView, AuthorFriendsView
+from .api.commentAPIView import EntryCommentAPIView, SingleCommentAPIView
+from .api.likeAPIView import LikeAPIView
 
 '''
 These URL Patterns registers all views 
@@ -41,13 +39,29 @@ urlpatterns = [
     # API end points
     # API views will be visible in /swagger/
     # Switched from <str:id> to <path:id> for file and URL flexibility
-    path("api/Profile/<path:id>/", apiViews.ProfileAPIView.as_view(), name="get-profile"),
-    path("api/Node/<path:id>/", apiViews.NodeAPIView.as_view(), name="get-node"),
-    path("api/Follow/<path:id>/", apiViews.FollowAPIView.as_view(), name="get-follow"),
-    path("api/Author/<path:author_id>/friends/", AuthorFriendsView.as_view()),
-    path("api/Like/<path:id>/", apiViews.LikeAPIView.as_view(), name="get-like"),
-    path("api/Entry/<path:id>/", apiViews.EntryAPIView.as_view(), name="get-entry"),
-    path("api/Entry/<path:entry_id>/comments/", EntryCommentAPIView.as_view(), name="entry-comments"),
+    path("api/profile/<path:id>/", apiViews.ProfileAPIView.as_view(), name="get-profile"),
+    path("api/node/<path:id>/", apiViews.NodeAPIView.as_view(), name="get-node"),
+    path("api/follow/<path:id>/", apiViews.FollowAPIView.as_view(), name="get-follow"),
+    path("api/author/<path:author_id>/friends/", AuthorFriendsView.as_view()),
+    path("api/like/<path:id>/", LikeAPIView.as_view(), name="get-like"),
+    path("api/entry/<path:id>/", apiViews.EntryAPIView.as_view(), name="get-entry"),
+
+    # --------------------------- COMMENTS ---------------------------
+    # Accept full-FQID inbox POSTs (remote POST)
+    path("api/authors/<path:author_serial>/inbox/", apiViews.InboxView.as_view(), name="inbox-accept-fullfqid"),
+    # Author-nested alias for getting comments on an entry from a certain author
+    # supports POST and GET
+    path("api/authors/<path:author_serial>/entries/<path:entry_serial>/comments/", EntryCommentAPIView.as_view(), name="author-entry-comments"),
+    # get comments on entry that server knows about
+    # list comments using entry's global id
+    path("api/entries/<path:entry_fqid>/comments/", EntryCommentAPIView.as_view(), name="list-comments-full-fqid"),
+    # get a single comment by id
+    path("api/authors/<str:author_id>/entries/<str:entry_id>/comments/<path:comment_fqid>/", SingleCommentAPIView.as_view()),
+    # # --------------------------- COMMENTED ----------------------------
+    # path("api/authors/<path:author_serial>/commented", apiViews.CommentedAPIView.as_view(), name="commented"),
+    # # list of comments the author authored
+    # path("api/authors/<path:author_id>/commented/", apiViews.AuthorCommentedAPIView.as_view(), name="author-commented"),
+
 
 
     # ! Thee two serve the same purpose, but the first is for getting images, the second is for uploading images to an entry

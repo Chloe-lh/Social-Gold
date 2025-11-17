@@ -1,6 +1,6 @@
 import uuid
 from django.conf import settings
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 from rest_framework.response import Response
 from .models import Node
 import requests
@@ -8,6 +8,7 @@ import json
 from django.db import transaction
 from .models import Author
 import logging
+from django.core.paginator import Paginator
 '''
 helper function for remote nodes
 sends a POST request with with HTTP Authentication
@@ -103,6 +104,29 @@ def resolve_or_create_author(author_input, create_if_missing=False):
             }
         )
     return author
+'''
+Extracts remote node object from fqid (https://node1.com/api/authors/<uuid>/)
+    will return node instance or None if host is local or not trusted
+'''
+def get_remote_node_from_fqid(fqid):
+    if not fqid: return None
+    fqid = unquote(str(fqid)).rstrip('/')
+    try:
+        parsed = urlparse(fqid)
+        if not parsed.scheme or not parsed.netloc:
+            return None
+        remote_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
+    except Exception:
+        return None
+    if settings.LOCAL_NODE_URL == remote_base:
+        return None
+
+    node = Node.objects.filter(id__startswith(remote_base)).first()
+    if not node:
+        return None
+    if not node.is_active:
+        return None
+    return node
 
 '''
 create fqid (id) for comment
@@ -111,6 +135,33 @@ author.id is a already createdd fqid, so append to the end
 def generate_comment_fqid(author, entry):
     comment_uuid = uuid.uuid4()
     return f"{author.id}/commented/{comment_uuid}"
+'''
+convert from fqid to uuid
+'''
+def fqid_to_uuid(fqid):
+    unquoted_fqid = unquote(fqid)
+    uid = unquoted_fqid.strip("/").split("/")[-1]
+    return uid
+'''
+pagination for listing comments and likes
+    params: allowed - filtered list of items 
+    returns: page object that is input for the correct serializer
+    (CommentSerializer(page_obj.object_list, many=True).data)
+'''
+def paginate(request, allowed):
+    try:
+        page_size = int(request.query_params.get('size', 10))
+    except Exception:
+        page_size = 10
+    try:
+        page_number = int(request.query_params.get('page', 1))
+    except Exception:
+        page_number = 1
+
+    paginator = Paginator(allowed, page_size)
+    page_obj = paginator.get_page(page_number)
+    return page_obj
+
 
 # def generate_comment_like_fqid(author, comment):
 #     comment_uuid = uuid.uuid4()

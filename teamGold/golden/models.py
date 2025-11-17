@@ -159,7 +159,11 @@ class Entry(models.Model):
         related_name='liked_entries',
         blank=True
     )
-
+    # comments = models.ManyToManyField(
+    #     'Author',
+    #     related_name='comments',
+    #     blank = True
+    # )
     # String representation for admin/debugging.
     def __str__(self):
         return f"Entry by {self.author} ({self.visibility})"
@@ -231,7 +235,11 @@ class Comment(models.Model):
     contentType = models.CharField(max_length=100, default="text/markdown")
     reply_to = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='replies')
     published = models.DateTimeField(auto_now_add=True)
-
+    likes = models.ManyToManyField(
+        'Author',
+        related_name='liked_comments',
+        blank=True
+    )
     def like_count(self):
         return Like.objects.filter(object=self.id).count()
 

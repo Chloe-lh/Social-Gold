@@ -37,7 +37,7 @@ def send_new_entry(entry):
     UserStory #20
     """
     author = entry.author
-    followers = Follow.objects.filter(object=author, state="ACCEPTED").select_related("actor")
+    followers = Follow.objects.filter(object=author.id, state="ACCEPTED").select_related("actor")
 
     results = []
 
@@ -68,8 +68,7 @@ def send_new_entry(entry):
 
 def send_update_activity(entry):
     followers = Follow.objects.filter(
-        object=entry.author, state="ACCEPTED"
-    ).select_related("actor")
+        object=entry.author.id, state="ACCEPTED").select_related("actor")
 
     activity = {
         "@context": "https://www.w3.org/ns/activitystreams",
@@ -88,9 +87,7 @@ def send_update_activity(entry):
     return results
 
 def send_delete_activity(entry):
-    followers = Follow.objects.filter(
-        object=entry.author, state="ACCEPTED"
-    ).select_related("actor")
+    followers = Follow.objects.filter(object=entry.author.id, state="ACCEPTED").select_related("actor")
 
     activity = {
         "@context": "https://www.w3.org/ns/activitystreams",

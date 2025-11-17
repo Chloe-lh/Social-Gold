@@ -416,7 +416,7 @@ def profile_view(request):
             a["is_following"] = False
             a["is_friend"] = False 
 
-    entries = Entry.objects.filter(author=author).order_by("-published")
+    entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("-published")
     followers = author.followers_set.all()
     following = author.following.all()
     follow_requests = Follow.objects.filter(object=author.id, state="REQUESTED")
@@ -454,7 +454,7 @@ def public_profile_view(request, author_id):
     author.description = markdown.markdown(author.description)
 
     # Get entries for this author
-    entries = Entry.objects.filter(author=author).order_by("-published")
+    entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("-published")
 
     context = {
         "author": author,
@@ -809,9 +809,9 @@ def handle_update(data, author):
 
     return Response({"status": "Entry updated"}, status=200)
 
-
 def handle_create(data, author):
-    serializer = EntryInboxSerializer(data=data, context={'author': author})
+    object_id = data.get("object", {})
+    serializer = EntryInboxSerializer(data=object_id, context={'author': author})
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data, status=201)

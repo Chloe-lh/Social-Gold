@@ -204,3 +204,37 @@ class EntryInboxSerializer(serializers.Serializer):
         if value.lower() != "entry":
             raise serializers.ValidationError("type must be 'entry'")
         return value
+    
+    def create(self, validated_data):
+        # pull out nested author
+        author_data = validated_data.pop("author")
+        author_id = author_data.get("id")
+
+        # get or create the foreign author
+        author, _ = Author.objects.get_or_create(
+            id=author_id,
+            defaults={
+                "username": author_data.get("displayName", author_id),
+                "host": author_data.get("host", ""),
+            }
+        )
+
+        entry_id = validated_data.get("id")
+        defaults = {
+            "author": author,
+            "title": validated_data.get("title", ""),
+            "description": validated_data.get("description", ""),
+            "content": validated_data.get("content", ""),
+            "contentType": validated_data.get("contentType", "text/plain"),
+            "visibility": validated_data.get("visibility", "PUBLIC"),
+            "web": validated_data.get("web", entry_id),
+            "source": entry_id,
+            "origin": entry_id,
+            "published": validated_data.get("published", timezone.now()),
+        }
+
+        entry, _ = Entry.objects.update_or_create(
+            id=entry_id,
+            defaults=defaults
+        )
+        return entry

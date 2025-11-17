@@ -51,7 +51,9 @@ urlpatterns = [
     path("api/EntryImage/<int:id>/", apiViews.EntryImageAPIView.as_view(), name="get-entry-image"),
     path("api/Entry/<path:entry_id>/images/", EntryImageAPIView.as_view(), name="entryimage-upload"),
 
-    path("api/author/<uuid:author_id>/inbox/", views.inbox, name="inbox")
+    path("api/author/<uuid:author_id>/inbox/", views.inbox, name="inbox"),
+    path('api/authors/<uuid:author_id>/followers/accept/', views.accept_follow, name='accept_follow'),
+    path('api/authors/<uuid:author_id>/followers/reject/', views.reject_follow, name='reject_follow'),
 ]
     
 

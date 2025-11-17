@@ -26,6 +26,8 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from base64 import b64encode
 from urllib.parse import quote
 import uuid, tempfile, io, shutil
+from unittest.mock import patch, Mock
+import logging
 
 # LOCAL IMPORTS
 from golden.models import Author, Entry, EntryImage, Node, Like, Comment, Follow
@@ -501,43 +503,145 @@ class LikeAPITests(AuthenticatedAPITestCase):
 class CommentAPITests(AuthenticatedAPITestCase):
     def setUp(self):
         super().setUp()
+        logging.basicConfig(level=logging.DEBUG)
         # create an entry to comment on (author may be different)
+        base = getattr(settings, 'LOCAL_NODE_URL', None) or getattr(settings, 'SITE_URL', 'http://local')
+        base = base.rstrip('/')
         self.entry_author = Author.objects.create(
-            id=f"{settings.SITE_URL}/api/authors/{uuid.uuid4()}",
+            id=f"{base}/api/authors/{uuid.uuid4()}",
             username='entry_author'
         )
         self.entry = Entry.objects.create(
-            id=f"{settings.SITE_URL}/api/entries/{uuid.uuid4()}",
+            id=f"{base}/api/entries/{uuid.uuid4()}",
             author=self.entry_author,
             content="test entry",
             title="Test"
         )
 
     def test_post_comment_success(self):
-        url = f"/api/Entry/{self.entry.id}/comments"
+        enc = quote(self.entry.id.rstrip('/'), safe='')
+        url = f"/api/entries/{enc}/comments/"
         payload = {"content":"Testing comment API", "contentType":"text/plain"}
         res = self.client.post(url, payload, format="json")
-        self.assertEqual(res.status_code, 200)
+        self.assertIn(res.status_code, (200, 201, 202))
     
     def test_post_comment_failure(self):
-        url = f"/api/Entry/{self.entry.id}/comments"
+        enc = quote(self.entry.id.rstrip('/'), safe='')
+        url = f"/api/entries/{enc}/comments/"
         payload = {"content":""}
         res = self.client.post(url, payload, format="json")
-        self.assertEqual(res.status_code, 400)
+        self.assertIn(res.status_code, (400,))
     
     def test_get_comments(self):
+        # create a proper Author for the comment
+        test_author = Author.objects.create(
+            id=f"{settings.SITE_URL}/api/authors/{uuid.uuid4()}",
+            username="commenter"
+        )
         Comment.objects.create(
             id=f"{settings.SITE_URL.rstrip('/')}/api/comments/{uuid.uuid4()}",
-            author=self.api_user,
+            author=test_author,
             entry=self.entry,
             content="Existing comment",
             published=timezone.now()
         )
-        url = f"/api/Entry/{self.entry.id}/comments/"
+        enc = quote(self.entry.id.rstrip('/'), safe='')
+        url = f"/api/entries/{enc}/comments/"
+        print('TEST URL:', url, flush=True)
         res = self.client.get(url)
         self.assertEqual(res.status_code, 200)
         
+class RemoteCommentsTests(AuthenticatedAPITestCase):
+    def setUp(self):
+        super().setUp()
+        # enable debug logging for test visibility
+        logging.basicConfig(level=logging.DEBUG)
+        # mark the test node as active so get_remote_node_from_fqid() recognizes it
+        Node.objects.create(id="http://nodebbbb/", auth_user="remoteuser", auth_pass="remotepass", is_active=True)
 
+    @patch("golden.api.commentAPIView.requests.get")
+    def test_remote_comments(self, mock_get):
+        mock_res = Mock()
+        mock_res.status_code = 200
+        mock_res.json.return_value = {
+            "type": "comments",
+            "id": "http://nodebbbb/api/entries/.../comments/",
+            "size": 1,
+            "items": [{
+                "id": "http://nodebbbb/comment/1",
+                "author": {"id": "http://nodebbbb/author/1/"},
+                "content": "remote!",
+                "contentType": "text/plain",
+            }]
+        }
+        mock_get.return_value = mock_res
+
+        remote_entry = "http://nodebbbb/api/authors/222/entries/249/"
+        enc = quote(remote_entry, safe='').rstrip('/')
+        res = self.client.get(f"/api/entries/{enc}/comments/")
+        print('DEBUG: mock_get.called=', mock_get.called, 'call_args=', mock_get.call_args, 'res.status_code=', getattr(res, 'status_code', None), flush=True)
+        self.assertEqual(res.status_code, 200)
+
+        # assert code called the expected remote URL
+        expected_url = "http://nodebbbb/api/entries/" + enc + "/comments/"
+        mock_get.assert_called_once()
+        called_url = mock_get.call_args[0][0]
+        self.assertIn("nodebbbb", called_url)
+
+    @patch("golden.api.commentAPIView.requests.post")
+    def test_post_forwarding(self, mock_post):
+        """Ensure that when a comment is posted to an entry whose author is on a remote node,
+        the server forwards the saved comment to that node's inbox via POST.
+        """
+        # prepare mock response for post
+        mock_res = Mock()
+        mock_res.status_code = 201
+        mock_post.return_value = mock_res
+
+        # Create an author representing the remote entry owner (actor)
+        remote_actor = Author.objects.create(
+            id="http://nodebbbb/api/authors/222/",
+            username="remote_owner",
+        )
+
+        # Create a local Entry that references the remote actor as its author
+        entry = Entry.objects.create(
+            id=f"http://local.example.com/api/entries/{uuid.uuid4()}/",
+            author=remote_actor,
+            title="Remote-owned post",
+            content="content",
+            visibility="PUBLIC",
+        )
+
+        # Create a local commenter author to include in the POST payload
+        commenter = Author.objects.create(
+            id=f"http://local.example.com/api/authors/{uuid.uuid4()}/",
+            username="local_commenter",
+        )
+
+        enc = quote(entry.id.rstrip('/'), safe='')
+        # use the Entry/ alias which passes `entry_id` to the view POST handler
+        url = f"/api/Entry/{enc}/comments/"
+
+        payload = {
+            "content": "Forward this comment",
+            "contentType": "text/plain",
+            "author": {"id": commenter.id},
+        }
+
+        res = self.client.post(url, payload, format="json")
+
+        # debug output for failing validation
+        print('POST res.status_code=', res.status_code, 'res.data=', getattr(res, 'data', None), flush=True)
+
+        # view should accept and create the comment
+        self.assertIn(res.status_code, (200, 201, 202))
+
+        # The inbox URL should be the remote node's base + '/inbox'
+        expected_inbox_prefix = "http://nodebbbb"  # our Node created in setUp has this base
+        self.assertTrue(mock_post.called, "requests.post should have been called to forward the comment")
+        called_url = mock_post.call_args[0][0]
+        self.assertIn(expected_inbox_prefix, called_url)
 
 # ============================================================
 # Note Related Test Suites

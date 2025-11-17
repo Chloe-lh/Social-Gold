@@ -74,7 +74,7 @@ def resolve_or_create_author(author_input, create_if_missing=False):
     host_base = f"{parsed.scheme}://{parsed.netloc}"
 
     # Ensure the host belongs to a known/trusted Node
-    node = Node.objects.filter(id__startswith(host_base)).first()
+    node = Node.objects.filter(id__startswith=host_base).first()
     if not node:
         raise PermissionError(f"Author host {host_base} is not a known node")
 
@@ -109,6 +109,7 @@ Extracts remote node object from fqid (https://node1.com/api/authors/<uuid>/)
     will return node instance or None if host is local or not trusted
 '''
 def get_remote_node_from_fqid(fqid):
+    
     if not fqid: return None
     fqid = unquote(str(fqid)).rstrip('/')
     try:
@@ -121,7 +122,7 @@ def get_remote_node_from_fqid(fqid):
     if settings.LOCAL_NODE_URL == remote_base:
         return None
 
-    node = Node.objects.filter(id__startswith(remote_base)).first()
+    node = Node.objects.filter(id__startswith=remote_base).first()
     if not node:
         return None
     if not node.is_active:

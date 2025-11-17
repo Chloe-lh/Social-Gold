@@ -15,12 +15,14 @@ import requests
 import json
 from urllib.parse import quote, unquote, urlparse
 
+
 # PYTHON IMPORTS
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.authentication import BasicAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+import logging
 
 # LOCAL IMPORTS
 from golden.models import Author, Entry, Comment, Like, Follow, Node, EntryImage
@@ -72,11 +74,14 @@ class EntryCommentAPIView(APIView):
         - Otherwise return 404.
         The response body is a "comments" collection object with `type`, `id`, `size`, and `items`.
         """
+        print("ENTER EntryCommentAPIView.get", flush=True)
+  
         raw = entry_id or entry_fqid or kwargs.get('entry_serial') or kwargs.get('entry_fqid')
         if not raw:
             return Response({'detail': 'entry id required'}, status=status.HTTP_400_BAD_REQUEST)
 
         entry_fqid = unquote(raw).rstrip('/')
+        print("DEBUG entry_fqid: %s ", entry_fqid, flush=True)
 
         # Try local lookup first
         try:
@@ -98,10 +103,10 @@ class EntryCommentAPIView(APIView):
             }
 
             # add simple pagination links if applicable
-            if getattr(page_obj, 'has_next', False):
+            if page_obj.has_next():
                 next_page = page_obj.next_page_number()
                 collection['next'] = f"{request.build_absolute_uri('?page=' + str(next_page))}"
-            if getattr(page_obj, 'has_previous', False):
+            if page_obj.has_previous():
                 prev_page = page_obj.previous_page_number()
                 collection['prev'] = f"{request.build_absolute_uri('?page=' + str(prev_page))}"
 
@@ -129,112 +134,129 @@ class EntryCommentAPIView(APIView):
 
         return Response({'detail': 'Entry not found'}, status=status.HTTP_404_NOT_FOUND)
 
-    @swagger_auto_schema(
-        operation_summary='Adding a comment to an entry',
-        operation_description='Client sends a POST request to comment on an entry',
-        request_body=CommentSerializer,
-        responses={
-            201: openapi.Response(description="Comment Created",
-                examples={"application/json"}),
-            404: openapi.Response(description="Not found"),
-            400: openapi.Response(description="Comment creation failure"),
-        }
-    )
-    def post(self, request, entry_id):
-
-        entry_id = unquote(entry_id).rstrip("/") # decode fqid to url
-        entry = get_object_or_404(Entry, id=entry_id)
+#! WIP
+    # @swagger_auto_schema(
+    #     operation_summary='Adding a comment to an entry',
+    #     operation_description='Client sends a POST request to comment on an entry',
+    #     request_body=CommentSerializer,
+    #     responses={
+    #         201: openapi.Response(description="Comment Created",
+    #             examples={"application/json"}),
+    #         404: openapi.Response(description="Not found"),
+    #         400: openapi.Response(description="Comment creation failure"),
+    #     }
+    # )
+    # def post(self, request, entry_id):
+    #     logger = logging.getLogger(__name__)
+    #     logger.debug("ENTER EntryCommentAPIView.post")
+    #     entry_id = unquote(entry_id).rstrip("/") # decode fqid to url
+    #     logger.debug("DEBUG entry_id=%s", entry_id)
+    #     entry = get_object_or_404(Entry, id=entry_id)
        
-        if request.content_type != 'application/json':
-            return Response({'detail': 'Content-Type must be application/json'}, status=status.HTTP_400_BAD_REQUEST)
+    #     if request.content_type != 'application/json':
+    #         return Response({'detail': 'Content-Type must be application/json'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # server side fields
-        data = request.data.copy()
-        # author will be a nested object
-        # we need to look it up on our local database or resolve it to a remote author
-        incoming = request.data.get('author')   # could be str, dict, or missing
+    #     # server side fields
+    #     data = request.data.copy()
+    #     # author will be a nested object
+    #     # we need to look it up on our local database or resolve it to a remote author
+    #     incoming = request.data.get('author')   # could be str, dict, or missing
     
-        try:
-            author = resolve_or_create_author(incoming, create_if_missing = True)
-        except Author.DoesNotExist:
-            return Response({'detail':'Author not found'}, status=400)
+    #     try:
+    #         author = resolve_or_create_author(incoming, create_if_missing = True)
+    #     except Author.DoesNotExist:
+    #         return Response({'detail':'Author not found'}, status=400)
 
-        data["type"] = "comment"
-        data["entry"] = entry.id #id == fqid
-        data["author"] = author
-       
-        data["entry"] = entry.id #id == fqid
-        # generate FQID (service expects (author, entry))
-        # e.g. "id":"http://nodeaaaa/api/authors/<author_uuid>/commented/<uuid>"
-        comment_id = generate_comment_fqid(author, entry)
-        data["id"] = comment_id
-        data["published"] = timezone.now().isoformat()
+    #     data["type"] = "comment"
+    #     data["entry"] = entry.id #id == fqid
+    #     # generate FQID (service expects (author, entry))
+    #     # e.g. "id":"http://nodeaaaa/api/authors/<author_uuid>/commented/<uuid>"
+    #     comment_id = generate_comment_fqid(author, entry)
+    #     data["id"] = comment_id
+    #     data["published"] = timezone.now().isoformat()
 
 
-        # create comment instance in database
-        # serializer maps data->json fields
-        try:
-            print("DEBUG: Comment payload (data) =", json.dumps(data, indent=2, default=str))
-        except Exception:
-            # fallback if data contains non-JSONable objects
-            print("DEBUG: Comment payload (repr) =", repr(data))
+    #     # create comment instance in database
+    #     # serializer maps data->json fields
+    #     try:
+    #         logger.debug("DEBUG: Comment payload (data) = %s", json.dumps(data, indent=2, default=str))
+    #     except Exception:
+    #         # fallback if data contains non-JSONable objects
+    #         logger.debug("DEBUG: Comment payload (repr) = %s", repr(data))
 
-        serializer = CommentSerializer(data=data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        comment = serializer.save(author=author)
+    #     serializer = CommentSerializer(data=data)
+    #     if serializer.is_valid():
+    #         comment = serializer.save(
+    #             entry=entry,
+    #             author=author,
+    #             content_type=data["content_type"],
+    #             content=data["content"]
+    #         )
+        
+    #     # Create the Comment directly to avoid nested-write serializer complexity.
+    #     comment_data = {
+    #         "type":"comment",
+    #         "author":AuthorSerializer(request.user).data,
+    #         "comment": comment.content,
+    #         "contentType": comment.content_type,
+    #         "published": comment.published_at.isoformat(),
+    #         "id": f"{request.build_absolute_uri()}/comments/{comment_id}"
+    #     }
+        
 
-        # if the entry author is remote, attempt to POST the comment
-        # to that node's inbox. Determine the parent node by matching the author's host.
-        try:
-            # Serialize the saved comment for sending
-            comment_object = CommentSerializer(comment).data
+    #     # if the entry author is remote, attempt to POST the comment
+    #     # to that node's inbox. Determine the parent node by matching the author's host.
+    #     try:
+    #         # Serialize the saved comment for sending
+    #         comment_object = CommentSerializer(comment).data
 
-            # parse host from the entry's author's id (FQID)
-            actor_id = getattr(entry.author, 'id', None)
-            if actor_id:
-                parsed = urlparse(actor_id)
-                actor_host = f"{parsed.scheme}://{parsed.netloc}"
-                parent_node = Node.objects.filter(id__startswith=actor_host).first()
-            else:
-                parent_node = None
+    #         # parse host from the entry's author's id (FQID)
+    #         actor_id = getattr(entry.author, 'id', None)
+    #         if actor_id:
+    #             parsed = urlparse(actor_id)
+    #             actor_host = f"{parsed.scheme}://{parsed.netloc}"
+    #             parent_node = Node.objects.filter(id__startswith=actor_host).first()
+    #         else:
+    #             parent_node = None
 
-            if parent_node and parent_node.id.rstrip('/') != settings.LOCAL_NODE_URL.rstrip('/'):
-                inbox_url = parent_node.id.rstrip('/') + '/inbox'
-                auth = None
-                if getattr(parent_node, 'auth_user', None):
-                    auth = (parent_node.auth_user, parent_node.auth_pass)
+    #         if parent_node and parent_node.id.rstrip('/') != settings.LOCAL_NODE_URL.rstrip('/'):
+    #             inbox_url = parent_node.id.rstrip('/') + '/inbox'
+    #             auth = None
+    #             if getattr(parent_node, 'auth_user', None):
+    #                 auth = (parent_node.auth_user, parent_node.auth_pass)
 
-                # Debug
-                try:
-                    print(f"DEBUG: Forwarding comment to parent node {parent_node.id}")
-                    print(f"DEBUG: inbox_url={inbox_url} auth={'yes' if auth else 'no'}")
-                    print("DEBUG: comment payload:", json.dumps(comment_object, indent=2, default=str))
-                except Exception:
-                    print("DEBUG: comment payload repr:", repr(comment_object))
+    #             # Debug
+    #             try:
+    #                 logger.debug("DEBUG: Forwarding comment to parent node %s", parent_node.id)
+    #                 logger.debug("DEBUG: inbox_url=%s auth=%s", inbox_url, 'yes' if auth else 'no')
+    #                 logger.debug("DEBUG: comment payload: %s", json.dumps(comment_object, indent=2, default=str))
+    #             except Exception:
+    #                 logger.debug("DEBUG: comment payload repr: %s", repr(comment_object))
 
-                resp = requests.post(
-                    inbox_url,
-                    json=comment_object,
-                    auth=auth,
-                    headers={'Content-Type': 'application/json'},
-                    timeout=5,
-                )
-                # Debug
-                try:
-                    print(f"DEBUG: Remote response status={resp.status_code}")
-                    print(f"DEBUG: Remote response text={resp.text}")
-                except Exception:
-                    print("DEBUG: Remote response (non-serializable)")
+    #             resp = requests.post(
+    #                 inbox_url,
+    #                 json=comment_object,
+    #                 auth=auth,
+    #                 headers={'Content-Type': 'application/json'},
+    #                 timeout=5,
+    #             )
+    #             # Debug
+    #             try:
+    #                 logger.debug("DEBUG: Remote response status=%s", resp.status_code)
+    #                 logger.debug("DEBUG: Remote response text=%s", resp.text)
+    #             except Exception:
+    #                 logger.debug("DEBUG: Remote response (non-serializable)")
 
-                if not (200 <= resp.status_code < 300):
-                    print(f"Failed to send comment to parent node {inbox_url}: {resp.status_code}")
+    #             if not (200 <= resp.status_code < 300):
+    #                 logger.debug("Failed to send comment to parent node %s: %s", inbox_url, resp.status_code)
 
-        except Exception as e:
-            # never fail the API call because of network issues; comment was saved locally
-            print(f"Error when attempting to forward comment: {e}")
+    #     except Exception as e:
+    #         # never fail the API call because of network issues; comment was saved locally
+    #         logger.exception("Error when attempting to forward comment: %s", e)
 
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    #     # Return the newly created comment as nested JSON (includes nested author)
+    #     serialized = CommentSerializer(comment)
+    #     return Response(serialized.data, status=status.HTTP_201_CREATED)
     
 '''
     PURPOSE: get a single comment on a post

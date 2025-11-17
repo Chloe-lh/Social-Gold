@@ -14,7 +14,6 @@ urlpatterns = [
     path("new_post/", views.new_post, name="new_post"),
     path("login/", views.CustomLoginView.as_view(template_name = "login.html"), name="login"),
     path("signup/", views.signup, name="signup"),
-
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
     path('profile/', views.profile_view, name='profile'),
     path('search/', views.profile_view, name='profile'),
@@ -39,12 +38,12 @@ urlpatterns = [
     # API end points
     # API views will be visible in /swagger/
     # Switched from <str:id> to <path:id> for file and URL flexibility
-    path("api/profile/<path:id>/", apiViews.ProfileAPIView.as_view(), name="get-profile"),
-    path("api/node/<path:id>/", apiViews.NodeAPIView.as_view(), name="get-node"),
-    path("api/follow/<path:id>/", apiViews.FollowAPIView.as_view(), name="get-follow"),
-    path("api/author/<path:author_id>/friends/", AuthorFriendsView.as_view()),
-    path("api/like/<path:id>/", LikeAPIView.as_view(), name="get-like"),
-    path("api/entry/<path:id>/", apiViews.EntryAPIView.as_view(), name="get-entry"),
+    path("api/Profile/<path:id>/", apiViews.ProfileAPIView.as_view(), name="get-profile"),
+    path("api/Node/<path:id>/", apiViews.NodeAPIView.as_view(), name="get-node"),
+    path("api/Follow/<path:id>/", apiViews.FollowAPIView.as_view(), name="get-follow"),
+    path("api/Author/<path:author_id>/friends/", AuthorFriendsView.as_view()),
+    path("api/Like/<path:id>/", LikeAPIView.as_view(), name="get-like"),
+    path("api/Entry/<path:id>/", apiViews.EntryAPIView.as_view(), name="get-entry"),
 
     # --------------------------- COMMENTS ---------------------------
     # Accept full-FQID inbox POSTs (remote POST)
@@ -55,6 +54,8 @@ urlpatterns = [
     # get comments on entry that server knows about
     # list comments using entry's global id
     path("api/entries/<path:entry_fqid>/comments/", EntryCommentAPIView.as_view(), name="list-comments-full-fqid"),
+    # Backwards-compatible entry-centric route (tests and some clients expect /api/Entry/ID/comments/)
+    path("api/Entry/<path:entry_id>/comments/", EntryCommentAPIView.as_view(), name="entry-comments"),
     # get a single comment by id
     path("api/authors/<str:author_id>/entries/<str:entry_id>/comments/<path:comment_fqid>/", SingleCommentAPIView.as_view()),
     # # --------------------------- COMMENTED ----------------------------
@@ -62,14 +63,11 @@ urlpatterns = [
     # # list of comments the author authored
     # path("api/authors/<path:author_id>/commented/", apiViews.AuthorCommentedAPIView.as_view(), name="author-commented"),
 
-
-
     # ! Thee two serve the same purpose, but the first is for getting images, the second is for uploading images to an entry
     path("api/EntryImage/<int:id>/", apiViews.EntryImageAPIView.as_view(), name="get-entry-image"),
     path("api/Entry/<path:entry_id>/images/", EntryImageAPIView.as_view(), name="entryimage-upload"),
 
-    
-    path("api/author/<uuid:author_id>/inbox/", views.inbox, name="inbox")
+    # path("api/author/<uuid:author_id>/inbox/", views.inbox, name="inbox"),
 ]
     
 

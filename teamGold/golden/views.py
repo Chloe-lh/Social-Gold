@@ -428,7 +428,7 @@ def profile_view(request):
 
             payload = {
                 "type": "follow",
-                "summary": f"{author.displayName} wants to follow {target.displayName}",
+                "summary": f"{author.username} wants to follow {target.username}",
                 "actor": {
                     "type": "author",
                     "id": author.id,

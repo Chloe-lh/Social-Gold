@@ -34,11 +34,7 @@ urlpatterns = [
     path("friends/", views.friends, name="friends"),
     path('add_comment/', views.add_comment, name = "add_comment"),
     path('add_like/', views.toggle_like, name='add_like'), # temporary
-<<<<<<< HEAD
-    path("admin/", views.profile_view, name="admin"), # You need to change the views.new_post to the actual admin view when it's created 
-=======
     path("node_admin/", views.profile_view, name="node_admin"), # You need to change the views.new_post to the actual admin view when it's created 
->>>>>>> 5d373ef320496bfff9cf673327d5c57455e7c248
 
     # API end points
     # API views will be visible in /swagger/

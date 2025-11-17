@@ -166,3 +166,6 @@ SITE_URL = os.environ.get("SITE_URL", "http://127.0.0.1:8000")
 
 # variable to help define our local node 
 LOCAL_NODE_URL = SITE_URL
+
+STATIC_ROOT = BASE_DIR / "staticfiles" 
+STATIC_URL = "/static/"

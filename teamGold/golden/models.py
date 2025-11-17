@@ -80,6 +80,7 @@ class Author(AbstractBaseUser, PermissionsMixin):
     friends = property(lambda self: self.following.filter(id__in=self.followers_set.values_list("id", flat=True)))
     objects = MyUserManager()
     description = models.TextField(blank=True)
+    is_shadow = models.BooleanField(default=False)
 
     # Authentication
     USERNAME_FIELD = "username"
@@ -110,8 +111,11 @@ class Author(AbstractBaseUser, PermissionsMixin):
     def save(self, *args, **kwargs):
         if not self.id:
             self.id = f"{settings.SITE_URL}/api/authors/{uuid.uuid4()}"
+        if not self.host:
+            # Set host to SITE_URL automatically
+            self.host = settings.SITE_URL.rstrip('/')  # remove trailing slash just in case
         super().save(*args, **kwargs)
-
+    
 class Entry(models.Model):
     """
     This class is using a FULL URL (FQID) as the primary key instead of an integer.
@@ -177,8 +181,6 @@ class Entry(models.Model):
             return str(self.id).rstrip('/').split('/')[-1]
         except Exception:
             return ""
-
-    
 
 class EntryImage(models.Model):
     """

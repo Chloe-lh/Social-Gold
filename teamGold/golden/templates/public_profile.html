@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% load static %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'golden/css/global.css' %}">
+<link rel="stylesheet" href="{% static 'golden/css/profile.css' %}">
+<link rel="stylesheet" href="{% static 'golden/css/mobile-profile.css' %}">
+{% endblock %}
+
+{% block content %}
+<body>
+  <!-- Sidebar with basic author info -->
+  <aside class="profile-sidebar">
+    <h2>@{{ author.username }}</h2>
+    {% if author.name %}
+      <p><strong>Name:</strong> {{ author.name }}</p>
+    {% endif %}
+    {% if author.github %}
+      <p><strong>GitHub:</strong> <a href="{{ author.github }}" target="_blank">{{ author.github }}</a></p>
+    {% endif %}
+    {% if author.web %}
+      <p><strong>Website:</strong> <a href="{{ author.web }}" target="_blank">{{ author.web }}</a></p>
+    {% endif %}
+    {% if author.email %}
+      <p><strong>Email:</strong> {{ author.email }}</p>
+    {% endif %}
+    {% if author.description %}
+      <p class="bio-description">{{ author.description|safe }}</p>
+    {% endif %}
+  </aside>
+
+  <!-- Entries section -->
+  <section class="entries-section">
+    {% if entries %}
+      {% for entry in entries %}
+        <article class="entry">
+          <p><strong>@{{ author.username }}</strong> {{ entry.published|date:"H:i T l M d, Y" }}</p>
+          {% for img in entry.images.all %} 
+            <img src="{{ img.image.url }}" alt="entry image" class="entry-img">
+          {% endfor %}
+          {{ entry.content|safe }}
+        </article>
+      {% endfor %}
+    {% else %}
+      <p>This author has no entries yet.</p>
+    {% endif %}
+  </section>
+</body>
+{% endblock %}

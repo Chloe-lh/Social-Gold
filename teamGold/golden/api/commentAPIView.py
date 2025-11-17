@@ -38,7 +38,7 @@ from golden.serializers import CommentSerializer, MinimalAuthorSerializer
 class EntryCommentAPIView(APIView):
     """
    
-    PURPOSE: This API view handles GET, POST, PUT, and DELETE requests for an entry's comments
+    PURPOSE: This API view handles GET, POST requests for an entry's comments
     METHODS:
         POST /api/authors/<AUTHOR_SERIAL>/entries/<ENTRY_SERIAL>/comments is for creating a new comment
         GET  /api/entries/<path:entry_fqid>/comments/ - get all comments on entry
@@ -223,14 +223,6 @@ class EntryCommentAPIView(APIView):
                 if getattr(parent_node, 'auth_user', None):
                     auth = (parent_node.auth_user, parent_node.auth_pass)
 
-                # Debug
-                try:
-                    print("DEBUG: Forwarding comment to parent node %s", parent_node.i, flush=True)
-                    print("DEBUG: inbox_url=%s auth=%s", inbox_url, 'yes' if auth else 'no', flush=True)
-                    print("DEBUG: comment payload: %s", json.dumps(comment_data, indent=2, default=str), flush=True)
-                except Exception:
-                    print("DEBUG: comment payload repr: %s", repr(comment_data))
-
                 resp = requests.post(
                     inbox_url,
                     json=comment_data,
@@ -293,58 +285,3 @@ class SingleCommentAPIView(APIView):
                 return Response(
                     {"detail":f"Failed to fetch remote comment: {comment_fqid}"}
                 )
-    
-class AuthorCommentedAPIView(APIView):
-    '''
-    GET /api/authors/<author_id>/commented - returns paginated list of comments made by the authenticated author
-       - this applies to local and remote entries
-       - we filter by PUBLIC and UNLISTED
-    POST /api/authors/<author_id>/commented - creates a comment as authenticated author
-    '''
-    authentication_classes = [BasicAuthentication]
-    permission_classes = [IsAuthenticated]
-    @swagger_auto_schema(
-        operation_description='Retreives all comments made by a single author',
-        responses={
-            200: openapi.Response(description="Comment found"),
-            404: openapi.Response(description="Comment Not found"),
-        }
-    )
-    def get(self,request,author_id): pass
-    #     author_id = unquote(author_id).rstrip('/')
-    #     local_base = settings.LOCAL_NODE_URL.rstrip('/')
-
-    #     # look up locally
-    #     try:
-    #         author = Author.objects.get(pk=id)
-    #     except Author.DoesNotExist:
-    #         return Response(status=status.HTTP_404_NOT_FOUND)
-    #     comment_list = Comment.objects.filter(author_id = author.d).select_related('entry').order_by('-published')
-
-    #     #filter comments and determine if in node
-    #     allowed = []
-    #     for c in comment_list:
-    #         try:
-    #             parsed = urlparse(c.entry.id)
-    #             host_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
-    #         except Exception:
-    #             host_base = ''
-            
-    #     if entry_base == local_base:
-
-            
-    #         if host_base == local_base:
-    #             allowed.append(c)
-    #         else:
-    #             if getattr(c.entry, 'visibility', '') in ('PUBLIC', 'UNLISTED'):
-    #                 allowed.append(c)
-
-    #     page_obj = paginate(request, comment_list)
-    #     serialized = CommentSerializer(page_obj.object_list, many=True).data
-    #     host = request.build_absolute_uri('/')
-      
-    #     # for comment in comment_list{
-    #     #     "type": "comments",
-    #     #     "id": co
-            
-    #     # }

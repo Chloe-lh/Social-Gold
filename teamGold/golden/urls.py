@@ -51,7 +51,7 @@ urlpatterns = [
     path("api/Entry/<path:entry_id>/comments/", EntryCommentAPIView.as_view(), name="entry-comments-alias"),
     path("api/Entry/<path:id>/", EntryAPIView.as_view(), name="get-entry"),
 
-    # --------------------------- COMMENTS ---------------------------
+    # --------------------------- COMMENTS ---------------------------------
     # Accept full-FQID inbox POSTs (remote POST)
     path("api/authors/<path:author_serial>/inbox/", InboxView.as_view(), name="inbox-accept-fullfqid"),
     # Author-nested alias for getting comments on an entry from a certain author
@@ -66,11 +66,12 @@ urlpatterns = [
     path("api/Entry/<path:entry_id>/comments/", EntryCommentAPIView.as_view(), name="entry-comments-alias"),
     # get a single comment by id
     path("api/authors/<str:author_id>/entries/<str:entry_id>/comments/<path:comment_fqid>/", SingleCommentAPIView.as_view()),
-    # # --------------------------- COMMENTED ----------------------------
-    # path("api/authors/<path:author_serial>/commented", apiViews.CommentedAPIView.as_view(), name="commented"),
-    # # list of comments the author authored
-    # path("api/authors/<path:author_id>/commented/", apiViews.AuthorCommentedAPIView.as_view(), name="author-commented"),
-
+    # # --------------------------- LIKES ------------------------------------
+    
+    path("api/authors/<path:author_serial>/entries/<path:entry_serial>/likes/", LikeAPIView.as_view(), name="author-entry-likes"),
+    path("api/entries/<path:entry_fqid>/likes/", LikeAPIView.as_view(), name="entry-likes"),
+    path("api/Entry/<path:entry_id>/likes/", LikeAPIView.as_view(), name="entry-likes-alias"),
+    # ------------------------------------------------------------------------
     # ! Thee two serve the same purpose, but the first is for getting images, the second is for uploading images to an entry
     path("api/EntryImage/<int:id>/", EntryImageAPIView.as_view(), name="get-entry-image"),
     path("api/Entry/<path:entry_id>/images/", EntryImageAPIView.as_view(), name="entryimage-upload"),

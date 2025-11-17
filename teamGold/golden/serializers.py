@@ -17,10 +17,9 @@ in a HTTP request and vice versa
 class NodeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Node
-        fields = '__all__'
+        fields = '__all__' 
 
 class AuthorSerializer(serializers.ModelSerializer):
-    type = serializers.CharField(default="author")
     class Meta:
         model = Author
         fields = '__all__'
@@ -40,9 +39,6 @@ class LikeSerializer(serializers.ModelSerializer):
         model = Like
         fields = '__all__'
 
-'''
-added ability to have a nested Author object
-'''
 class CommentSerializer(serializers.ModelSerializer):
     # Return the full nested author on reads; the view should supply an Author
     # instance when creating via `serializer.save(author=author, entry=entry)`.
@@ -95,3 +91,116 @@ class EntryImageSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'entry': {'read_only': True}, # By having 'entry' as an argument, we can prevent the DRF from requiring it in POST data
         }
+class AuthorInboxSerializer(serializers.Serializer):
+    class Meta:
+        model = Author
+        fields = [
+            'id',
+            'host',
+            'web',
+            'github',
+        ]
+    type = serializers.CharField(default="author")
+    displayName = serializers.CharField(required=True)
+    profileImage = serializers.URLField(required=False, allow_blank=True)
+
+    def validate_type(self, value):
+        if value.lower() != "author":
+            raise serializers.ValidationError("type must be 'author'")
+        return value
+
+class FollowRequestInboxSerializer(serializers.Serializer):
+    type = serializers.CharField()
+    actor = AuthorInboxSerializer()
+    object = AuthorInboxSerializer()
+    class Meta:
+        model = Follow
+        fields = [
+            'summary'
+        ]
+
+    def validate_type(self, value):
+        if value.lower() != "follow":
+            raise serializers.ValidationError("type must be 'follow'")
+        return value
+    
+class CommentInboxSerializaer(serializers.Serializer):
+    type = serializers.CharField()
+    author = AuthorInboxSerializer()
+
+    class Meta:
+        model = Comment
+        fields = [
+        'contentType',
+        'published',
+        'id',
+        'entry'
+        ]
+    comment = serializers.CharField(max_length=200, allow_blank=True)
+    def validate_type(self, value):
+        if value.lower() != "comment":
+            raise serializers.ValidationError("type must be 'comment'")
+        return value
+    
+class LikeInboxSerializer(serializers.Serializer):
+    type = serializers.CharField()
+
+    author = AuthorInboxSerializer()
+    class Meta:
+        model = Like
+        fields = [
+            'published',
+            'id',
+            'object'
+        ]
+    def validate_type(self, value):
+        if value.lower() != "like":
+            raise serializers.ValidationError("type must be 'like'")
+        return value
+
+'''
+validation for specific entry items
+'''
+class CommentsInfoSerializer(serializers.Serializer):
+    type = serializers.CharField(default="comments")
+    id = serializers.URLField()
+    web = serializers.URLField(required=False)
+    page_number = serializers.IntegerField(required=False)
+    size = serializers.IntegerField(required=False)
+    count = serializers.IntegerField(required=False)
+    src = serializers.ListField(child=serializers.DictField(), required=False)
+
+    
+class LikesInfoSerializer(serializers.Serializer):
+    type = serializers.CharField(default="likes")
+    id = serializers.URLField()
+    web = serializers.URLField(required=False)
+    page_number = serializers.IntegerField(required=False)
+    size = serializers.IntegerField(required=False)
+    count = serializers.IntegerField(required=False)
+    src = serializers.ListField(child=serializers.DictField(), required=False)
+
+class EntryInboxSerializer(serializers.Serializer):
+    type = serializers.CharField()
+    class Meta:
+        model = Entry
+        fields = [
+            'title',
+            'id',
+            'web',
+            'description',
+            'contentType',
+            'content',
+            'published',
+            'visibility'
+
+        ]
+    comments = CommentsInfoSerializer(required = False)
+    likes = LikesInfoSerializer(required = False)
+    author = AuthorInboxSerializer()
+
+
+    def validate_type(self, value):
+        if value.lower() != "entry":
+            raise serializers.ValidationError("type must be 'entry'")
+        return value

@@ -16,7 +16,7 @@ from rest_framework.permissions import IsAuthenticated
 from golden import models
 from golden.models import Entry, EntryImage, Author, Comment, Like, Follow
 from .forms import CustomUserForm, CommentForm, ProfileForm, EntryList
-from golden.serializers import CommentSerializer
+from golden.serializers import CommentSerializer, EntryInboxSerializer, LikeInboxSerializer, CommentsInfoSerializer, FollowRequestInboxSerializer
 from golden.utils import get_or_create_foreign_author, post_to_remote_inbox, build_accept_activity
 
 # Import login authentication stuff
@@ -68,6 +68,7 @@ def stream_view(request):
     # Query entries according to visibility rules
 
     entries = Entry.objects.filter(
+        Q(author=user_author) |
         Q(visibility='PUBLIC') |  # Public entries: everyone can see
         Q(visibility='UNLISTED', author__id__in=followed_author_fqids) |  # Unlisted: only followers
         Q(visibility='FRIENDS', author__id__in=friends_fqids)  # Friends-only: only friends
@@ -586,11 +587,9 @@ def inbox(request, author_id):
     elif activity_type == "comment":
         return handle_comment(data, author)
     elif activity_type == "follow":
-        return handle_follow(request.data, author)
+        return handle_follow(data, author)
     elif activity_type == "update":
         return handle_update(data, author)
-    elif activity_type in ("accept", "reject"):
-        return handle_incoming_accept_reject(request.data, author)
     else:
         return Response({"error": "Unsupported type"}, status=400)
     
@@ -642,87 +641,34 @@ def handle_update(data, author):
 
     return Response({"status": "Entry updated"}, status=200)
 
-# TODO 
+
 def handle_create(data, author):
-    return
-# TODO 
+    serializer = EntryInboxSerializer(data=data, context={'author': author})
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=201)
+    return Response(serializer.errors, status=400)
+
 def handle_like(data,author):
-    return
-# TODO 
+    serializer = LikeInboxSerializer(data=data, context={'author': author})
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=201)
+    return Response(serializer.errors, status=400)
+
 def handle_comment(data,author):
-    return
+    serializer = CommentsInfoSerializer(data=data, context={'author': author})
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=201)
+    return Response(serializer.errors, status=400)
 
 def handle_follow(data, author):
-    follow_id = data.get("id")
-    actor_id = data.get("actor", {}).get("id")
-    object_id = data.get("object")
-    if not follow_id or not actor_id or not object_id:
-        return Response({"error": "Invalid follow object"}, status=400)
-
-    actor = get_or_create_foreign_author(actor_id)
-
-    follow_obj, created = Follow.objects.get_or_create(
-        id=follow_id,
-        defaults={
-            "actor": actor,
-            "object": object_id,
-            "summary": data.get("summary", ""),
-            "state": "REQUESTING",
-        }
-    )
-
-    if not created:
-        follow_obj.summary = data.get("summary", follow_obj.summary)
-        follow_obj.save()
-
-    return Response({"status": "Follow request stored"}, status=201)
-
-@api_view(["PUT"])
-@permission_classes([IsAuthenticated])  # require a logged-in local user
-def accept_follow(request, author_id):
-    # request.user must correspond to local author; validate that
-    follow_id = request.data.get("follow_id")
-    if not follow_id:
-        return Response({"error": "follow_id required"}, status=400)
-    try:
-        follow_obj = Follow.objects.get(id=follow_id)
-    except Follow.DoesNotExist:
-        return Response({"error": "Follow not found"}, status=404)
-
-    # ensure the follow is targeting this author
-    if follow_obj.object != request.build_absolute_uri(f"api/authors/{author_id}/"):
-        return Response({"error": "Follow does not target this author"}, status=400)
-
-    follow_obj.state = "ACCEPTED"
-    follow_obj.save()
-
-    # send Accept back
-    remote_actor_url = follow_obj.actor.id  # e.g., https://remote/api/authors/xyz/
-    local_actor_url = follow_obj.object      # our author URL
-    payload = build_accept_activity(local_actor_url, remote_actor_url, summary="Accepted follow")
-    # determine Node
-    node = Node.objects.filter(id__contains=follow_obj.actor.id).first()  # simplistic
-    inbox_url = f"{remote_actor_url}inbox/"
-    post_to_remote_inbox(inbox_url, payload, node=node)
-
-    return Response({"status": "Follow accepted"}, status=200)
-
-@api_view(["PUT"])
-@permission_classes([IsAuthenticated])
-def reject_follow(request, author_id):
-    follow_id = request.data.get("follow_id")
-    if not follow_id:
-        return Response({"error": "follow_id required"}, status=400)
-    try:
-        follow_obj = Follow.objects.get(id=follow_id)
-    except Follow.DoesNotExist:
-        return Response({"error": "Follow not found"}, status=404)
-
-    follow_obj.state = "REJECTED"
-    follow_obj.save()
-    # similar to accept: build reject payload and post_to_remote_inbox
-
-    return Response({"status": "Follow rejected"}, status=200)
+    serializer = FollowRequestInboxSerializer(data=data, context={'author': author})
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=201)
+    return Response(serializer.errors, status=400)
 
 @login_required
 @require_author 

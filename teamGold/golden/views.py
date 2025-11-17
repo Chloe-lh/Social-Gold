@@ -69,10 +69,12 @@ def stream_view(request):
     # Query entries according to visibility rules
 
     entries = Entry.objects.filter(
+        (
         Q(author=user_author) |
         Q(visibility='PUBLIC') |  # Public entries: everyone can see
         Q(visibility='UNLISTED', author__id__in=followed_author_fqids) |  # Unlisted: only followers
         Q(visibility='FRIENDS', author__id__in=friends_fqids)  # Friends-only: only friends
+        ) & ~Q(visibility='DELETED')
     ).order_by('-is_updated', '-is_posted')  # Most recent first
 
     # Prepare context for the template

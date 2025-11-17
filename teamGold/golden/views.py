@@ -842,11 +842,51 @@ def handle_comment(data,author):
     return Response(serializer.errors, status=400)
 
 def handle_follow(data, author):
-    serializer = FollowRequestInboxSerializer(data=data, context={'author': author})
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data, status=201)
-    return Response(serializer.errors, status=400)
+    actor_data = data.get("actor")
+    object_id = data.get("object")
+
+    if not actor_data or not object_id:
+        return Response({"error": "Follow activity missing actor or object"}, status=400)
+
+    if object_id != author.id:
+        return Response({"error": "Follow target does not match inbox author"}, status=400)
+
+    # Parse remote author info
+    remote_id = actor_data.get("id")
+    remote_display = actor_data.get("displayName", "Unknown")
+    remote_host = actor_data.get("host")
+
+    if not remote_id or not remote_host:
+        return Response({"error": "Invalid remote actor format"}, status=400)
+
+    # Create or update remote author locally
+    remote_author, created = Author.objects.get_or_create(
+        id=remote_id,
+        defaults={
+            "displayName": remote_display,
+            "host": remote_host,
+            "github": actor_data.get("github", ""),
+            "profileImage": actor_data.get("profileImage", "")
+        }
+    )
+
+    # Check if follow already exists
+    existing = FollowRequest.objects.filter(
+        actor=remote_author, 
+        object=receiving_author
+    ).first()
+
+    if existing:
+        return Response({"status": "Already following"}, status=200)
+
+    # Create follow relationship
+    follow_request = FollowRequest.objects.create(
+        actor=remote_author,
+        object=receiving_author
+    )
+
+    serializer = FollowSerializer(follow_request)
+    return Response(serializer.data, status=201)
 
 @login_required
 @require_author 

@@ -35,3 +35,10 @@ html, body {
     height: 100%;
     background-color: var(--background-colour);
 }
+
+h2 {
+    font-family: 'BlackMango';
+    color: var(--primary-colour);
+    margin-bottom: 0;
+    font-size: 30px;
+}

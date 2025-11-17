@@ -55,7 +55,7 @@ def stream_view(request):
     follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
     followed_author_fqids = [f.object for f in follows]
 
-    # etermine authors who are "friends" (mutual follows)
+    # Determine authors who are "friends" (mutual follows)
     friends_fqids = []
     for f in follows:
         try:
@@ -702,19 +702,72 @@ def inbox(request, author_id):
         return handle_comment(data, author)
     elif activity_type == "follow":
         return handle_follow(request.data, author)
+    elif activity_type == "update":
+        return handle_update(data, author)
     elif activity_type in ("accept", "reject"):
         return handle_incoming_accept_reject(request.data, author)
     else:
         return Response({"error": "Unsupported type"}, status=400)
     
+def handle_update(data, author):
+    """
+    Processes the remote update activity for an Entry.
+    Handels user stories #22 and #35 
+    """
+    object_id = data.get("object", {})
+
+    if not isinstance(object_id, dict):
+        return Response({"error": "Invalid update object"}, status=400)
+
+    entry_id = object_id.get("id")
+    if not entry_id:
+        return Response({"error": "Missing object.id in update"}, status=400)
+
+    # Finds an existing Entry to prevent the creation of new entries since this is editing (PUT).
+    try:
+        entry = Entry.objects.get(id=entry_id)
+    except Entry.DoesNotExist:
+        return Response({"error": "Entry not found"}, status=404)
+
+    # Update fields that remote nodes are allowed to overwrite
+    updated = False
+
+    if "title" in object_id:
+        entry.title = object_id["title"]
+        updated = True
+
+    if "content" in object_id:
+        entry.content = object_id["content"]
+        updated = True
+
+    if "contentType" in object_id:
+        entry.contentType = object_id["contentType"]
+        updated = True
+
+    if "visibility" in object_id:
+        entry.visibility = object_id["visibility"]
+        updated = True
+        # So that admin can still see what was deleted
+        if entry.visibility == "DELETED":
+            entry.content = ""
+
+    if updated:
+        entry.is_updated = timezone.now()
+        entry.save()
+
+    return Response({"status": "Entry updated"}, status=200)
+
+# TODO 
 def handle_create(data, author):
-    
     return
+# TODO 
 def handle_like(data,author):
     return
+# TODO 
 def handle_comment(data,author):
     return
-def handle_follow(data,author):
+
+def handle_follow(data, author):
     follow_id = data.get("id")
     actor_id = data.get("actor", {}).get("id")
     object_id = data.get("object")
@@ -807,7 +860,6 @@ def new_post(request):
     ]
     entry_heading = random.choice(headings)
 
-    
     context = {}
     form = EntryList()
     editing_entry = None # because by default, users are not in editing mode 
@@ -831,7 +883,6 @@ def new_post(request):
                 visibility=request.POST.get('visibility', 'PUBLIC')
             )
         
-
         images = request.FILES.getlist('images')
         for idx, image in enumerate(images):
             EntryImage.objects.create(
@@ -915,5 +966,4 @@ def new_post(request):
     context["editing_entry"] = editing_entry
     # context["entries"] = Entry.objects.select_related("author").all()
  
-
     return render(request, "new_post.html", context | {'entries': entries})

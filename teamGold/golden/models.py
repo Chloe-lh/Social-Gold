@@ -2,6 +2,8 @@ from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import PermissionsMixin
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
+from django.conf import settings
+import uuid
 
 '''
 Relationship Summary
@@ -31,21 +33,28 @@ FOLLOW_STATE_CHOICES = [
 ]
 
 class MyUserManager(BaseUserManager):
-    def create_user(self, email, password=None, **extra_fields):
+
+    def _generate_fqid(self):
+        return f"{settings.SITE_URL}/api/authors/{uuid.uuid4()}"
+
+    def create_user(self, username, email=None, password=None, **extra_fields):
         if not email:
             raise ValueError("Email required")
+        if not username:
+            raise ValueError("Username required")
         email = self.normalize_email(email)
-        user = self.model(email=email, **extra_fields)
+        user = self.model(username=username, email=email, **extra_fields)
+        user.id = self._generate_fqid()
         user.set_password(password)
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, email, password=None, **extra_fields):
+    def create_superuser(self, username, email, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_admin", True)
         extra_fields.setdefault("is_approved", True)
         extra_fields.setdefault("is_superuser", True)
-        return self.create_user(email, password, **extra_fields)
+        return self.create_user(username, email, password, **extra_fields)
 
 class Author(AbstractBaseUser, PermissionsMixin):
     id = models.URLField(primary_key=True, unique = True)
@@ -99,6 +108,11 @@ class Author(AbstractBaseUser, PermissionsMixin):
         Keys = friend's FQID, Values = info (username, etc)
         """
         return self.friends
+
+    def save(self, *args, **kwargs):
+        if not self.id:
+            self.id = f"{settings.SITE_URL}/api/authors/{uuid.uuid4()}"
+        super().save(*args, **kwargs)
 
 class Entry(models.Model):
     """

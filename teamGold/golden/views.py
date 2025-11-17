@@ -243,7 +243,6 @@ def signup(request):
         # we don't want to create a user if the inputs are not valid since that can raise errors
         if form.is_valid():
             user = form.save(commit=False)
-            user.id = f"{settings.SITE_URL}/api/authors/{uuid.uuid4()}"
             user.save()
             #if not next_page:
                 #next_page = "/golden/"

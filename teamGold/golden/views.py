@@ -71,7 +71,6 @@ def stream_view(request):
     remote_nodes = Node.objects.filter(is_active=True)
     for node in remote_nodes:
 
-        # get raw remote JSON entries
         raw_items = fetch_remote_entries(node)
 
         for item in raw_items:
@@ -82,16 +81,10 @@ def stream_view(request):
                 continue
 
             # only fetch entries from authors the user follows
-            is_following = Follow.objects.filter(
-                actor=user_author,
-                object=remote_author_id,
-                state="ACCEPTED"
-            ).exists()
+            is_following = Follow.objects.filter(actor=user_author, object=remote_author_id, state="ACCEPTED").exists()
 
             if not is_following:
                 continue
-
-            # convert JSON → local Entry model instance
             entry = sync_remote_entry(item, node)
             if entry:
                 remote_entries.append(entry)

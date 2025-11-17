@@ -68,8 +68,9 @@ class Author(AbstractBaseUser, PermissionsMixin):
         'self', symmetrical=False, 
         related_name='followers_set', 
         blank=True)
-    followers_info = models.JSONField(default=dict, blank=True)
-    friends = models.JSONField(default=dict, blank=True)
+    friends = property(lambda self: self.following.filter(id__in=self.followers_set.values_list("id", flat=True)))
+    # followers_info = models.JSONField(default=dict, blank=True)
+    # friends = models.JSONField(default=dict, blank=True)
     objects = MyUserManager()
     description = models.TextField(blank=True)
 
@@ -97,24 +98,7 @@ class Author(AbstractBaseUser, PermissionsMixin):
         Updates the `friends` JSONField to contain mutual followers.
         Keys = friend's FQID, Values = info (username, etc)
         """
-        following_ids = set(self.following.values_list('id', flat=True))
-        followers_ids = set(self.followers_info.keys())
-        mutual_ids = following_ids.intersection(followers_ids)
-
-        # Build dict with info for each friend
-        new_friends = {}
-        for friend_id in mutual_ids:
-            try:
-                friend = Author.objects.get(id=friend_id)
-                new_friends[friend_id] = {
-                    "username": friend.username,
-                    #"profileImage": friend.profileImage,
-                }
-            except Author.DoesNotExist:
-                continue
-
-        self.friends = new_friends
-        self.save(update_fields=['friends'])
+        return self.friends
 
 class Entry(models.Model):
     """
@@ -266,8 +250,12 @@ class Node(models.Model):
     )
 
     # Remote nodes this node knows about & can communicate with
-    remote_nodes = models.JSONField(default=list, blank=True)
+    # remote_nodes = models.JSONField(default=list, blank=True)
     # Later this could become its own table for more features
+
+class KnownNode(models.Model):
+    parent = models.ForeignKey(Node, related_name="known_nodes", on_delete=models.CASCADE)
+    url = models.URLField()
 
     def __str__(self):
         return self.title

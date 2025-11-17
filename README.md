@@ -34,22 +34,22 @@ Make a distributed social network!
 
 
 ### Golden's Available Endpoints
-GET  /api/Profile/<path:id>/
-GET  /api/Node/<path:id>/
-POST /api/authors/<path:author_serial>/inbox/
-POST /api/author/<uuid:author_id>/inbox/
-GET  /api/Entry/<path:id>/
-POST /api/entries/<uuid:entry_id>/
-GET  /api/entries/<path:entry_fqid>/comments/
-GET  /api/Entry/<path:entry_id>/comments/
-GET  /api/authors/<path:author_serial>/entries/<path:entry_serial>/comments/
-POST /api/authors/<path:author_serial>/entries/<path:entry_serial>/comments/
-GET  /api/authors/<str:author_id>/entries/<str:entry_id>/comments/<path:comment_fqid>/
-GET  /api/Like/<path:id>/
-GET  /api/Follow/<path:id>/
-GET  /api/Author/<path:author_id>/friends/
-GET  /api/EntryImage/<int:id>/
-POST /api/Entry/<path:entry_id>/images/
+- GET  /api/Profile/<path:id>/
+- GET  /api/Node/<path:id>/
+- POST /api/authors/<path:author_serial>/inbox/
+- POST /api/author/<uuid:author_id>/inbox/
+- GET  /api/Entry/<path:id>/
+- POST /api/entries/<uuid:entry_id>/
+- GET  /api/entries/<path:entry_fqid>/comments/
+- GET  /api/Entry/<path:entry_id>/comments/
+- GET  /api/authors/<path:author_serial>/entries/<path:entry_serial>/comments/
+- POST /api/authors/<path:author_serial>/entries/<path:entry_serial>/comments/
+- GET  /api/authors/<str:author_id>/entries/<str:entry_id>/comments/<path:comment_fqid>/
+- GET  /api/Like/<path:id>/
+- GET  /api/Follow/<path:id>/
+- GET  /api/Author/<path:author_id>/friends/
+- GET  /api/EntryImage/<int:id>/
+- POST /api/Entry/<path:entry_id>/images/
 
 ### Authentication (HTTP Basic Auth)
 Scheme: HTTP Basic Auth

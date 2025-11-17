@@ -116,6 +116,7 @@ class Author(AbstractBaseUser, PermissionsMixin):
         super().save(*args, **kwargs)
 
     def to_activitypub_dict(self):
+        """Convert entry to ActivityPub format for federation."""
         return {
             "type": "entry",
             "id": self.id,
@@ -123,9 +124,12 @@ class Author(AbstractBaseUser, PermissionsMixin):
             "description": self.description or "",
             "contentType": self.contentType,
             "content": self.content,
-            "published": self.published.isoformat(),
+            "published": self.published.isoformat() if self.published else "",
             "visibility": self.visibility,
+            "source": self.source or self.id,
+            "origin": self.origin or self.id,
             "author": {
+                "type": "author",
                 "id": self.author.id,
                 "host": self.author.host,
                 "displayName": self.author.username,
@@ -137,6 +141,11 @@ class Author(AbstractBaseUser, PermissionsMixin):
             },
         }
 
+class EntryManager(models.Manager):
+    def visible(self):
+        """Return only non-deleted entries."""
+        return self.exclude(visibility="DELETED")
+    
 class Entry(models.Model):
     """
     This class is using a FULL URL (FQID) as the primary key instead of an integer.
@@ -180,6 +189,7 @@ class Entry(models.Model):
         related_name='liked_entries',
         blank=True
     )
+    objects = EntryManager()
     # comments = models.ManyToManyField(
     #     'Author',
     #     related_name='comments',

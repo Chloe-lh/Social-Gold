@@ -44,10 +44,11 @@ def send_new_entry(entry):
     for follow in followers:
         follower = follow.actor
 
+        # Skip local followers
         if follower.host.startswith(settings.SITE_URL):
             continue
 
-        node = Node.objects.filter(id__contains=follower.host).first()
+        node = Node.objects.filter(id__startswith=follower.host).first()
 
         activity = {
             "@context": "https://www.w3.org/ns/activitystreams",
@@ -56,10 +57,7 @@ def send_new_entry(entry):
             "object": entry.to_activitypub_dict(),
         }
 
-        inbox_url = getattr(follower, "inbox", None)
-        if not inbox_url:
-            # fall back to prevent crashing
-            inbox_url = follower.id.rstrip("/") + "/inbox/"
+        inbox_url = follower.inbox
 
         success = post_to_remote_inbox(inbox_url, activity, node=node)
         results.append((follower.id, success))
@@ -67,33 +65,48 @@ def send_new_entry(entry):
     return results
 
 def send_update_activity(entry):
+    """
+    Re-sends an edited entry to all remote followers.
+    """
+    author = entry.author
     followers = Follow.objects.filter(
-        object=entry.author.id, state="ACCEPTED").select_related("actor")
+        object=author.id, state="ACCEPTED").select_related("actor")
 
     activity = {
         "@context": "https://www.w3.org/ns/activitystreams",
         "type": "Update",
-        "actor": {"id": entry.author.id},
+        "actor": {"id": author.id},
         "object": entry.to_activitypub_dict(),
     }
 
     results = []
     for follow in followers:
+        # Skip local followers
         if follow.actor.host.startswith(settings.SITE_URL):
             continue
-        node = Node.objects.filter(id__contains=follow.actor.host).first()
-        inbox = follow.actor.inbox or follow.actor.id.rstrip("/") + "/inbox/"
-        results.append((follow.actor.id, post_to_remote_inbox(inbox, activity, node)))
+            
+        node = Node.objects.filter(id__startswith=follow.actor.host).first()
+        inbox_url = follow.actor.inbox
+        
+        success = post_to_remote_inbox(inbox_url, activity, node=node)
+        results.append((follow.actor.id, success))
+    
     return results
 
 def send_delete_activity(entry):
-    followers = Follow.objects.filter(object=entry.author.id, state="ACCEPTED").select_related("actor")
+    """
+    Notifies remote followers that an entry has been deleted (soft delete).
+    """
+    author = entry.author
+    followers = Follow.objects.filter(
+        object=author.id, state="ACCEPTED").select_related("actor")
 
     activity = {
         "@context": "https://www.w3.org/ns/activitystreams",
-        "type": "Update",   # ActivityPub uses Update to signal soft delete
-        "actor": {"id": entry.author.id},
+        "type": "Update",   # Use Update with visibility: DELETED
+        "actor": {"id": author.id},
         "object": {
+            "type": "entry",
             "id": entry.id,
             "visibility": "DELETED",
             "content": "",
@@ -102,9 +115,14 @@ def send_delete_activity(entry):
 
     results = []
     for follow in followers:
+        # Skip local followers
         if follow.actor.host.startswith(settings.SITE_URL):
             continue
-        node = Node.objects.filter(id__contains=follow.actor.host).first()
-        inbox = follow.actor.inbox or follow.actor.id.rstrip("/") + "/inbox/"
-        results.append((follow.actor.id, post_to_remote_inbox(inbox, activity, node)))
+            
+        node = Node.objects.filter(id__startswith=follow.actor.host).first()
+        inbox_url = follow.actor.inbox
+        
+        success = post_to_remote_inbox(inbox_url, activity, node=node)
+        results.append((follow.actor.id, success))
+    
     return results

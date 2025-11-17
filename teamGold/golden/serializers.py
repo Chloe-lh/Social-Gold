@@ -39,6 +39,33 @@ class LikeSerializer(serializers.ModelSerializer):
         model = Like
         fields = '__all__'
 
+    ''' this helps with shape validation and nesting'''
+    def create(self, validated_data):
+        # DRF's `serializer.save(author=..., entry=...)` will merge those kwargs
+        # into `validated_data`, so pull them out here.
+        author = validated_data.pop('author', None)
+        entry = validated_data.pop('entry', None)
+
+        if author is None or entry is None:
+            raise serializers.ValidationError("Both 'author' and 'entry' must be provided when creating a Comment")
+
+        # ensure id/published
+        if not validated_data.get('id'):
+            validated_data['id'] = generate_comment_fqid(author, entry)
+        if not validated_data.get('published'):
+            validated_data['published'] = timezone.now()
+
+        comment = Comment.objects.create(
+            id=validated_data['id'],
+            author=author,
+            entry=entry,
+            content=validated_data.get('content', ''),
+            contentType=validated_data.get('contentType', Comment._meta.get_field('contentType').get_default()),
+            published=validated_data.get('published'),
+            reply_to=validated_data.get('reply_to', None)
+        )
+        return comment
+
 class CommentSerializer(serializers.ModelSerializer):
     # Return the full nested author on reads; the view should supply an Author
     # instance when creating via `serializer.save(author=author, entry=entry)`.
@@ -51,6 +78,7 @@ class CommentSerializer(serializers.ModelSerializer):
         model = Comment
         fields = '__all__'
 
+    ''' this helps with shape validation and nesting'''
     def create(self, validated_data):
         # DRF's `serializer.save(author=..., entry=...)` will merge those kwargs
         # into `validated_data`, so pull them out here.

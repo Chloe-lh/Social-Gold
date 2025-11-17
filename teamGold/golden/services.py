@@ -94,80 +94,6 @@ def get_remote_author_profile(remote_node_url, author_id):
         return response.json()
     return None
 
-
-# def resolve_or_create_author(author_input, create_if_missing=False):
-#     """
-#     Resolve an incoming author reference to a local `Author` instance.
-
-#     - `author_input` may be:
-#         - an `Author` instance -> returned as-is
-#         - a string FQID (e.g. "http://node.com/api/authors/<uuid>/")
-#         - a dict containing at least an 'id' key
-#     - If `create_if_missing` is True and the author is remote and the
-#       author host matches a known `Node`, this will fetch the remote
-#       profile (best-effort) and create a minimal, unprivileged placeholder
-#       Author (is_active=False, is_approved=False).
-
-#     Errors:
-#       - Author.DoesNotExist if the author is not found and creation is
-#         not allowed.
-#       - requests.RequestException when remote fetch fails.
-#     """
-#     # If caller passed a model instance, return it
-#     if hasattr(author_input, '__class__') and getattr(author_input, 'pk', None):
-#         return author_input
-
-#     # Normalize to an id string
-#     if isinstance(author_input, dict):
-#         author_id = author_input.get('id')
-#     else:
-#         author_id = author_input
-
-#     if not author_id:
-#         raise Author.DoesNotExist("Author id missing")
-
-#     # Try local lookup first
-#     try:
-#         return Author.objects.get(pk=author_id)
-#     except Author.DoesNotExist:
-#         if not create_if_missing:
-#             raise
-
-#     # At this point author must be remote
-#     parsed = urlparse(author_id)
-#     host_base = f"{parsed.scheme}://{parsed.netloc}"
-
-#     # Ensure the host belongs to a known/trusted Node
-#     node = Node.objects.filter(id__startswith=host_base).first()
-#     if not node:
-#         raise PermissionError(f"Author host {host_base} is not a known node")
-
-#     # Try to fetch profile from remote node 
-#     author_uuid = author_id.rstrip('/').split('/')[-1]
-#     try:
-#         profile = get_remote_author_profile(node.id.rstrip('/'), author_uuid)
-#     except Exception as e:
-#         logging.exception("Failed to fetch remote author profile")
-#         raise
-
-#     if not profile or profile.get('id') != author_id:
-#         # If remote profile missing or mismatched, do not create
-#         raise Author.DoesNotExist("Remote author profile mismatch or not found")
-
-#     # Create a minimal placeholder Author to be nested
-#     with transaction.atomic():
-#         # Avoid duplicate creation in race conditions
-#         author, created = Author.objects.get_or_create(
-#             id=profile['id'],
-#             defaults={
-#                 'username': f"remote_{uuid.uuid4().hex[:8]}",
-#                 'name': profile.get('displayName') or profile.get('name') or '',
-#                 'host': host_base,
-#                 'is_active': False,
-#                 'is_approved': False,
-#             }
-#         )
-#     return author
 '''
 Extracts remote node object from fqid (https://node1.com/api/authors/<uuid>/)
     will return node instance or None if host is local or not trusted
@@ -196,9 +122,14 @@ def get_remote_node_from_fqid(fqid):
 create fqid (id) for comment
 author.id is a already createdd fqid, so append to the end
 '''
-def generate_comment_fqid(author, entry):
+def generate_comment_fqid(author):
     comment_uuid = uuid.uuid4()
     return f"{author.id}/commented/{comment_uuid}"
+
+def generate_like_fqid(author):
+    like_uuid = uuid.uuid4()
+    return f"{author.id}/liked/{like_uuid}"
+
 '''
 convert from fqid to uuid
 '''

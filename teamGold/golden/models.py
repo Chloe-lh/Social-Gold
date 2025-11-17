@@ -80,6 +80,7 @@ class Author(AbstractBaseUser, PermissionsMixin):
     friends = property(lambda self: self.following.filter(id__in=self.followers_set.values_list("id", flat=True)))
     objects = MyUserManager()
     description = models.TextField(blank=True)
+    is_shadow = models.BooleanField(default=False)
 
     # Authentication
     USERNAME_FIELD = "username"

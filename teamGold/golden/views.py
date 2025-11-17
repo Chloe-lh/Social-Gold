@@ -376,7 +376,7 @@ def profile_view(request):
         
         if request.POST.get("action") == "follow" and "author_id" in request.POST:
             target_id = request.POST.get("author_id")
-            target = Author.objects.filter(id=target_id).first()
+            target = Author.objects.filter(id=target_id, is_shadow=False).first()
 
             if target:
                 # Local follow
@@ -408,7 +408,8 @@ def profile_view(request):
                     "username": f"remote-{remote_uuid}",  # ensures uniqueness
                     "name": remote_uuid,                  # used as displayName
                     "host": remote_host,
-                    "email": "",                          # required by model but blank ok
+                    "is_remote": True,
+                    "is_shadow": True,   # mark as shadow
                 }
             )
 

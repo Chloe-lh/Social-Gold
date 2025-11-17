@@ -8,6 +8,7 @@ See [the web page](https://uofa-cmput404.github.io/general/project.html) for a d
 
 Make a distributed social network!
 
+## Copyright
 **Team Members:**
 - Aesoji
 - chobo
@@ -19,13 +20,8 @@ Make a distributed social network!
 ## License
 
 * Choose an OSI approved license, name it here, and copy the license text to a file called `LICENSE`.
-
-## Copyright
-
-The authors claiming copyright, if they wish to be known, can list their names here...
-
 ---
-
+  
 ## API Access Information
 ### Service Details
 | Setting | Value |
@@ -37,15 +33,23 @@ The authors claiming copyright, if they wish to be known, can list their names h
 | **URL Prefix** | `/api/` |
 
 ### Golden's Available Endpoints
-- GET /api/Profile/<id>/
-- GET /api/Entry/<id>/
-- GET /api/Node/<id>/
-- GET /api/Follow/<id>/
-- GET /api/Like/<id>/
-- GET /api/Comment/<id>/
-- GET /api/EntryImage/<id>/
-> **Note:** <id> in most endpoints accepts a full path (<path:id>), which allows slashes/URLs. EntryImage requires an integer.
+- GET  /api/Profile/<path:id>/
+- GET  /api/Node/<path:id>/
+- POST /api/authors/<path:author_serial>/inbox/
+- POST /api/author/<uuid:author_id>/inbox/
+- GET  /api/Entry/<path:id>/
+- POST /api/entries/<uuid:entry_id>/
+- GET  /api/entries/<path:entry_fqid>/comments/
+- GET  /api/Entry/<path:entry_id>/comments/
+- GET  /api/authors/<path:author_serial>/entries/<path:entry_serial>/comments/
+- POST /api/authors/<path:author_serial>/entries/<path:entry_serial>/comments/
+- GET  /api/authors/<str:author_id>/entries/<str:entry_id>/comments/<path:comment_fqid>/
+- GET  /api/Like/<path:id>/
+- GET  /api/Follow/<path:id>/
+- GET  /api/Author/<path:author_id>/friends/
+- GET  /api/EntryImage/<int:id>/
+- POST /api/Entry/<path:entry_id>/images/
 
 ### Authentication (HTTP Basic Auth)
 Scheme: HTTP Basic Auth
-
+*Remote nodes must authenticate to prior to being able to send inbox POST, access entries, and use the website.*

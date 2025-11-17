@@ -149,6 +149,18 @@ class ApprovedUserBackend(ModelBackend):
             return super().user_can_authenticate(user)
         return False # dont allow user to log in if not approved
 
+@api_view(['GET'])
+def remote_authors_list(request):
+    authors = Author.objects.all()
+    results = []
+    for a in authors:
+        results.append({
+            "id": a.id,
+            "displayName": a.username,
+            "host": a.host,
+        })
+    return Response({"type": "authors", "items": results})
+
 @login_required
 def profile_view(request):
     """
@@ -162,18 +174,6 @@ def profile_view(request):
     - Requests Tab
     - Search Tab
     """
-
-    @api_view(['GET'])
-    def remote_authors_list(request):
-        authors = Author.objects.all()
-        results = []
-        for a in authors:
-            results.append({
-                "id": a.id,
-                "displayName": a.username,
-                "host": a.host,
-            })
-        return Response({"type": "authors", "items": results})
 
     def get_remote_authors(node):
         """
@@ -190,8 +190,8 @@ def profile_view(request):
             if response.status_code == 200:
                 data = response.json()
                 return data.get("items", [])
-        except requests.exceptions.RequestException:
-            pass
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching remote authors from {node.id}: {e}")
 
         return []
 

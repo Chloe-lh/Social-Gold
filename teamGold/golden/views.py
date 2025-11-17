@@ -164,24 +164,24 @@ def profile_view(request):
     """
 
     def get_remote_authors(node):
-    """
-    Fetch all authors from a remote node.
-    """
-    api_url = f"{node.id}/api/authors/"  # Build API URL from node.id
+        """
+        Fetch all authors from a remote node.
+        """
+        api_url = f"{node.id}/api/authors/"  # Build API URL from node.id
 
-    try:
-        response = requests.get(
-            api_url,
-            timeout=5,
-            auth=(node.auth_user, node.auth_pass) if node.auth_user else None
-        )
-        if response.status_code == 200:
-            data = response.json()
-            return data.get("items", [])
-    except requests.exceptions.RequestException:
-        pass
+        try:
+            response = requests.get(
+                api_url,
+                timeout=5,
+                auth=(node.auth_user, node.auth_pass) if node.auth_user else None
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("items", [])
+        except requests.exceptions.RequestException:
+            pass
 
-    return []
+        return []
 
     def get_friends_context(author: Author):
         """
@@ -216,10 +216,10 @@ def profile_view(request):
         for node in nodes:
             remote_authors = get_remote_authors(node)
             for ra in remote_authors:
-                if query.lower() in ra.get("username", "").lower():
+                if query.lower() in ra.get("displayName", "").lower():
                     results.append({
                         "id": ra.get("id"),
-                        "username": ra.get("username"),
+                        "username": ra.get("displayName"),
                         "host": ra.get("host"),
                         "is_local": False
                     })
@@ -311,17 +311,17 @@ def profile_view(request):
     authors = get_search_authors(author, query)
 
     for a in authors:
-    if a.get("is_local"):
-        # Django Author object
-        follow = Follow.objects.filter(actor=author, object=a["id"]).first()
-        a["follow_state"] = follow.state if follow else "NONE"
-        a["is_following"] = author.following.filter(id=a["id"]).exists()
-        a["is_friend"] = str(a["id"]) in friend_ids
-    else:
-        # Remote authors — assume not following/friends by default
-        a["follow_state"] = "NONE"
-        a["is_following"] = False
-        a["is_friend"] = False 
+        if a.get("is_local"):
+            # Django Author object
+            follow = Follow.objects.filter(actor=author, object=a["id"]).first()
+            a["follow_state"] = follow.state if follow else "NONE"
+            a["is_following"] = author.following.filter(id=a["id"]).exists()
+            a["is_friend"] = str(a["id"]) in friend_ids
+        else:
+            # Remote authors — assume not following/friends by default
+            a["follow_state"] = "NONE"
+            a["is_following"] = False
+            a["is_friend"] = False 
 
     entries = Entry.objects.filter(author=author).order_by("-published")
     followers = author.followers_set.all()

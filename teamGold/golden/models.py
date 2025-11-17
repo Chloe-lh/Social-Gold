@@ -110,6 +110,9 @@ class Author(AbstractBaseUser, PermissionsMixin):
     def save(self, *args, **kwargs):
         if not self.id:
             self.id = f"{settings.SITE_URL}/api/authors/{uuid.uuid4()}"
+        if not self.host:
+            # Set host to SITE_URL automatically
+            self.host = settings.SITE_URL.rstrip('/')  # remove trailing slash just in case
         super().save(*args, **kwargs)
 
 class Entry(models.Model):

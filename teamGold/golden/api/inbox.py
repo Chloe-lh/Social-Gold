@@ -19,7 +19,7 @@ from django.core.paginator import Paginator
 
 # LOCAL IMPORTS
 from golden.models import Author, Entry, Comment, Like, Follow, Node, EntryImage
-from golden.services import generate_comment_fqid, resolve_or_create_author, paginate
+from golden.services import generate_comment_fqid, paginate
 
 # SWAGGER
 from drf_yasg.utils import swagger_auto_schema

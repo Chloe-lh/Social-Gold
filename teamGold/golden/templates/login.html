@@ -15,8 +15,9 @@
             <header>
                 <h2>GOLDEN</h2>
             </header>
-
-            <img src="{% static 'golden/icons/profile-picture.png' %}">
+            
+            <!-- TODO: if user is cached, use the corresponding pfp -->
+            <img src="{% static 'golden/icons/profile-picture.png' %}"alt="Default Profile">
 
             <form name="login" method="POST" enctype="application/x-www-form-urlencoded">
                 {% csrf_token %}

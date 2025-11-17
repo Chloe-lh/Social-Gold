@@ -405,9 +405,10 @@ def profile_view(request):
             target, created = Author.objects.get_or_create(
                 id=target_id,  # full FQID
                 defaults={
-                    "username": remote_uuid,
+                    "username": f"remote-{remote_uuid}",  # ensures uniqueness
+                    "name": remote_uuid,                  # used as displayName
                     "host": remote_host,
-                    "url": target_id,
+                    "email": "",                          # required by model but blank ok
                 }
             )
 
@@ -433,14 +434,14 @@ def profile_view(request):
                     "id": author.id,
                     "host": author.host,
                     "displayName": author.username,
-                    "profileImage": author.profileImage or ""
+                    "profileImage": author.profileImage if author.profileImage else ""
                 },
                 "object": {
                     "type": "author",
                     "id": target.id,
                     "host": target.host,
                     "displayName": target.username,
-                    "profileImage": target.profileImage or ""
+                    "profileImage": target.profileImage if target.profileImage else ""
                 }
             }
 

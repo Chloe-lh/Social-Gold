@@ -835,6 +835,140 @@ class CommentLikeAPITests(AuthenticatedAPITestCase):
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
 # ============================================================
+# Remote node / federation related tests
+# ============================================================
+
+class RemoteTests(AuthenticatedAPITestCase):
+    def setUp(self):
+        super().setUp()
+        # create an active remote node record used by the view to detect remote hosts
+        Node.objects.create(id="http://nodebbbb/", auth_user="remoteuser", auth_pass="remotepass", is_active=True)
+
+    @patch("golden.api.commentAPIView.requests.get")
+    def test_get_remote_comments(self, mock_get):
+        mock_res = Mock()
+        mock_res.status_code = 200
+        mock_res.json.return_value = {
+            "type": "comments",
+            "id": "http://nodebbbb/api/entries/.../comments/",
+            "size": 1,
+            "items": [{
+                "id": "http://nodebbbb/comment/1",
+                "author": {"id": "http://nodebbbb/author/1/"},
+                "content": "remote!",
+                "contentType": "text/plain",
+            }]
+        }
+        mock_get.return_value = mock_res
+
+        remote_entry = "http://nodebbbb/api/authors/222/entries/249/"
+        enc = quote(remote_entry.rstrip('/'), safe='')
+        res = self.client.get(f"/api/entries/{enc}/comments/")
+        self.assertEqual(res.status_code, 200)
+
+        # assert our code called the expected remote URL
+        mock_get.assert_called_once()
+        called_url = mock_get.call_args[0][0]
+        self.assertIn("nodebbbb", called_url)
+
+    @patch("golden.api.commentAPIView.requests.post")
+    def test_remote_comment_post(self, mock_post):
+        """Ensure that when a comment is posted to an entry whose author is on a remote node,
+        the server forwards the saved comment to that node's inbox via POST.
+        """
+        mock_res = Mock()
+        mock_res.status_code = 201
+        mock_post.return_value = mock_res
+
+        
+        # Create an author representing the remote entry owner (actor)
+        remote_actor = Author.objects.create(
+            id="http://nodebbbb/api/authors/222/",
+            username="remote_owner",
+        )
+
+        # Create a local Entry that references the remote actor as its author
+        entry = Entry.objects.create(
+            id=f"http://local.example.com/api/entries/{uuid.uuid4()}/",
+            author=remote_actor,
+            title="Remote-owned post",
+            content="content",
+            visibility="PUBLIC",
+        )
+
+        # Create a local commenter author to include in the POST payload
+        commenter = Author.objects.create(
+            id=f"http://local.example.com/api/authors/{uuid.uuid4()}/",
+            username="local_commenter",
+        )
+        print(entry.id)
+        enc = quote(entry.id.rstrip('/'), safe='')
+        # use the Entry/ alias which passes `entry_id` to the view POST handler
+        url = f"/api/Entry/{enc}/comments/"
+
+        payload = {
+            "content": "Forward this comment",
+            "contentType": "text/plain",
+            "author": {"id": commenter.id},
+        }
+        print(url)
+        print(payload)
+        res = self.client.post(url, payload, format="json")
+        print(res)
+        # view should accept and create the comment
+        self.assertIn(res.status_code, (200, 201, 202))
+
+        # The inbox URL should be the remote node's base + '/inbox'
+        self.assertTrue(mock_post.called, "requests.post should have been called to forward the comment")
+        called_url = mock_post.call_args[0][0]
+        self.assertIn("nodebbbb", called_url)
+
+    @patch("golden.api.likeAPIView.requests.post")
+    def test_remote_like_post(self, mock_post):
+        """Ensure that when a like is posted to an entry whose author is on a remote node,
+        the server forwards the like to that node's inbox via POST.
+        """
+        mock_res = Mock()
+        mock_res.status_code = 201
+        mock_post.return_value = mock_res
+
+        # Create a remote owner and entry owned by that remote actor
+        remote_owner = Author.objects.create(
+            id="http://nodebbbb/api/authors/333/",
+            username="remote_like_owner",
+        )
+
+        entry = Entry.objects.create(
+            id=f"http://local.example.com/api/entries/{uuid.uuid4()}/",
+            author=remote_owner,
+            title="Remote-owned like test",
+            content="content",
+            visibility="PUBLIC",
+        )
+
+        # Create a local liker author to include in the POST payload
+        liker = Author.objects.create(
+            id=f"http://local.example.com/api/authors/{uuid.uuid4()}/",
+            username="local_liker",
+        )
+
+        enc = quote(entry.id.rstrip('/'), safe='')
+        url = f"/api/Entry/{enc}/likes/"
+
+        payload = {
+            "author": {"id": liker.id},
+            "object": entry.id,
+        }
+
+        res = self.client.post(url, payload, format="json")
+        # view should accept and either create or forward the like
+        self.assertIn(res.status_code, (200, 201, 202))
+
+        # The inbox URL should be the remote node's base + '/inbox'
+        self.assertTrue(mock_post.called, "requests.post should have been called to forward the like")
+        called_url = mock_post.call_args[0][0]
+        self.assertIn("nodebbbb", called_url)
+# ============================================================
 # Node Related Test Suites
 # ============================================================
 

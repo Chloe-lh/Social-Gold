@@ -80,7 +80,7 @@
       {% if followers %}
         {% for f in followers %}
           <section class="author-list-item follower-row">
-            <span class="follower-username">{{ f.username }}</span>
+            <a href="{% url 'public-profile' f.id %}" class="follower-username">{{ f.username }}</a>
             {% if f in friends %}
               <img class="friend-icon" src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
             {% endif %}
@@ -88,7 +88,7 @@
           <hr class="follower-divider">
         {% endfor %}
       {% else %}
-        <p>You're a lonely loser.</p>
+        <p>You have no followers.</p>
       {% endif %}
     </section>
 
@@ -97,7 +97,7 @@
       {% if following %}
         {% for f in following %}
           <section class="author-list-item follower-row">
-            <span class="follower-username">{{ f.username }}</span>
+            <a href="{% url 'public-profile' f.id %}" class="follower-username">{{ f.username }}</a>
             {% if f in friends %}
               <img class="friend-icon" src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
             {% endif %}
@@ -122,7 +122,7 @@
       <ul style="list-style: none; padding: 0;">
         {% for req in follow_requests %}
         <li class="request-row">
-          <span>{{ req.actor.username }} wants to follow you</span>
+          <a href="{% url 'public-profile' req.actor.id %}">{{ req.actor.username }} wants to follow you</span>
             <form method="POST" style="display:inline;">
               {% csrf_token %}
               <input type="hidden" name="follow_id" value="{{ req.id }}">
@@ -163,7 +163,7 @@
       <ul>
       {% for a in authors %}
         <li style="padding: 10px; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center;">
-          <span>{{ a.username }}</span>
+          <a href="{% url 'public-profile' a.id %}">{{ a.username }}</a>
 
           {% if a.is_friend %}
             <button class="follow-btn" disabled>

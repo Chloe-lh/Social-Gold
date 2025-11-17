@@ -675,7 +675,7 @@ class EntryCommentAPITests(AuthenticatedAPITestCase):
         
     def test_post_comment_invalid_data(self):
         """POST should return 400 with invalid data"""
-        data = {}  # Missing required content field
+        data = {} 
         res = self.client.post(
             f"/api/Entry/{self.entry.id}/comments/", 
             data, 
@@ -713,7 +713,7 @@ class EntryCommentAPITests(AuthenticatedAPITestCase):
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
 # ============================================================
-# MISSING TEST CASES - Comment Likes
+# Comment Likes
 # ============================================================
 
 class CommentLikeAPITests(AuthenticatedAPITestCase):
@@ -907,7 +907,7 @@ class ForbiddenAuthorizationTests(APITestCase):
         self.assertIn(res.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
 
     # ============================================================
-# MISSING TEST CASES - Follow API
+# Follow API
 # ============================================================
 
 class FollowAPITests(AuthenticatedAPITestCase):
@@ -950,7 +950,7 @@ class FollowAPITests(AuthenticatedAPITestCase):
         self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
 
 # ============================================================
-# MISSING TEST CASES - Entry Images POST
+# Entry Images POST
 # ============================================================
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp())

@@ -16,7 +16,7 @@ from rest_framework.permissions import IsAuthenticated
 from golden import models
 from golden.models import Entry, EntryImage, Author, Comment, Like, Follow, Node
 from .forms import CustomUserForm, CommentForm, ProfileForm, EntryList
-from golden.serializers import CommentSerializer, EntryInboxSerializer, LikeInboxSerializer, CommentsInfoSerializer, FollowRequestInboxSerializer
+from golden.serializers import CommentSerializer, EntryInboxSerializer, LikeInboxSerializer, CommentsInfoSerializer, FollowRequestInboxSerializer, NodeSerializer
 from golden.utils import get_or_create_foreign_author, post_to_remote_inbox, build_accept_activity
 
 # Import login authentication stuff
@@ -73,7 +73,7 @@ def stream_view(request):
         Q(visibility='PUBLIC') |  # Public entries: everyone can see
         Q(visibility='UNLISTED', author__id__in=followed_author_fqids) |  # Unlisted: only followers
         Q(visibility='FRIENDS', author__id__in=friends_fqids)  # Friends-only: only friends
-    ).order_by('-is_updated', '-published')  # Most recent first
+    ).order_by('-is_updated', '-is_posted')  # Most recent first
 
     # Prepare context for the template
     context = {
@@ -203,6 +203,82 @@ def profile_view(request):
         friend_ids = set(f.id for f in friends_qs)  # set of FQIDs
         return friends_qs, friend_ids
 
+    def sync_github_activity(author):
+        """
+        Fetch public GitHub events for the author and create public Entries automatically.
+        """
+        if not author.github:
+            return  # Skip if no GitHub URL
+
+        # Extract username from full URL
+        username = author.github.rstrip('/').split('/')[-1]
+
+        api_url = f"https://api.github.com/users/{username}/events/public"
+        try:
+            response = requests.get(api_url, timeout=5)
+            if response.status_code != 200:
+                print(f"Failed to fetch GitHub events: {response.status_code}")
+                return
+            events = response.json()
+        except Exception as e:
+            print(f"Error fetching GitHub events: {e}")
+            return
+
+        for event in events:
+            event_id = event.get("id")
+            event_type = event.get("type")
+            repo_name = event.get("repo", {}).get("name", "unknown repo")
+            repo_url = f"https://github.com/{repo_name}"
+            created_at = event.get("created_at")
+
+            # Unique FQID for GitHub entry
+            entry_id = f"{author.host}/authors/{author.id}/entries/github-{event_id}"
+
+            # Avoid duplicates
+            if Entry.objects.filter(id=entry_id).exists():
+                continue
+
+            content_text = ""
+            if event_type == "PushEvent":
+                commits = event.get("payload", {}).get("commits", [])
+                messages = []
+                for c in commits:
+                    sha = c.get("sha")[:7]
+                    msg = c.get("message", "")
+                    url = c.get("url", "").replace("api.", "").replace("repos/", "").replace("commits", "commit")
+                    messages.append(f"[{sha}]({url}): {msg}")
+                content_text = f"**Pushed to [{repo_name}]({repo_url})**:\n\n" + "\n".join(messages)
+
+            elif event_type == "IssuesEvent":
+                issue = event.get("payload", {}).get("issue", {})
+                issue_url = issue.get("html_url", "")
+                content_text = f"**Issue in [{repo_name}]({repo_url})**: [{issue.get('title', '')}]({issue_url})\n\n{issue.get('body', '')}"
+
+            elif event_type == "PullRequestEvent":
+                pr = event.get("payload", {}).get("pull_request", {})
+                pr_url = pr.get("html_url", "")
+                content_text = f"**Pull Request in [{repo_name}]({repo_url})**: [{pr.get('title', '')}]({pr_url})\n\n{pr.get('body', '')}"
+
+            else:
+                content_text = f"**{event_type}** in [{repo_name}]({repo_url})"
+
+            # Convert to HTML
+            html_content = markdown.markdown(content_text)
+
+            # Create Entry
+            Entry.objects.create(
+                id=entry_id,
+                author=author,
+                title=f"{event_type} on {repo_name} (GitHub)",
+                content=html_content,
+                contentType="text/html",
+                visibility="PUBLIC",
+                source=author.github,
+                origin=author.github,
+                published=created_at,
+                is_posted=timezone.now()
+            )
+
     def get_search_authors(author: Author, query: str):
         """
         Inner function to perform a search queryset specifically for profile.html
@@ -239,6 +315,9 @@ def profile_view(request):
 
     author = Author.from_user(request.user)
     form = ProfileForm(instance=author)
+
+    if request.method == "GET":
+        sync_github_activity(author)
 
     if request.method == "POST":
         if "follow_id" in request.POST and "action" in request.POST:

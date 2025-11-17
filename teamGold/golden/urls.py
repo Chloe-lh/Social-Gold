@@ -26,7 +26,7 @@ urlpatterns = [
     path('profile/followers/', views.followers, name='followers'),
     path('profile/following/', views.following, name='following'),
     path("profile/follow_requests/", views.follow_requests, name="follow_requests"),
-    path('entry/<uuid:entry_uuid>/', views.entry_detail, name='entry_detail'),
+    path('entry/<str:entry_uuid>/', views.entry_detail, name='entry_detail'),
     path('stream/', views.stream_view, name="stream-link"),
     # TODO: change the id to be the id, whatever we decide to use later
     # TODO: entries can have comment page number queries (Or we just allow infinite scroll for comments..?)

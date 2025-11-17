@@ -26,44 +26,10 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
 # SERIALIZERS IMPORTS
-from .serializers import (
+from golden.serializers import (
     AuthorSerializer, EntrySerializer, NodeSerializer,
     FollowSerializer, LikeSerializer, CommentSerializer, EntryImageSerializer
 )
-
-'''
-Django REST Framework view that returns authors profiles data
-as JSON data for other API nodes 
-    - when a remote node wants to display an authors profile from our local node
-    - remote node sends a GET request to our API endpoint (http:://golden.node.com/api/profile/<id>)
-    - our node handles the request and serializers authors data to JSON
-    - Entry related class based API views also have POST, PUT, DELETE API  
-    - REST endpoints 
-
-inbox info (comment/like/follow):
-    If the entry’s author is local to your node:
-    - send the Object (comment/like/follow) to the inboxes of all followers of that author.
-    - remote authors will also be able to see it
-If the entry’s author is remote:
-    - push the Object to the parent node’s inbox (POST /api/authors/{AUTHOR_FQID}/inbox).
-    - That remote node will then handle
-'''
-
-class ProfileAPIView(APIView):
-    """
-    This API view handles GET requests to retrieve author profile data by ID.
-    - GET /api/profile/<id>/ will then retrieve author profile data
-    """
-    authentication_classes = [BasicAuthentication]
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, id):
-        try:
-            obj = Author.objects.get(pk=id) 
-        except Author.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        return Response(AuthorSerializer(obj).data, status=status.HTTP_200_OK)
-
 
 class EntryAPIView(APIView):
     """
@@ -153,60 +119,3 @@ class EntryImageAPIView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
         obj.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
-
-# @swagger_auto_schema(
-#     method='GET',
-#     operation_summary='Retrieve Node information',
-#     operation_description='Returns node metadata by id',
-#     responses={
-#         200: openapi.Response(description="OK"),
-#         404: openapi.Response(description="Not found"),
-#         400: openapi.Response(description="Bad request"),
-#     }
-# )
-class NodeAPIView(APIView):
-    """
-    This API view handles GET requests to retrieve node data by ID.
-    - GET /api/node/<id>/ will then retrieve node data
-    """
-    authentication_classes = [BasicAuthentication]
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, id):
-        node = get_object_or_404(Node, id)
-        return Response(NodeSerializer(node).data, status=status.HTTP_200_OK)
-
-class FollowAPIView(APIView):
-    """
-    This API view handles GET requests to retrieve follow data by ID.
-    - GET /api/follow/<id>/ will then retrieve follow data
-    """
-    authentication_classes = [BasicAuthentication]
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, id):
-        follow = get_object_or_404(Follow, id)
-        return Response(NodeSerializer(follow).data, status=status.HTTP_200_OK)
-
-class AuthorFriendsView(APIView):
-    """
-    This API view handles GET requests to retrieve an author's friends (mutual followers).
-    - GET /api/Author/<author_id>/friends/ will then retrieve a list of friends
-    """
-    def get(self, request, author_id):
-        author = get_object_or_404(Author, id=author_id)
-
-        # Get all accepted follow relationships
-        outgoing = Follow.objects.filter(actor=author, state="ACCEPTED").values_list("object", flat=True)
-        incoming = Follow.objects.filter(object=author.id, state="ACCEPTED").values_list("actor__id", flat=True)
-
-        # Mutual follows = both in outgoing and incoming
-        mutual_ids = set(outgoing).intersection(incoming)
-        mutuals = Author.objects.filter(id__in=mutual_ids)
-
-        serializer = AuthorSerializer(mutuals, many=True)
-        return Response(serializer.data)
-    
-class InboxView(APIView):
-    def get(self, request, author_id): pass
-    def post(self, request): pass

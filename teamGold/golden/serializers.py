@@ -12,9 +12,10 @@ in a HTTP request and vice versa
 class NodeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Node
-        fields = '__all__' 
+        fields = '__all__'
 
 class AuthorSerializer(serializers.ModelSerializer):
+    type = serializers.CharField(default="author")
     class Meta:
         model = Author
         fields = '__all__'
@@ -29,29 +30,32 @@ class LikeSerializer(serializers.ModelSerializer):
         model = Like
         fields = '__all__'
 
+'''
+added ability to have a nested Author object
+'''
 class CommentSerializer(serializers.ModelSerializer):
+    # Return a nested author object on reads, but treat author as read-only
+    # for serializer input. The view will resolve/create the Author instance
+    # and pass it to `serializer.save(author=author)` during POST handling.
+    author = AuthorSerializer(read_only=True)
+    # Allow `id` and `published` to be omitted from incoming payloads
+    id = serializers.CharField(required=False)
+    published = serializers.DateTimeField(required=False)
     class Meta:
         model = Comment
-        fields = '__all__'
-
-""" 
-This comment section shows an alternative, more detailed CommentSerializer
-that includes custom representations. 
-
-class CommentSerializer(serializers.ModelSerializer):
-    author_username = serializers.CharField(source='author.username', read_only=True)
-
-    class Meta:
-        model = Comment
+        # Explicit fields matching Comment model
         fields = [
-            'id',                 
-            'author_username',   
-            'entry',              
-            'content',          
+            'id',
+            'type',
+            'author',
+            'entry',
+            'content',
             'contentType',
-            'published'
+            'published',
+            'reply_to',
         ]
-"""    
+
+
 
 class FollowSerializer(serializers.ModelSerializer):
     class Meta:

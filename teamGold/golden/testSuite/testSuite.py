@@ -26,6 +26,8 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from base64 import b64encode
 from urllib.parse import quote
 import uuid, tempfile, io, shutil
+from unittest.mock import patch, Mock
+import logging
 
 # LOCAL IMPORTS
 from golden.models import Author, Entry, EntryImage, Node, Like, Comment, Follow

@@ -153,14 +153,14 @@
     <section class="tab-panel" data-tab-panel="search">
 
       <!-- Search Bar Feature -->
-      <form method="GET" action="" style="margin-bottom: 15px;">
-        <input type="text" name="q" placeholder="Search users..." ="{{ query }}" class="search-bar" style="padding: 8px 12px; width: 80%;">
-        <button type="submit" style="padding: 8px 12px;"> Search for User </button>
+      <form method="GET" action="">
+        <input type="text" name="q" placeholder="Search users..." ="{{ query }}" class="search-bar">
+        <button type="submit"> Search for User </button>
       </form>
 
       <!-- Author List Feature -->
       {% if authors %}
-      <ul style="list-style: none; padding: 0; margin: 0;">
+      <ul>
       {% for a in authors %}
         <li style="padding: 10px; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center;">
           <span>{{ a.username }}</span>
@@ -181,7 +181,7 @@
             </button>
 
           {% else %}
-            <form method="POST" style="display:inline;">
+            <form method="POST">
               {% csrf_token %}
               <input type="hidden" name="action" value="follow">
               <input type="hidden" name="author_id" value="{{ a.id }}">

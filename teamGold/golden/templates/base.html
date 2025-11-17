@@ -28,14 +28,13 @@ to inherit these properties
             <h1 id="navbar-header">GOLDEN</h1>
             {% if request.user.is_authenticated and request.user.profileImage %}
                 <img class="profile-pic" src="{{ request.user.profileImage.url }}" alt="Profile">
+                <p>{{ request.user.username }}</p>
+                <p>{{ request.user.email }}</p>
+                <p>{{ request.user.github }}</p>
             {% else %}
                 <img class="profile-pic" src="{% static 'golden/media/profile_pics/default_profile.webp' %}" alt="Default Profile">
+                <p>Guest</p>
             {% endif %}
-
-            <!-- This needs to be able to match the users -->
-            <p>name</p>
-            <p>email</p>
-            <p>github</p>
         </div>
 
         <ul class="menu">
@@ -50,7 +49,11 @@ to inherit these properties
     <!-- Primary Content -->
     <div class="main">
         <nav class="top-nav">
-            <h2 id="one-breadcrumb">Hello, user</h2>
+            {% if request.user.is_authenticated %}
+                <h2 id="one-breadcrumb">Hello, {{ request.user.username }}</h2>
+            {% else %}
+                <h2 id="one-breadcrumb">Hello, Guest</h2>
+            {% endif %}
             <ul class="menu">
                 <li class="item">
                     <a href="{% url 'admin' %}" class="icon-btn" aria-label="admin"> 

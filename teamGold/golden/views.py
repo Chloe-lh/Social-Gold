@@ -211,7 +211,7 @@ def profile_view(request):
             })
 
         # Remote authors
-        nodes = Node.objects.filter(is_active=True).exclude(id=author.host)  # exclude local node
+        nodes = Node.objects.filter(is_active=True)#.exclude(id=author.host)  # exclude local node
 
         for node in nodes:
             remote_authors = get_remote_authors(node)

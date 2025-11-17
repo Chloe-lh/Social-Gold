@@ -114,37 +114,6 @@ class Author(AbstractBaseUser, PermissionsMixin):
             # Set host to SITE_URL automatically
             self.host = settings.SITE_URL.rstrip('/')  # remove trailing slash just in case
         super().save(*args, **kwargs)
-
-    def to_activitypub_dict(self):
-        """Convert entry to ActivityPub format for federation."""
-        return {
-            "type": "entry",
-            "id": self.id,
-            "title": self.title or "",
-            "description": self.description or "",
-            "contentType": self.contentType,
-            "content": self.content,
-            "published": self.published.isoformat() if self.published else "",
-            "visibility": self.visibility,
-            "source": self.source or self.id,
-            "origin": self.origin or self.id,
-            "author": {
-                "type": "author",
-                "id": self.author.id,
-                "host": self.author.host,
-                "displayName": self.author.username,
-                "profileImage": (
-                    self.author.profileImage.url 
-                    if self.author.profileImage 
-                    else ""
-                ),
-            },
-        }
-
-class EntryManager(models.Manager):
-    def visible(self):
-        """Return only non-deleted entries."""
-        return self.exclude(visibility="DELETED")
     
 class Entry(models.Model):
     """
@@ -189,7 +158,6 @@ class Entry(models.Model):
         related_name='liked_entries',
         blank=True
     )
-    objects = EntryManager()
     # comments = models.ManyToManyField(
     #     'Author',
     #     related_name='comments',
@@ -212,8 +180,6 @@ class Entry(models.Model):
             return str(self.id).rstrip('/').split('/')[-1]
         except Exception:
             return ""
-
-    
 
 class EntryImage(models.Model):
     """

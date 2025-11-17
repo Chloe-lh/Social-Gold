@@ -119,7 +119,6 @@ def sync_remote_entry(item, node):
     if not entry_id:
         return None
 
-    # Author handling
     author_data = item.get("author", {})
     author_id = author_data.get("id")
 

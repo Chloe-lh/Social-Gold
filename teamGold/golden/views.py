@@ -849,9 +849,6 @@ def handle_update(data, author):
     if "visibility" in object_id:
         entry.visibility = object_id["visibility"]
         updated = True
-        # So that admin can still see what was deleted
-        if entry.visibility == "DELETED":
-            entry.content = ""
 
     if updated:
         entry.is_updated = timezone.now()

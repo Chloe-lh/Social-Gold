@@ -53,7 +53,7 @@ urlpatterns = [
     # list comments using entry's global id
     path("api/entries/<path:entry_fqid>/comments/", EntryCommentAPIView.as_view(), name="list-comments-full-fqid"),
     # Backwards-compatible entry-centric route (tests and some clients expect /api/Entry/ID/comments/)
-    path("api/Entry/<path:entry_id>/comments/", EntryCommentAPIView.as_view(), name="entry-comments"),
+    path("api/entry/<path:entry_id>/comments/", EntryCommentAPIView.as_view(), name="entry-comments"),
     # get a single comment by id
     path("api/authors/<str:author_id>/entries/<str:entry_id>/comments/<path:comment_fqid>/", SingleCommentAPIView.as_view()),
     # # --------------------------- COMMENTED ----------------------------

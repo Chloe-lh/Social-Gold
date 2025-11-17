@@ -42,9 +42,6 @@ import json
 # For Website Design
 import random
 
-# API
-from golden.apiViews import distribute_entry_activity
-
 # TODO: Do we still need this?
 @login_required
 def stream_view(request):
@@ -69,13 +66,12 @@ def stream_view(request):
             continue
 
     # Query entries according to visibility rules
+
     entries = Entry.objects.filter(
-        (
         Q(author=user_author) |
         Q(visibility='PUBLIC') |  # Public entries: everyone can see
         Q(visibility='UNLISTED', author__id__in=followed_author_fqids) |  # Unlisted: only followers
-        Q(visibility='FRIENDS', author__id__in=friends_fqids) # Friends-only: only friends
-        ) & ~Q(visibility="DELETED")
+        Q(visibility='FRIENDS', author__id__in=friends_fqids)  # Friends-only: only friends
     ).order_by('-is_updated', '-published')  # Most recent first
 
     # Prepare context for the template
@@ -273,12 +269,7 @@ def profile_view(request):
         a.is_following = author.following.filter(id=a.id).exists()
         a.is_friend = str(a.id) in friend_ids 
 
-    entries = (
-        Entry.objects
-        .filter(author=author)
-        .exclude(visibility="DELETED")
-        .order_by("-published")
-    )
+    entries = Entry.objects.filter(author=author).order_by("-published")
     followers = author.followers_set.all()
     following = author.following.all()
     follow_requests = Follow.objects.filter(object=author.id, state="REQUESTED")
@@ -555,10 +546,8 @@ def entry_detail(request, entry_uuid):
     except Entry.DoesNotExist:
         entry = get_object_or_404(Entry, id__endswith=str(entry_uuid))
     
-    if entry.visibility == "DELETED":
-            return HttpResponseForbidden("This entry is deleted.")
     viewer = Author.from_user(request.user)
-    # Enforce visibility (deny if FRIENDS-only and viewer isn't allowed)
+        # Enforce visibility (deny if FRIENDS-only and viewer isn't allowed)
     # VISIBILITY CHECK (NEW VERSION)
     if entry.visibility == "FRIENDS":
         if viewer != entry.author and viewer not in entry.author.friends:
@@ -607,45 +596,40 @@ def inbox(request, author_id):
 def handle_update(data, author):
     """
     Processes the remote update activity for an Entry.
-    Handles user stories #22 and #35.
+    Handels user stories #22 and #35 
     """
+    object_id = data.get("object", {})
 
-    update_type = data.get("type")
-    if not update_type or str(update_type).lower() != "update":
-        return Response({"error": "Invalid or missing type for update"}, status=400)
-
-    # Extract and validate the object payload
-    obj = data.get("object")
-    if not isinstance(obj, dict):
+    if not isinstance(object_id, dict):
         return Response({"error": "Invalid update object"}, status=400)
 
-    entry_id = obj.get("id")
+    entry_id = object_id.get("id")
     if not entry_id:
         return Response({"error": "Missing object.id in update"}, status=400)
 
-    # Find existing Entry (Update MUST NOT create new entries)
+    # Finds an existing Entry to prevent the creation of new entries since this is editing (PUT).
     try:
         entry = Entry.objects.get(id=entry_id)
     except Entry.DoesNotExist:
         return Response({"error": "Entry not found"}, status=404)
 
-    # Update only the fields remote nodes are allowed to overwrite
+    # Update fields that remote nodes are allowed to overwrite
     updated = False
 
-    if "title" in obj:
-        entry.title = obj["title"]
+    if "title" in object_id:
+        entry.title = object_id["title"]
         updated = True
 
-    if "content" in obj:
-        entry.content = obj["content"]
+    if "content" in object_id:
+        entry.content = object_id["content"]
         updated = True
 
-    if "contentType" in obj:
-        entry.contentType = obj["contentType"]
+    if "contentType" in object_id:
+        entry.contentType = object_id["contentType"]
         updated = True
 
-    if "visibility" in obj:
-        entry.visibility = obj["visibility"]
+    if "visibility" in object_id:
+        entry.visibility = object_id["visibility"]
         updated = True
         # So that admin can still see what was deleted
         if entry.visibility == "DELETED":
@@ -657,7 +641,7 @@ def handle_update(data, author):
 
     return Response({"status": "Entry updated"}, status=200)
 
-# TODO 
+
 def handle_create(data, author):
     serializer = EntryInboxSerializer(data=data, context={'author': author})
     if serializer.is_valid():
@@ -665,7 +649,6 @@ def handle_create(data, author):
         return Response(serializer.data, status=201)
     return Response(serializer.errors, status=400)
 
-# TODO 
 def handle_like(data,author):
     serializer = LikeInboxSerializer(data=data, context={'author': author})
     if serializer.is_valid():
@@ -711,7 +694,7 @@ def new_post(request):
     context = {}
     form = EntryList()
     editing_entry = None # because by default, users are not in editing mode 
-    entries = Entry.objects.exclude(visibility="DELETED").order_by('-is_posted')
+    entries = Entry.objects.all().order_by('-is_posted')
     context['entries'] = entries
     context['entry_heading'] = entry_heading
 
@@ -735,9 +718,6 @@ def new_post(request):
         for idx, image in enumerate(images):
             EntryImage.objects.create(
                 entry=entry, image=image, order=idx)
-
-        # ! SENDS INFORMATION TO NODE VIA APIVIEW FUNCTION HANDELLER
-        distribute_entry_activity(entry, action="create")
                     
         return redirect('new_post')
     
@@ -746,16 +726,11 @@ def new_post(request):
         primary_key = request.POST.get('entry_delete')
         entry = Entry.objects.get(id=primary_key)
 
+        # also for testing purposes 
         if entry.author.id != request.current_author.id:
             return HttpResponseForbidden("This isn't yours")
 
-        # Instead of entry.delete(), do a soft delete
-        entry.visibility = "DELETED"
-        entry.save()
-
-        # ! SENDS INFORMATION TO NODE VIA APIVIEW FUNCTION HANDELLER
-        distribute_entry_activity(entry, action="delete")
-
+        entry.delete()
         return redirect('new_post')
     
     # FEATURE UPDATE AN EDITED ENTRY
@@ -798,18 +773,11 @@ def new_post(request):
                         image=f,
                         order=current_max + idx
                     )
-        # ! SENDS INFORMATION TO NODE VIA APIVIEW FUNCTION HANDELLER
-        distribute_entry_activity(editing_entry, action="update")
 
         context = {}
         context['form'] = EntryList()  
         context['editing_entry'] = None 
-        context['entries'] = (
-            Entry.objects
-            .select_related("author")
-            .exclude(visibility="DELETED") # SHOW STREAM EXCEPT DELETE
-            .order_by('-is_posted')
-        )
+        context['entries'] = Entry.objects.select_related("author").all()
         context['comment_form'] = CommentForm()
         
         return render(request, "new_post.html", context | {'entries': entries})
@@ -822,12 +790,7 @@ def new_post(request):
         form = EntryList(instance=editing_entry)
         context["editing_entry"] = editing_entry
         context["form"] = form
-        context["entries"] = (
-            Entry.objects
-            .select_related("author")
-            .exclude(visibility="DELETED")
-            .order_by('-is_posted')
-        )
+        context["entries"] = Entry.objects.select_related("author").all()
         return render(request, "new_post.html", context | {'entries': entries})
 
     context['form'] = form 

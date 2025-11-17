@@ -1,15 +1,10 @@
 from django.urls import path
 from django.contrib.auth import views as auth_views
-from . import views
+from . import apiViews, views
 
-# API view imports (use the modules under golden.api)
-from .api.profileAPIView import ProfileAPIView
-from .api.nodeAPIView import NodeAPIView
-from .api.friendsAPIView import AuthorFriendsView, FollowAPIView
-from .api.entryAPIView import EntryAPIView, EntryImageAPIView
+from .apiViews import EntryImageAPIView, AuthorFriendsView
 from .api.commentAPIView import EntryCommentAPIView, SingleCommentAPIView
 from .api.likeAPIView import LikeAPIView
-from .api.inbox import InboxView
 
 '''
 These URL Patterns registers all views 
@@ -41,18 +36,16 @@ urlpatterns = [
     # API end points
     # API views will be visible in /swagger/
     # Switched from <str:id> to <path:id> for file and URL flexibility
-    path("api/Profile/<path:id>/", ProfileAPIView.as_view(), name="get-profile"),
-    path("api/Node/<path:id>/", NodeAPIView.as_view(), name="get-node"),
-    path("api/Follow/<path:id>/", FollowAPIView.as_view(), name="get-follow"),
+    path("api/Profile/<path:id>/", apiViews.ProfileAPIView.as_view(), name="get-profile"),
+    path("api/Node/<path:id>/", apiViews.NodeAPIView.as_view(), name="get-node"),
+    path("api/Follow/<path:id>/", apiViews.FollowAPIView.as_view(), name="get-follow"),
     path("api/Author/<path:author_id>/friends/", AuthorFriendsView.as_view()),
     path("api/Like/<path:id>/", LikeAPIView.as_view(), name="get-like"),
-    # Backwards-compatible Entry comments alias must come before the generic Entry route
-    path("api/Entry/<path:entry_id>/comments/", EntryCommentAPIView.as_view(), name="entry-comments-alias"),
-    path("api/Entry/<path:id>/", EntryAPIView.as_view(), name="get-entry"),
+    path("api/Entry/<path:id>/", apiViews.EntryAPIView.as_view(), name="get-entry"),
 
     # --------------------------- COMMENTS ---------------------------
     # Accept full-FQID inbox POSTs (remote POST)
-    path("api/authors/<path:author_serial>/inbox/", InboxView.as_view(), name="inbox-accept-fullfqid"),
+    path("api/authors/<path:author_serial>/inbox/", apiViews.InboxView.as_view(), name="inbox-accept-fullfqid"),
     # Author-nested alias for getting comments on an entry from a certain author
     # supports POST and GET
     path("api/authors/<path:author_serial>/entries/<path:entry_serial>/comments/", EntryCommentAPIView.as_view(), name="author-entry-comments"),
@@ -61,8 +54,6 @@ urlpatterns = [
     path("api/entries/<path:entry_fqid>/comments/", EntryCommentAPIView.as_view(), name="list-comments-full-fqid"),
     # Backwards-compatible entry-centric route (tests and some clients expect /api/Entry/ID/comments/)
     path("api/entry/<path:entry_id>/comments/", EntryCommentAPIView.as_view(), name="entry-comments"),
-    # Backwards-compatible alias with capital 'Entry' used by some clients/tests
-    path("api/Entry/<path:entry_id>/comments/", EntryCommentAPIView.as_view(), name="entry-comments-alias"),
     # get a single comment by id
     path("api/authors/<str:author_id>/entries/<str:entry_id>/comments/<path:comment_fqid>/", SingleCommentAPIView.as_view()),
     # # --------------------------- COMMENTED ----------------------------
@@ -71,7 +62,7 @@ urlpatterns = [
     # path("api/authors/<path:author_id>/commented/", apiViews.AuthorCommentedAPIView.as_view(), name="author-commented"),
 
     # ! Thee two serve the same purpose, but the first is for getting images, the second is for uploading images to an entry
-    path("api/EntryImage/<int:id>/", EntryImageAPIView.as_view(), name="get-entry-image"),
+    path("api/EntryImage/<int:id>/", apiViews.EntryImageAPIView.as_view(), name="get-entry-image"),
     path("api/Entry/<path:entry_id>/images/", EntryImageAPIView.as_view(), name="entryimage-upload"),
 
     path("api/author/<uuid:author_id>/inbox/", views.inbox, name="inbox"),

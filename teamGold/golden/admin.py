@@ -5,6 +5,7 @@ from golden.models import Author, Entry, Comment, Node, EntryImage
 models_class = [Entry, Comment, Node, EntryImage]
 
 for model in models_class:
+   
     admin.site.register(model)
     
 

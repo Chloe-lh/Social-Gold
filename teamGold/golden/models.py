@@ -178,6 +178,8 @@ class Entry(models.Model):
         except Exception:
             return ""
 
+    
+
 class EntryImage(models.Model):
     """
     Multiple images can be associated with a single Entry.

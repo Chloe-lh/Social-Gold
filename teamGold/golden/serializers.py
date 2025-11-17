@@ -1,10 +1,5 @@
-from urllib.parse import urlparse
 from rest_framework import generics
 from rest_framework import serializers
-from django.utils import timezone
-import uuid
-
-from .services import generate_comment_fqid
 from .models import Node, Author, Entry, Like, Comment, Follow, EntryImage
 
 '''
@@ -24,11 +19,6 @@ class AuthorSerializer(serializers.ModelSerializer):
         model = Author
         fields = '__all__'
 
-class MinimalAuthorSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Author
-        fields = ('id',)
-
 class EntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = Entry
@@ -40,43 +30,28 @@ class LikeSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class CommentSerializer(serializers.ModelSerializer):
-    # Return the full nested author on reads; the view should supply an Author
-    # instance when creating via `serializer.save(author=author, entry=entry)`.
-    author = AuthorSerializer(read_only=True)
-
-    id = serializers.CharField(required=False)
-    published = serializers.DateTimeField(required=False)
-
     class Meta:
         model = Comment
         fields = '__all__'
 
-    def create(self, validated_data):
-        # DRF's `serializer.save(author=..., entry=...)` will merge those kwargs
-        # into `validated_data`, so pull them out here.
-        author = validated_data.pop('author', None)
-        entry = validated_data.pop('entry', None)
+""" 
+This comment section shows an alternative, more detailed CommentSerializer
+that includes custom representations. 
 
-        if author is None or entry is None:
-            raise serializers.ValidationError("Both 'author' and 'entry' must be provided when creating a Comment")
+class CommentSerializer(serializers.ModelSerializer):
+    author_username = serializers.CharField(source='author.username', read_only=True)
 
-        # ensure id/published
-        if not validated_data.get('id'):
-            validated_data['id'] = generate_comment_fqid(author, entry)
-        if not validated_data.get('published'):
-            validated_data['published'] = timezone.now()
-
-        comment = Comment.objects.create(
-            id=validated_data['id'],
-            author=author,
-            entry=entry,
-            content=validated_data.get('content', ''),
-            contentType=validated_data.get('contentType', Comment._meta.get_field('contentType').get_default()),
-            published=validated_data.get('published'),
-            reply_to=validated_data.get('reply_to', None)
-        )
-        return comment
-
+    class Meta:
+        model = Comment
+        fields = [
+            'id',                 
+            'author_username',   
+            'entry',              
+            'content',          
+            'contentType',
+            'published'
+        ]
+"""    
 
 class FollowSerializer(serializers.ModelSerializer):
     class Meta:

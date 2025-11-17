@@ -40,15 +40,6 @@ class LikeSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class CommentSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Comment
-        fields = '__all__'
-
-""" 
-This comment section shows an alternative, more detailed CommentSerializer
-that includes custom representations. 
-
-class CommentSerializer(serializers.ModelSerializer):
     # Return the full nested author on reads; the view should supply an Author
     # instance when creating via `serializer.save(author=author, entry=entry)`.
     author = AuthorSerializer(read_only=True)

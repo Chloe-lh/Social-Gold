@@ -18,7 +18,7 @@ from golden import models
 from golden.models import Entry, EntryImage, Author, Comment, Like, Follow, Node
 from .forms import CustomUserForm, CommentForm, ProfileForm, EntryList
 from golden.serializers import CommentSerializer, EntryInboxSerializer, LikeInboxSerializer, CommentsInfoSerializer, FollowRequestInboxSerializer, NodeSerializer
-from golden.utils import get_or_create_foreign_author, post_to_remote_inbox, build_accept_activity
+from golden.utils import get_or_create_foreign_author, post_to_remote_inbox, build_accept_activity, fetch_remote_entries, sync_remote_entry, send_new_entry,  send_update_activity
 
 # Import login authentication stuff
 from django.contrib.auth.decorators import login_required
@@ -46,50 +46,91 @@ from urllib.parse import urlparse
 import random
 import requests
 
-# TODO: Do we still need this?
 @login_required
 def stream_view(request):
-    # Get the Author object for the logged-in user
+    # current user as Author
     user_author = request.user
 
     # only a local node uses stream_view
     remote_node = False
-
-    # Get all accepted follows (authors this user follows)
     follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
     followed_author_fqids = [f.object for f in follows]
 
-    # Determine authors who are "friends" (mutual follows)
     friends_fqids = []
     for f in follows:
         try:
-            # Check if the followed author also follows the user
-            reciprocal = Follow.objects.get(actor__id=f.object, object=user_author.id, state='ACCEPTED')
+            reciprocal = Follow.objects.get(
+                actor__id=f.object,
+                object=user_author.id,
+                state='ACCEPTED'
+            )
             friends_fqids.append(f.object)
         except Follow.DoesNotExist:
             continue
 
-    # Query entries according to visibility rules
+    remote_node = False
+    remote_entries = []
 
-    entries = Entry.objects.filter(
+    remote_nodes = Node.objects.filter(is_active=True)
+    for node in remote_nodes:
+
+        raw_items = fetch_remote_entries(node)
+
+        for item in raw_items:
+            author_data = item.get("author", {})
+            remote_author_id = author_data.get("id")
+
+            if not remote_author_id:
+                continue
+
+            # only fetch entries from authors the user follows
+            is_following = Follow.objects.filter(actor=user_author, object=remote_author_id, state="ACCEPTED").exists()
+
+            if not is_following:
+                continue
+            entry = sync_remote_entry(item, node)
+            if entry:
+                remote_entries.append(entry)
+
+    local_entries = Entry.objects.filter(
         (Q(author=user_author) & ~Q(visibility="DELETED")) |
-        Q(visibility='PUBLIC') |  # Public entries: everyone can see
-        Q(visibility='UNLISTED', author__id__in=followed_author_fqids) |  # Unlisted: only followers
-        Q(visibility='FRIENDS', author__id__in=friends_fqids)  # Friends-only: only friends
-    ).order_by('-is_updated', '-is_posted')  # Most recent first
+        Q(visibility='PUBLIC') |
+        Q(visibility='UNLISTED', author__id__in=followed_author_fqids) |
+        Q(visibility='FRIENDS', author__id__in=friends_fqids)
+    )
+    visible_remote = []
 
-    # Prepare context for the template
+    for e in remote_entries:
+
+        # user is already following this author
+        if e.visibility == "PUBLIC":
+            visible_remote.append(e)
+            continue
+
+        # allowed for followers
+        if e.visibility == "UNLISTED":
+            visible_remote.append(e)
+            continue
+
+        # only if mutual acceptance
+        is_mutual = (
+            Follow.objects.filter(actor=user_author, object=e.author.id, state="ACCEPTED").exists() and
+            Follow.objects.filter(actor=e.author, object=user_author.id, state="ACCEPTED").exists()
+        )
+        if e.visibility == "FRIENDS" and is_mutual:
+            visible_remote.append(e)
+
+    entries = list(local_entries) + visible_remote
+    entries.sort(key=lambda x: x.is_posted, reverse=True)
     context = {
         'entries': entries,
         'user_author': user_author,
         'followed_author_fqids': followed_author_fqids,
         'friends_fqids': friends_fqids,
-        'comment_form' : CommentForm(),
-        # 'entry_comments_json': json.dumps(entry_comments),
-        'remote_node':remote_node,
+        'comment_form': CommentForm(),
+        'remote_node': remote_node,
     }
 
-    # Render the stream page extending base.html
     return render(request, 'stream.html', context)
 
 @login_required
@@ -476,7 +517,7 @@ def profile_view(request):
             a["is_following"] = False
             a["is_friend"] = False 
 
-    entries = Entry.objects.filter(Q(author=author) & ~Q(visibility='DELETED')).order_by("-published")
+    entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("-published")
     followers = author.followers_set.all()
     following = author.following.all()
     follow_requests = Follow.objects.filter(object=author.id, state="REQUESTED")
@@ -514,7 +555,7 @@ def public_profile_view(request, author_id):
     author.description = markdown.markdown(author.description)
 
     # Get entries for this author
-    entries = Entry.objects.filter(author=author).order_by("-published")
+    entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("-published")
 
     context = {
         "author": author,
@@ -787,7 +828,7 @@ def entry_detail(request, entry_uuid):
         return redirect('stream')
     
     viewer = Author.from_user(request.user)
-        # Enforce visibility (deny if FRIENDS-only and viewer isn't allowed)
+    # Enforce visibility (deny if FRIENDS-only and viewer isn't allowed)
     # VISIBILITY CHECK (NEW VERSION)
     if entry.visibility == "FRIENDS":
         if viewer != entry.author and viewer not in entry.author.friends:
@@ -806,7 +847,6 @@ def entry_detail(request, entry_uuid):
         'entry_comments_json': json.dumps(entry_comments),
     }
     return render(request, 'entry_detail.html', context)
-
 
 @api_view(['POST'])
 def inbox(request, author_id):
@@ -871,9 +911,6 @@ def handle_update(data, author):
     if "visibility" in object_id:
         entry.visibility = object_id["visibility"]
         updated = True
-        # So that admin can still see what was deleted
-        if entry.visibility == "DELETED":
-            entry.content = ""
 
     if updated:
         entry.is_updated = timezone.now()
@@ -881,9 +918,9 @@ def handle_update(data, author):
 
     return Response({"status": "Entry updated"}, status=200)
 
-
 def handle_create(data, author):
-    serializer = EntryInboxSerializer(data=data, context={'author': author})
+    object_id = data.get("object", {})
+    serializer = EntryInboxSerializer(data=object_id, context={'author': author})
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data, status=201)
@@ -974,13 +1011,14 @@ def new_post(request):
     context = {}
     form = EntryList()
     editing_entry = None # because by default, users are not in editing mode 
-    entries = Entry.objects.filter(Q(author=request.current_author) & ~Q(visibility='DELETED')).order_by('-is_posted')
+    entries = Entry.objects.exclude(visibility="DELETED").order_by('-is_posted')
     context['entries'] = entries
     context['entry_heading'] = entry_heading
 
     # FEATURE POST AN ENTRY
     if request.method == "POST" and "entry_post" in request.POST:
-        entry_id = f"https://node1.com/api/entries/{uuid.uuid4()}"  #****** we need to change this to dynamically get the node num
+        host = settings.SITE_URL.rstrip("/")
+        entry_id = f"{host}/api/entries/{uuid.uuid4()}"
 
         # Markdown conversion 
         markdown_content = request.POST['content']
@@ -998,7 +1036,8 @@ def new_post(request):
         for idx, image in enumerate(images):
             EntryImage.objects.create(
                 entry=entry, image=image, order=idx)
-                    
+        
+        send_new_entry(entry)
         return redirect('new_post')
     
     # FEATURE DELETE AN ENTRY 
@@ -1041,6 +1080,9 @@ def new_post(request):
             editing_entry.visibility = visibility
             editing_entry.contentType = "text/html"
             editing_entry.save()
+            
+            send_update_activity(editing_entry)
+
 
             if remove_ids:
                 EntryImage.objects.filter(entry=editing_entry, id__in=remove_ids).delete()
@@ -1058,10 +1100,11 @@ def new_post(request):
         context = {}
         context['form'] = EntryList()  
         context['editing_entry'] = None 
-        context['entries'] = Entry.objects.select_related("author").filter(~Q(visibility='DELETED'))
+        context['entries'] = Entry.objects.exclude(visibility="DELETED").select_related("author")
         context['comment_form'] = CommentForm()
         
-        return render(request, "new_post.html", context | {'entries': entries})
+        return render(request, "new_post.html", context)
+        #return render(request, "new_post.html", context | {'entries': entries})
 
     # FEATURE EDIT BUTTON CLICKED 
     if request.method == "POST" and "entry_edit" in request.POST:

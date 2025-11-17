@@ -115,7 +115,7 @@ class Author(AbstractBaseUser, PermissionsMixin):
             # Set host to SITE_URL automatically
             self.host = settings.SITE_URL.rstrip('/')  # remove trailing slash just in case
         super().save(*args, **kwargs)
-
+    
 class Entry(models.Model):
     """
     This class is using a FULL URL (FQID) as the primary key instead of an integer.
@@ -181,8 +181,6 @@ class Entry(models.Model):
             return str(self.id).rstrip('/').split('/')[-1]
         except Exception:
             return ""
-
-    
 
 class EntryImage(models.Model):
     """

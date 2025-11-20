@@ -170,3 +170,10 @@ local nodes URL
 '''
 def is_remote_node(node):
     return node.id != settings.LOCAL_NODE_URL
+
+def is_local(author_id: str) -> bool:
+    """
+    Returns True if the given author_id string belongs to this node.
+    """
+    local_prefix = settings.SITE_URL.rstrip("/") + "/api/authors/"
+    return str(author_id).startswith(local_prefix)

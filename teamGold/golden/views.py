@@ -199,7 +199,7 @@ def remote_authors_list(request):
     authors = Author.objects.all()
     results = []
     for a in authors:
-        print(a)
+        #print(a)
         results.append({
             "id": a.id,
             "username": a.username,
@@ -209,7 +209,7 @@ def remote_authors_list(request):
             "profileImage": a.profileImage.url if a.profileImage else None,
             
         })
-    print(results)
+    #print(results)
     return Response({"type": "authors", "items": results}, status=200)
 
 @login_required
@@ -339,6 +339,7 @@ def profile_view(request):
         Inner function to perform a search queryset specifically for profile.html
         """
         results = []
+        process_inbox(author)
 
         following_ids = set(author.following.values_list("id", flat=True))
 
@@ -387,20 +388,36 @@ def profile_view(request):
         if "follow_id" in request.POST and "action" in request.POST:
             follow_id = request.POST.get("follow_id")
             action = request.POST.get("action")
-            follow_request = get_object_or_404(Follow, id=follow_id, object=author.id)
+
+            follow_request = get_object_or_404(Follow, id=follow_id, object=author.id,)
+            target_author=follow_request.actor_id
 
             if action == "approve":
                 follow_request.state = "ACCEPTED"
                 follow_request.save()
 
-                follower = follow_request.actor
-                follower.following.add(author)
-                follower.save()
+                # Only update the acceptor's following table
+                follow_request.actor.following.add(author)
+                #follower.save()
 
             elif action == "reject":
                 follow_request.state = "REJECTED"
                 follow_request.save()
 
+
+            #Send decision back to the original actor via inbox
+            decision_activity = {
+                "type": "process_decision",
+                "summary": f"{author.username} has {follow_request.state.lower()}ed your follow request",
+                "author": str(author.id),         
+                "object": str(target_author), 
+                "id": f"{author.id}/follow/{uuid.uuid4()}",
+                "state": follow_request.state,
+                "published": timezone.now().isoformat(),
+                "target_is_local": is_local(target_author),
+            }
+
+            distribute_activity(decision_activity, actor=author)
             return redirect("profile")
 
         if "remove_follower" in request.POST:
@@ -433,39 +450,42 @@ def profile_view(request):
 
             return redirect("profile")
 
-        if "follow_remote" in request.POST:
+        if request.POST.get("action") == "follow":
             # New POST key for following a remote author
-            print("remote follow request")
-            target_id = request.POST.get("follow_remote")
-            print(target_id)
-            target = get_object_or_404(Author, id=target_id)
+            target_id = request.POST.get("author_id")
+            target_author = get_object_or_404(Author, id=target_id)
 
-            #if target.is_local:
-                # Local follow: normal ManyToMany
-                #author.following.add(target)
-                #Follow.objects.get_or_create(actor=author, object=target)
-            if not target.is_local:
-                # Remote follow: send Follow activity to remote author's inbox
-                remote_author = ensure_remote_author({
-                    "id": target.id,
-                    "host": target.host,
-                    "username": target.username,
-                    "profileImage": target.profileImage,
-                    "github": target.github
-                })
+            # Build ActivityPub Follow activity
+            follow_activity = {
+                "type": "Follow",
+                "summary": f"{author.username} wants to follow {target_author.username}",
+                "author": str(author.id),         
+                "object": str(target_author.id), 
+                "id": f"{author.id}/follow/{uuid.uuid4()}",
+                "state": "REQUESTED",
+                "published": timezone.now().isoformat(),
+                "target_is_local": is_local(str(target_author.id)),
+            }
 
-                activity = {
-                    "type": "Follow",
-                    "actor": str(author.id),
-                    "object": {
-                        "id": target.id,
-                        "host": target.host,
-                        "username": target.username,
-                        "profileImage": target.profileImage
-                    }
+            # Send the activity to target author's inbox (local or remote)
+            distribute_activity(follow_activity, author)
+
+            follow, created = Follow.objects.get_or_create(
+            actor=author,
+            object=target_author.id,
+            defaults={
+                'id': f"{author.id}/follow/{uuid.uuid4()}",
+                'summary': f"{author.username} wants to follow {target_author.username}",
+                'published': timezone.now(),
+                'state': "REQUESTED",
                 }
+            )
 
-                push_remote_inbox(target.inbox_url, activity)
+            if not created:
+                # Update the follow request timestamp/state
+                follow.state = "REQUESTED"
+                follow.published = timezone.now()
+                follow.save()
 
             return redirect("profile")
 
@@ -635,7 +655,7 @@ def profile_view(request):
         "authors": authors,
         "query": query,
     }
-    print(authors)
+    #print(authors)
     return render(request, "profile.html", context)
 
 FOLLOW_STATE_CHOICES = ["REQUESTED", "ACCEPTED", "REJECTED"]
@@ -963,16 +983,29 @@ def list_inbox(request, author_id):
     serializer = InboxSerializer(inbox_items, many=True)
     return Response(serializer.data)
 
+@csrf_exempt
+def inbox_view(request, author_id):
+    if request.method == "POST":
+        data = json.loads(request.body)
+        author = Author.objects.get(id=author_id)
+        Inbox.objects.create(
+            id=f"{settings.SITE_URL}/api/inbox/{uuid.uuid4()}",
+            author=author,
+            data=data
+        )
+        return JsonResponse({"success": True})
+
+"""
 @api_view(['POST'])
 def inbox(request, author_id):
-    """
+
     Remote nodes call this endpoint.
     We:
     1. identify the inbox owner
     2. validate + normalize the activity
     3. store the activity in the inbox
     4. run local handlers (create/update/delete/comment/like/follow)
-    """
+
     print("IT GOT TO INBOX?!")
     try:
         host = request.build_absolute_uri('/')  # "https://node1/"
@@ -1006,10 +1039,10 @@ def inbox(request, author_id):
     return dispatch_table[activity_type](data, author)
     
 def handle_update(data, author):
-    """
+
     Processes the remote update activity for an Entry.
     Handels user stories #22 and #35 
-    """
+
     object_id = data.get("object", {})
 
     if not isinstance(object_id, dict):
@@ -1118,7 +1151,7 @@ def handle_follow(data, author):
 
     serializer = FollowSerializer(follow_request)
     return Response(serializer.data, status=201)
-
+"""
 @login_required
 @require_author 
 def new_post(request):

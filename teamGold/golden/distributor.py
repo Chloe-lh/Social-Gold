@@ -1,6 +1,8 @@
 import requests
 from django.utils import timezone
 from golden.models import Entry, EntryImage, Author, Comment, Like, Follow, Node, Inbox
+from golden.services import is_local
+from urllib.parse import urljoin
 
 
 def push_local_inbox(author, activity):
@@ -11,7 +13,6 @@ def push_local_inbox(author, activity):
 def push_remote_inbox(url, activity):
     """
     Push activity to a remote node's inbox URL.
-    You can enhance this with HTTP signature + auth later.
     """
     try:
         resp = requests.post(url, json=activity, timeout=5)
@@ -42,14 +43,20 @@ def previously_delivered(post):
     return Author.objects.filter(id__in=author_ids)
 
 
-def send_activity(author_list, activity):
-    """Send to multiple authors, local or remote."""
-    for author in author_list:
-        if author.local:  # local node
-            push_local_inbox(author, activity)
-        else:  # remote node
-            inbox_url = author.inbox_url  # store this field on Author
-            push_remote_inbox(inbox_url, activity)
+def send_activity(target_id, activity):
+    """
+    Send an activity to a single target (local or remote).
+    """
+    
+    target_author = Author.objects.filter(id=target_id).first()
+
+    if target_author:
+        # Local author: store in DB inbox
+        Inbox.objects.create(author=target_author, data=activity)
+    else:
+        # Remote author: build inbox URL from FQID
+        inbox_url = f"{target_id.rstrip('/')}/inbox/"
+        push_remote_inbox(inbox_url, activity)
 
 def distribute_activity(activity, actor):
     """
@@ -59,11 +66,9 @@ def distribute_activity(activity, actor):
     """
 
     type = activity.get("type", "").lower()
-    visibility = activity.get("object", {}).get("visibility", "PUBLIC").upper()
-    post_id = activity.get("object", {}).get("id")
-    post = Post.objects.filter(id=post_id).first() if post_id else None
 
     if type in ["create", "entry", "post"]:
+        visibility = activity.get("object", {}).get("visibility", "PUBLIC").upper()
         if visibility == "PUBLIC":
             # send to all followers + friends
             recipients = set(get_followers(actor)) | set(get_friends(actor))
@@ -124,19 +129,97 @@ def distribute_activity(activity, actor):
         send_activity(recipients, activity)
         return
 
-    if type == "follow":
+    if type == "follow" or type == "process_decision":
         # push to target's inbox
         target_id = activity.get("object")
-        target = Author.objects.filter(id=target_id).first()
-        if target:
-            send_activity([target], activity)
+        send_activity(target_id, activity)
         return
 
-    if type == "follow-back":
-        target_id = activity.get("object")
-        target = Author.objects.filter(id=target_id).first()
-        if target:
-            # push to both friend and actor
-            send_activity([target, actor], activity)
-        return
+def process_inbox(author):
+    """Process all unprocessed activities in this author's inbox."""
+    inbox_items = Inbox.objects.filter(author=author, processed=False)
 
+    for item in inbox_items:
+        activity = item.data
+        activity_type = activity.get("type", "").lower()
+
+        if activity_type == "follow":
+            # Extract actor and object
+            actor_id = activity.get("author")
+            actor_author = Author.objects.filter(id=actor_id).first()
+
+            # Create Follow request in DB if it doesn't exist
+            follow, created = Follow.objects.get_or_create(
+                actor=actor_author,
+                object=author,
+                defaults={
+                    "id": activity.get("id") or f"{actor_author.id}/follow/{uuid.uuid4()}",
+                    "summary": activity.get("summary", ""),
+                    "published": activity.get("published", timezone.now()),
+                    "state": activity.get("state", "REQUESTED")
+                }
+            )
+
+        elif activity_type == "process_decision":
+            actor_id = activity.get("object")
+            actor_author = Author.objects.filter(id=actor_id).first()
+            state = activity.get("state")
+            target_id = activity.get("author")
+            target_author = Author.objects.filter(id=target_id).first()
+            if not target_author:
+                # Cannot update table if target author does not exist locally
+                return
+            if state == "ACCEPTED":
+                actor_author.following.add(target_author)
+            #if state == "REJECTED" -> have to update this
+
+        elif activity_type in ["create", "post", "entry"]:
+            # Handle posts: create or update local Entry table
+            from golden.models import Entry
+            obj = activity.get("object", {})
+            Entry.objects.update_or_create(
+                id=obj.get("id"),
+                defaults={
+                    "title": obj.get("title", ""),
+                    "content": obj.get("content", ""),
+                    "contentType": obj.get("contentType", "text/plain"),
+                    "author": author,
+                    "visibility": obj.get("visibility", "PUBLIC"),
+                    "published": obj.get("published", timezone.now()),
+                }
+            )
+
+        elif activity_type == "like":
+            # Similar: handle likes
+            from golden.models import Like, Entry
+            entry_id = activity.get("object")
+            entry = Entry.objects.filter(id=entry_id).first()
+            if entry:
+                Like.objects.get_or_create(
+                    id=activity.get("id") or f"{author.id}/like/{uuid.uuid4()}",
+                    entry=entry,
+                    author=author,
+                    published=activity.get("published", timezone.now())
+                )
+
+        elif activity_type == "comment":
+            # Handle comments
+            from golden.models import Comment, Entry
+            obj = activity.get("object", {})
+            entry = Entry.objects.filter(id=obj.get("id")).first()
+            if entry:
+                Comment.objects.get_or_create(
+                    id=activity.get("id") or f"{author.id}/comment/{uuid.uuid4()}",
+                    entry=entry,
+                    author=author,
+                    content=obj.get("content", ""),
+                    contentType=obj.get("contentType", "text/plain"),
+                    published=activity.get("published", timezone.now())
+                )
+
+        else:
+            raise ValueError(f"Unrecognized activity type: '{activity.get('type')}'")
+
+        # Mark the inbox item as processed
+        item.processed = True
+        item.save()

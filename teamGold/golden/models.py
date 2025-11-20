@@ -81,8 +81,8 @@ class Author(AbstractBaseUser, PermissionsMixin):
     friends = property(lambda self: self.following.filter(id__in=self.followers_set.values_list("id", flat=True)))
     objects = MyUserManager()
     description = models.TextField(blank=True)
-    is_shadow = models.BooleanField(default=False)
-    is_local = models.BooleanField(default=True)
+    #is_shadow = models.BooleanField(default=False)
+    #is_local = models.BooleanField(default=True)
 
     # Authentication
     USERNAME_FIELD = "username"
@@ -340,7 +340,7 @@ class Inbox(models.Model):
     Represents an ActivityPub inbox for a given author.
     Stores activities received by that author.
     """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id = models.URLField(primary_key=True)  # FQID of the inbox
     author = models.ForeignKey(
         Author,
         on_delete=models.CASCADE,
@@ -348,9 +348,15 @@ class Inbox(models.Model):
     )
     data = models.JSONField()  # Raw activity JSON
     received_at = models.DateTimeField(auto_now_add=True)
+    processed = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-received_at']
 
     def __str__(self):
         return f"Inbox item for {self.author.username} at {self.received_at}"
+
+    def save(self, *args, **kwargs):
+        if not self.id:
+            self.id = f"{self.author.id.rstrip('/')}/inbox/{uuid.uuid4()}"
+        super().save(*args, **kwargs)

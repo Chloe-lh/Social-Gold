@@ -465,15 +465,17 @@ def profile_view(request):
                     )
                 return redirect("profile")
 
-           
+            '''
             print(" it got to checkpoint1")
             # Find NODE entry for this host
             node = Node.objects.filter(id=remote_host).first()
+            print("tf is this node", node)
             if not node:
+                print("not supposed to go here")
                 messages.error(request, "Remote node not registered.")
                 return redirect("profile")
             print(" it got to checkpoint2")
-
+            '''
             '''
             # Create a shadow Author for remote user if not exists
             target, created = Author.objects.get_or_create(
@@ -490,33 +492,36 @@ def profile_view(request):
 
             # Generate follow FQID
             follow_fqid = f"{author.id.rstrip('/')}/follow/{uuid.uuid4()}"
-
+            print("checkpoint 1", follow_fqid)
             # Store follow request locally
             Follow.objects.create(
                 id=follow_fqid,
                 actor=author,
-                object=target.id,
+                object=target.id if target else target_id,
                 state="REQUESTED",
             )
 
             # Send FOLLOW REQUEST TO REMOTE INBOX
-            inbox_url = f"{remote_host}/api/authors/{remote_uuid}/inbox/"
-
+            inbox_url = f"{"https://golden-at1-e84633ad2437.herokuapp.com"}/api/authors/{remote_uuid}/inbox/"
+            print("checkpoint2", inbox_url)
             payload = {
                 "type": "follow",
-                "summary": f"{author.username} wants to follow {target.username}",
+                "summary": f"{request.user.username} wants to follow {request.POST.get("displayName")}",
                 "actor": {
                     "type": "author",
-                    "id": author.id,
-                    "host": author.host,
-                    "displayName": author.username,
-                    "github": author.github,
-                    "profileImage": author.profileImage if author.profileImage else "",
-                    "web" : author.web
+                    "id": request.user.id,
+                    "host": request.user.host,
+                    "displayName": request.user.username,
+                    "github": request.user.github,
+                    "profileImage": request.user.profileImage.url if request.user.profileImage else "",
+                    "web" : request.user.web
+
+
+                    
                 },
                 "object": {
                     "type": "author",
-                    "id": request.POST.get("author.id"),
+                    "id": request.POST.get("author_id"),
                     "host": request.POST.get("host"),
                     "displayName": request.POST.get("displayName"),
                     "github": request.POST.get("github"),
@@ -524,14 +529,14 @@ def profile_view(request):
                     "web": request.POST.get("web")
                 }
             }
-
+            print("checkpoint3", payload)
             try:
 
                 resp = requests.post(
                     inbox_url,
                     json=payload,
-                    timeout=5,
-                    auth=(node.auth_user, node.auth_pass)
+                    timeout=15,
+                    auth=("admin", "password2025")
                 )
                 print("REMOTE FOLLOW RESPONSE:", resp.status_code, resp.text)
             except Exception as e:
@@ -889,6 +894,7 @@ def entry_detail(request, entry_uuid):
 
 @api_view(['POST'])
 def inbox(request, author_id):
+    print("IT GOT TO INBOX?!")
     try:
         host = request.build_absolute_uri('/')  # "https://node1/"
         full_author_id = f"{host}api/authors/{author_id}/"
@@ -898,6 +904,7 @@ def inbox(request, author_id):
         return Response({"error": "Author not found"}, status=404)
     
     data = request.data
+    print("this is recieving data", data)
     activity_type = data.get("type", "").lower()
 
     if activity_type == "create":

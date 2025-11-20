@@ -356,15 +356,15 @@ def profile_view(request):
         nodes = Node.objects.filter(is_active=True)#.exclude(id=author.host)  # exclude local node
 
         for node in nodes:
-            print("NODE", node)
+            #print("NODE", node)
             remote_authors = get_remote_authors(node)
-            print("REMOTE AUTHORS", remote_authors)
+            #print("REMOTE AUTHORS", remote_authors)
             for ra in remote_authors:
                 #print("RA", ra)
-                if query.lower() in ra.get("displayName", "").lower():
+                if query.lower() in ra.get("username", "").lower():
                     results.append({
                         "id": ra.get("id"),
-                        "displayName": ra.get("displayName"),
+                        "username": ra.get("username"),
                         "host": ra.get("host"),
                         "is_local": False,
                         "web": ra.get("web"),

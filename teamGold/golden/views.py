@@ -201,7 +201,7 @@ def remote_authors_list(request):
         print(a)
         results.append({
             "id": a.id,
-            "displayName": a.username,
+            "username": a.username,
             "host": a.host,
             "github":a.github,
             "web":a.web,
@@ -434,7 +434,7 @@ def profile_view(request):
 
         if request.POST.get("action") == "follow" and "author_id" in request.POST:
             print("test pls work")
-            print(request.POST.get("author_id"),request.POST.get("web"),request.POST.get("displayName"))
+            print(request.POST.get("author_id"),request.POST.get("web"),request.POST.get("username"))
             target_id = request.POST.get("author_id")
 
             parsed = urlparse(target_id)
@@ -482,7 +482,7 @@ def profile_view(request):
                 id=target_id,  # full FQID
                 defaults={
                     "username": f"remote-{remote_uuid}",  # ensures uniqueness
-                    "name": remote_uuid,                  # used as displayName
+                    "name": remote_uuid,                  # used as username
                     "host": remote_host,
                     "is_remote": True,
                     "is_shadow": True,   # mark as shadow
@@ -506,12 +506,12 @@ def profile_view(request):
             print("checkpoint2", inbox_url)
             payload = {
                 "type": "follow",
-                "summary": f"{request.user.username} wants to follow {request.POST.get("displayName")}",
+                "summary": f"{request.user.username} wants to follow {request.POST.get("username")}",
                 "actor": {
                     "type": "author",
                     "id": request.user.id,
                     "host": request.user.host,
-                    "displayName": request.user.username,
+                    "username": request.user.username,
                     "github": request.user.github,
                     "profileImage": request.user.profileImage.url if request.user.profileImage else "",
                     "web" : request.user.web
@@ -523,7 +523,7 @@ def profile_view(request):
                     "type": "author",
                     "id": request.POST.get("author_id"),
                     "host": request.POST.get("host"),
-                    "displayName": request.POST.get("displayName"),
+                    "username": request.POST.get("username"),
                     "github": request.POST.get("github"),
                     "profileImage": request.POST.get("profileImage") if request.POST.get("profileImage") else "",
                     "web": request.POST.get("web")
@@ -999,7 +999,7 @@ def handle_follow(data, author):
 
     # Parse remote author info
     remote_id = actor_data.get("id")
-    remote_display = actor_data.get("displayName", "Unknown")
+    remote_display = actor_data.get("username", "Unknown")
     remote_host = actor_data.get("host")
 
     if not remote_id or not remote_host:
@@ -1009,7 +1009,7 @@ def handle_follow(data, author):
     remote_author, created = Author.objects.get_or_create(
         id=remote_id,
         defaults={
-            "displayName": remote_display,
+            "username": remote_display,
             "host": remote_host,
             "github": actor_data.get("github", ""),
             "profileImage": actor_data.get("profileImage", "")

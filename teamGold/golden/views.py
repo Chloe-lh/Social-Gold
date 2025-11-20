@@ -453,40 +453,59 @@ def profile_view(request):
         if request.POST.get("action") == "follow":
             # New POST key for following a remote author
             target_id = request.POST.get("author_id")
-            target_author = get_object_or_404(Author, id=target_id)
+            target_author = Author.objects.filter(id=target_id).first()
 
-            # Build ActivityPub Follow activity
-            follow_activity = {
-                "type": "Follow",
-                "summary": f"{author.username} wants to follow {target_author.username}",
-                "author": str(author.id),         
-                "object": str(target_author.id), 
-                "id": f"{author.id}/follow/{uuid.uuid4()}",
-                "state": "REQUESTED",
-                "published": timezone.now().isoformat(),
-                "target_is_local": is_local(str(target_author.id)),
-            }
+            if target_author is not None:
 
-            # Send the activity to target author's inbox (local or remote)
-            distribute_activity(follow_activity, author)
-
-            follow, created = Follow.objects.get_or_create(
-            actor=author,
-            object=target_author.id,
-            defaults={
-                'id': f"{author.id}/follow/{uuid.uuid4()}",
-                'summary': f"{author.username} wants to follow {target_author.username}",
-                'published': timezone.now(),
-                'state': "REQUESTED",
+                # Build ActivityPub Follow activity
+                follow_activity = {
+                    "type": "Follow",
+                    "summary": f"{author.username} wants to follow {target_author.username}",
+                    "author": str(author.id),         
+                    "object": str(target_author.id), 
+                    "id": f"{author.id}/follow/{uuid.uuid4()}",
+                    "state": "REQUESTED",
+                    "published": timezone.now().isoformat(),
+                    "target_is_local": is_local(str(target_author.id)),
                 }
-            )
 
-            if not created:
-                # Update the follow request timestamp/state
-                follow.state = "REQUESTED"
-                follow.published = timezone.now()
-                follow.save()
+                # Send the activity to target author's inbox (local or remote)
+                distribute_activity(follow_activity, author)
 
+                follow, created = Follow.objects.get_or_create(
+                actor=author,
+                object=target_author.id,
+                defaults={
+                    'id': f"{author.id}/follow/{uuid.uuid4()}",
+                    'summary': f"{author.username} wants to follow {target_author.username}",
+                    'published': timezone.now(),
+                    'state': "REQUESTED",
+                    }
+                )
+
+                if not created:
+                    # Update the follow request timestamp/state
+                    follow.state = "REQUESTED"
+                    follow.published = timezone.now()
+                    follow.save()
+
+                return redirect("profile")
+            
+            else:
+                inbox_url = urljoin(author_id, "inbox/")
+                follow_activity = {
+                    "type": "Follow",
+                    "summary": f"{actor.username} wants to follow a remote author",
+                    "author": str(author.id),
+                    "object": target_id,
+                    "id": f"{actor.id}/follow/{uuid.uuid4()}",
+                    "state": "REQUESTED",,
+                    "published": timezone.now().isoformat(),
+                    "target_is_local": False,
+                }
+                push_remote_inbox(inbox_url, follow_activity)
+
+                return redirect("profile")
             return redirect("profile")
 
         if "remove_friend" in request.POST:

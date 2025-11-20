@@ -5,7 +5,7 @@ from django.utils import timezone
 import uuid
 
 from .services import generate_comment_fqid
-from .models import Node, Author, Entry, Like, Comment, Follow, EntryImage
+from .models import Node, Author, Entry, Like, Comment, Follow, EntryImage, Inbox
 
 '''
 Serializers convert JSON data in order to update the Models

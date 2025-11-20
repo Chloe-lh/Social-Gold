@@ -434,9 +434,9 @@ def profile_view(request):
             return redirect("profile")
 
         if "follow_remote" in request.POST:
-        # New POST key for following a remote author
-        target_id = request.POST.get("follow_remote")
-        target = get_object_or_404(Author, id=target_id)
+            # New POST key for following a remote author
+            target_id = request.POST.get("follow_remote")
+            target = get_object_or_404(Author, id=target_id)
 
         if target.local:
             # Already handled by local follow logic

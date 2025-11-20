@@ -28,7 +28,7 @@ from drf_yasg import openapi
 # SERIALIZERS IMPORTS
 from golden.serializers import (
     AuthorSerializer, EntrySerializer, NodeSerializer,
-    FollowSerializer, LikeSerializer, CommentSerializer, EntryImageSerializer
+    FollowSerializer, LikeSerializer, CommentSerializer, EntryImageSerializer,AuthorInboxSerializer
 )
 
 
@@ -42,10 +42,10 @@ class ProfileAPIView(APIView):
     """
     authentication_classes = [BasicAuthentication]
     permission_classes = [IsAuthenticated]
-
+    #adjusted it so that only certain remote author info will be send back
     def get(self, request, id):
         try:
             obj = Author.objects.get(pk=id) 
         except Author.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        return Response(AuthorSerializer(obj).data, status=status.HTTP_200_OK)
+        return Response(AuthorInboxSerializer(obj).data, status=status.HTTP_200_OK)

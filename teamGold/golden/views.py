@@ -32,7 +32,7 @@ import uuid
 from django.contrib.auth import get_user_model
 from .decorators import require_author
 import markdown
-
+from services import *
 # Security
 from django.views.decorators.csrf import csrf_exempt
 
@@ -202,6 +202,10 @@ def remote_authors_list(request):
             "id": a.id,
             "displayName": a.username,
             "host": a.host,
+            "github":a.github,
+            "web":a.web,
+            "profileImage": a.profileImage,
+            
         })
     return Response({"type": "authors", "items": results})
 
@@ -353,7 +357,10 @@ def profile_view(request):
                         "id": ra.get("id"),
                         "username": ra.get("displayName"),
                         "host": ra.get("host"),
-                        "is_local": False
+                        "is_local": False,
+                        "web": ra.get("web"),
+                        "github":ra.get("github"),
+                        "profileImage": ra.get("profileImage")
                     })
         return results
 
@@ -416,9 +423,24 @@ def profile_view(request):
             return redirect("profile")
         
         if request.POST.get("action") == "follow" and "author_id" in request.POST:
-            target_id = request.POST.get("author_id")
-            target = Author.objects.filter(id=target_id, is_shadow=False).first()
+            print("test pls work")
 
+            target_id = request.POST.get("author_id")
+
+            parsed = urlparse(target_id)
+            remote_host = f"{parsed.scheme}://{parsed.netloc}"
+            remote_uuid = target_id.rstrip("/").split("/")[-1]
+            #target = Author.objects.filter(id=target_id, is_shadow=False).first()
+
+            #target_info  = get_remote_author_profile(remote_host, target_id)
+            '''
+            we have target author's id
+            now we need more info to create a shadow author
+
+            '''
+            #we got the target author's id
+            print(target_id)
+            print(target)
             if target:
                 # Local follow
                 existing = Follow.objects.filter(actor=author, object=target.id).first()
@@ -432,16 +454,14 @@ def profile_view(request):
                     )
                 return redirect("profile")
 
-            parsed = urlparse(target_id)
-            remote_host = f"{parsed.scheme}://{parsed.netloc}"
-            remote_uuid = target_id.rstrip("/").split("/")[-1]
+           
 
             # Find NODE entry for this host
             node = Node.objects.filter(id=remote_host).first()
             if not node:
                 messages.error(request, "Remote node not registered.")
                 return redirect("profile")
-
+            '''
             # Create a shadow Author for remote user if not exists
             target, created = Author.objects.get_or_create(
                 id=target_id,  # full FQID
@@ -453,6 +473,7 @@ def profile_view(request):
                     "is_shadow": True,   # mark as shadow
                 }
             )
+            '''
 
             # Generate follow FQID
             follow_fqid = f"{author.id.rstrip('/')}/follow/{uuid.uuid4()}"
@@ -476,18 +497,23 @@ def profile_view(request):
                     "id": author.id,
                     "host": author.host,
                     "displayName": author.username,
-                    "profileImage": author.profileImage if author.profileImage else ""
+                    "github": author.github,
+                    "profileImage": author.profileImage if author.profileImage else "",
+                    "web" : author.web
                 },
                 "object": {
                     "type": "author",
                     "id": target.id,
                     "host": target.host,
                     "displayName": target.username,
-                    "profileImage": target.profileImage if target.profileImage else ""
+                    "github": target.github,
+                    "profileImage": target.profileImage if target.profileImage else "",
+                    "web": target.web
                 }
             }
 
             try:
+
                 resp = requests.post(
                     inbox_url,
                     json=payload,
@@ -497,7 +523,7 @@ def profile_view(request):
                 print("REMOTE FOLLOW RESPONSE:", resp.status_code, resp.text)
             except Exception as e:
                 print("ERROR SENDING REMOTE FOLLOW:", e)
-
+            
             return redirect("profile")
 
     friends_qs, friend_ids = get_friends_context(author)

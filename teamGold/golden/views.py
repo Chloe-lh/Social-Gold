@@ -32,7 +32,7 @@ import uuid
 from django.contrib.auth import get_user_model
 from .decorators import require_author
 import markdown
-from services import *
+from golden.services import *
 # Security
 from django.views.decorators.csrf import csrf_exempt
 
@@ -523,7 +523,7 @@ def profile_view(request):
                 print("REMOTE FOLLOW RESPONSE:", resp.status_code, resp.text)
             except Exception as e:
                 print("ERROR SENDING REMOTE FOLLOW:", e)
-            
+
             return redirect("profile")
 
     friends_qs, friend_ids = get_friends_context(author)

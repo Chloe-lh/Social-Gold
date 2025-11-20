@@ -198,16 +198,17 @@ def remote_authors_list(request):
     authors = Author.objects.all()
     results = []
     for a in authors:
+        print(a)
         results.append({
             "id": a.id,
             "displayName": a.username,
             "host": a.host,
             "github":a.github,
             "web":a.web,
-            "profileImage": a.profileImage,
+            "profileImage": a.profileImage.url if a.profileImage else None,
             
         })
-    return Response({"type": "authors", "items": results})
+    return Response({"type": "authors", "items": results}, status=200)
 
 @login_required
 def profile_view(request):
@@ -230,12 +231,16 @@ def profile_view(request):
         api_url = f"{node.id}/api/authors/"  # Build API URL from node.id
 
         try:
+            print("aattemping to send request")
             response = requests.get(
                 api_url,
                 timeout=5,
                 auth=(node.auth_user, node.auth_pass) if node.auth_user else None
             )
+            print("remote author get request send. awaiting status", response.status_code)
+            
             if response.status_code == 200:
+                print("it is a success. now, just need to return it")
                 data = response.json()
                 return data.get("items", [])
         except requests.exceptions.RequestException as e:
@@ -350,8 +355,11 @@ def profile_view(request):
         nodes = Node.objects.filter(is_active=True)#.exclude(id=author.host)  # exclude local node
 
         for node in nodes:
+            print("NODE", node)
             remote_authors = get_remote_authors(node)
+            print("REMOTE AUTHORS", remote_authors)
             for ra in remote_authors:
+                print("RA", ra)
                 if query.lower() in ra.get("displayName", "").lower():
                     results.append({
                         "id": ra.get("id"),

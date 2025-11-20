@@ -440,7 +440,7 @@ def profile_view(request):
             '''
             #we got the target author's id
             print(target_id)
-            print(target)
+            
             if target:
                 # Local follow
                 existing = Follow.objects.filter(actor=author, object=target.id).first()

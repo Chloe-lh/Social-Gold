@@ -439,8 +439,8 @@ def profile_view(request):
 
             '''
             #we got the target author's id
-            print(target_id)
-            
+            print("HERE IS TARGET ID", target_id)
+            print("TARGET OBJECT", target)
             if target:
                 # Local follow
                 existing = Follow.objects.filter(actor=author, object=target.id).first()
@@ -503,7 +503,7 @@ def profile_view(request):
                 },
                 "object": {
                     "type": "author",
-                    "id": request.POST.get("id"),
+                    "id": request.POST.get("author.id"),
                     "host": request.POST.get("host"),
                     "displayName": request.POST.get("displayName"),
                     "github": request.POST.get("github"),

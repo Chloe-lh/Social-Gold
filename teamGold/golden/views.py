@@ -208,6 +208,7 @@ def remote_authors_list(request):
             "profileImage": a.profileImage.url if a.profileImage else None,
             
         })
+    print(results)
     return Response({"type": "authors", "items": results}, status=200)
 
 @login_required
@@ -229,7 +230,7 @@ def profile_view(request):
         Fetch all authors from a remote node.
         """
         api_url = f"{node.id}/api/authors/"  # Build API URL from node.id
-
+        print("TESTY'TEST'SET'SE'", api_url)
         try:
             print("aattemping to send request")
             response = requests.get(
@@ -238,7 +239,7 @@ def profile_view(request):
                 auth=(node.auth_user, node.auth_pass) if node.auth_user else None
             )
             print("remote author get request send. awaiting status", response.status_code)
-            
+            print("THIS IS FHE RESPONSE", response.json())
             if response.status_code == 200:
                 print("it is a success. now, just need to return it")
                 data = response.json()
@@ -359,7 +360,7 @@ def profile_view(request):
             remote_authors = get_remote_authors(node)
             print("REMOTE AUTHORS", remote_authors)
             for ra in remote_authors:
-                print("RA", ra)
+                #print("RA", ra)
                 if query.lower() in ra.get("displayName", "").lower():
                     results.append({
                         "id": ra.get("id"),
@@ -430,9 +431,10 @@ def profile_view(request):
                 form.save()
             return redirect("profile")
         
+
         if request.POST.get("action") == "follow" and "author_id" in request.POST:
             print("test pls work")
-
+            print(request.POST.get("author_id"),request.POST.get("web"),request.POST.get("displayName"))
             target_id = request.POST.get("author_id")
 
             parsed = urlparse(target_id)
@@ -448,6 +450,7 @@ def profile_view(request):
             '''
             #we got the target author's id
             print("HERE IS TARGET ID", target_id)
+            print("remote host", remote_host)
             print("TARGET OBJECT", target)
             if target:
                 # Local follow
@@ -463,12 +466,14 @@ def profile_view(request):
                 return redirect("profile")
 
            
-
+            print(" it got to checkpoint1")
             # Find NODE entry for this host
             node = Node.objects.filter(id=remote_host).first()
             if not node:
                 messages.error(request, "Remote node not registered.")
                 return redirect("profile")
+            print(" it got to checkpoint2")
+
             '''
             # Create a shadow Author for remote user if not exists
             target, created = Author.objects.get_or_create(

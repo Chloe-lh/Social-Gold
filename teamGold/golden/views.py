@@ -415,21 +415,21 @@ def profile_view(request):
             target = get_object_or_404(Author, id=target_id)
 
             if target.local:
-            # Local unfollow
-            author.following.remove(target)
-            Follow.objects.filter(actor=author, object=target.id).delete()
-        else:
-            # Remote unfollow: send "Undo" Follow activity
-            activity = {
-                "type": "Undo",
-                "actor": str(author.id),
-                "object": {
-                    "type": "Follow",
+                # Local unfollow
+                author.following.remove(target)
+                Follow.objects.filter(actor=author, object=target.id).delete()
+            else:
+                # Remote unfollow: send "Undo" Follow activity
+                activity = {
+                    "type": "Undo",
                     "actor": str(author.id),
-                    "object": target.id
+                    "object": {
+                        "type": "Follow",
+                        "actor": str(author.id),
+                        "object": target.id
+                    }
                 }
-            }
-            push_remote_inbox(target.inbox_url, activity)
+                push_remote_inbox(target.inbox_url, activity)
 
             return redirect("profile")
 
@@ -598,7 +598,7 @@ def profile_view(request):
 
             return redirect("profile")
         """
-        
+
     friends_qs, friend_ids = get_friends_context(author)
     query = request.GET.get("q", "").strip()
     authors = get_search_authors(author, query)

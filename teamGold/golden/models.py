@@ -340,7 +340,7 @@ class Inbox(models.Model):
     Represents an ActivityPub inbox for a given author.
     Stores activities received by that author.
     """
-    id = models.URLField(primary_key=True)  # FQID of the inbox
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     author = models.ForeignKey(
         Author,
         on_delete=models.CASCADE,
@@ -352,11 +352,3 @@ class Inbox(models.Model):
 
     class Meta:
         ordering = ['-received_at']
-
-    def __str__(self):
-        return f"Inbox item for {self.author.username} at {self.received_at}"
-
-    def save(self, *args, **kwargs):
-        if not self.id:
-            self.id = f"{self.author.id.rstrip('/')}/inbox/{uuid.uuid4()}"
-        super().save(*args, **kwargs)

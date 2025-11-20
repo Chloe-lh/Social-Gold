@@ -438,34 +438,34 @@ def profile_view(request):
             target_id = request.POST.get("follow_remote")
             target = get_object_or_404(Author, id=target_id)
 
-        if target.local:
-            # Already handled by local follow logic
-            author.following.add(target)
-            Follow.objects.get_or_create(actor=author, object=target)
-        else:
-            # Remote follow: send Follow activity to remote author's inbox
-            remote_author = ensure_remote_author({
-                "id": target.id,
-                "host": target.host,
-                "username": target.username,
-                "profileImage": target.profileImage,
-                "github": target.github
-            })
-
-            activity = {
-                "type": "Follow",
-                "actor": str(author.id),
-                "object": {
+            if target.local:
+                # Local follow: normal ManyToMany
+                author.following.add(target)
+                Follow.objects.get_or_create(actor=author, object=target)
+            else:
+                # Remote follow: send Follow activity to remote author's inbox
+                remote_author = ensure_remote_author({
                     "id": target.id,
                     "host": target.host,
                     "username": target.username,
-                    "profileImage": target.profileImage
+                    "profileImage": target.profileImage,
+                    "github": target.github
+                })
+
+                activity = {
+                    "type": "Follow",
+                    "actor": str(author.id),
+                    "object": {
+                        "id": target.id,
+                        "host": target.host,
+                        "username": target.username,
+                        "profileImage": target.profileImage
+                    }
                 }
-            }
 
-            push_remote_inbox(target.inbox_url, activity)
+                push_remote_inbox(target.inbox_url, activity)
 
-        return redirect("profile")
+            return redirect("profile")
 
         if "remove_friend" in request.POST:
             target_id = request.POST.get("remove_friend")

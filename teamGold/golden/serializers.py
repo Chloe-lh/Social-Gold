@@ -125,9 +125,10 @@ class AuthorInboxSerializer(serializers.Serializer):
             'host',
             'web',
             'github',
+            'username'
         ]
     type = serializers.CharField(default="author")
-    displayName = serializers.CharField(required=True)
+    
     profileImage = serializers.URLField(required=False, allow_blank=True)
 
     def validate_type(self, value):

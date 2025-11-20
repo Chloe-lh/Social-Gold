@@ -355,7 +355,7 @@ def profile_view(request):
                 if query.lower() in ra.get("displayName", "").lower():
                     results.append({
                         "id": ra.get("id"),
-                        "username": ra.get("displayName"),
+                        "displayName": ra.get("displayName"),
                         "host": ra.get("host"),
                         "is_local": False,
                         "web": ra.get("web"),
@@ -430,7 +430,7 @@ def profile_view(request):
             parsed = urlparse(target_id)
             remote_host = f"{parsed.scheme}://{parsed.netloc}"
             remote_uuid = target_id.rstrip("/").split("/")[-1]
-            #target = Author.objects.filter(id=target_id, is_shadow=False).first()
+            target = Author.objects.filter(id=target_id, is_shadow=False).first()
 
             #target_info  = get_remote_author_profile(remote_host, target_id)
             '''
@@ -503,12 +503,12 @@ def profile_view(request):
                 },
                 "object": {
                     "type": "author",
-                    "id": target.id,
-                    "host": target.host,
-                    "displayName": target.username,
-                    "github": target.github,
-                    "profileImage": target.profileImage if target.profileImage else "",
-                    "web": target.web
+                    "id": request.POST.get("id"),
+                    "host": request.POST.get("host"),
+                    "displayName": request.POST.get("displayName"),
+                    "github": request.POST.get("github"),
+                    "profileImage": request.POST.get("profileImage") if request.POST.get("profileImage") else "",
+                    "web": request.POST.get("web")
                 }
             }
 

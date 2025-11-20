@@ -414,7 +414,7 @@ def profile_view(request):
             target_id = request.POST.get("unfollow")
             target = get_object_or_404(Author, id=target_id)
 
-            if target.local:
+            if target.is_local:
                 # Local unfollow
                 author.following.remove(target)
                 Follow.objects.filter(actor=author, object=target.id).delete()
@@ -435,14 +435,16 @@ def profile_view(request):
 
         if "follow_remote" in request.POST:
             # New POST key for following a remote author
+            print("remote follow request")
             target_id = request.POST.get("follow_remote")
+            print(target_id)
             target = get_object_or_404(Author, id=target_id)
 
-            if target.local:
+            #if target.is_local:
                 # Local follow: normal ManyToMany
-                author.following.add(target)
-                Follow.objects.get_or_create(actor=author, object=target)
-            else:
+                #author.following.add(target)
+                #Follow.objects.get_or_create(actor=author, object=target)
+            if not target.is_local:
                 # Remote follow: send Follow activity to remote author's inbox
                 remote_author = ensure_remote_author({
                     "id": target.id,

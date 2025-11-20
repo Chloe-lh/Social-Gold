@@ -82,6 +82,7 @@ class Author(AbstractBaseUser, PermissionsMixin):
     objects = MyUserManager()
     description = models.TextField(blank=True)
     is_shadow = models.BooleanField(default=False)
+    is_local = models.BooleanField(default=True)
 
     # Authentication
     USERNAME_FIELD = "username"

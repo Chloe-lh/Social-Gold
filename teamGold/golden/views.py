@@ -560,7 +560,7 @@ def profile_view(request):
         "authors": authors,
         "query": query,
     }
-
+    print(authors)
     return render(request, "profile.html", context)
 
 FOLLOW_STATE_CHOICES = ["REQUESTED", "ACCEPTED", "REJECTED"]

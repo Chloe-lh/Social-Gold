@@ -17,7 +17,7 @@ from rest_framework.permissions import IsAuthenticated
 from golden import models
 from golden.models import Entry, EntryImage, Author, Comment, Like, Follow, Node
 from .forms import CustomUserForm, CommentForm, ProfileForm, EntryList
-from golden.serializers import CommentSerializer, EntryInboxSerializer, LikeInboxSerializer, CommentsInfoSerializer, FollowRequestInboxSerializer, NodeSerializer
+from golden.serializers import CommentSerializer, EntryInboxSerializer, LikeInboxSerializer, CommentsInfoSerializer, FollowRequestInboxSerializer, NodeSerializer, FollowSerializer
 from golden.utils import get_or_create_foreign_author, post_to_remote_inbox, build_accept_activity, fetch_remote_entries, sync_remote_entry, send_new_entry,  send_update_activity
 
 # Import login authentication stuff
@@ -854,6 +854,7 @@ def inbox(request, author_id):
         host = request.build_absolute_uri('/')  # "https://node1/"
         full_author_id = f"{host}api/authors/{author_id}/"
         author = Author.objects.get(id=full_author_id)
+
     except Author.DoesNotExist:
         return Response({"error": "Author not found"}, status=404)
     
@@ -970,18 +971,18 @@ def handle_follow(data, author):
     )
 
     # Check if follow already exists
-    existing = FollowRequest.objects.filter(
+    existing = Follow.objects.filter(
         actor=remote_author, 
-        object=receiving_author
+        object= author
     ).first()
 
     if existing:
         return Response({"status": "Already following"}, status=200)
 
     # Create follow relationship
-    follow_request = FollowRequest.objects.create(
+    follow_request = Follow.objects.create(
         actor=remote_author,
-        object=receiving_author
+        object=author
     )
 
     serializer = FollowSerializer(follow_request)

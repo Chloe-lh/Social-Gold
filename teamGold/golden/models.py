@@ -2,6 +2,7 @@ from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import PermissionsMixin
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
+from django.contrib.postgres.fields import JSONField 
 from django.conf import settings
 import uuid
 
@@ -332,3 +333,23 @@ class Follow(models.Model):
 
     def __str__(self):
         return f"Follow {self.id} {self.actor} -> {self.object} ({self.state})"
+
+class Inbox(models.Model):
+    """
+    Represents an ActivityPub inbox for a given author.
+    Stores activities received by that author.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    author = models.ForeignKey(
+        Author,
+        on_delete=models.CASCADE,
+        related_name="inbox_items"
+    )
+    data = models.JSONField()  # Raw activity JSON
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-received_at']
+
+    def __str__(self):
+        return f"Inbox item for {self.author.username} at {self.received_at}"

@@ -15,9 +15,10 @@ from rest_framework.permissions import IsAuthenticated
 
 # BASE GOLDEN
 from golden import models
-from golden.models import Entry, EntryImage, Author, Comment, Like, Follow, Node
+from golden.models import Entry, EntryImage, Author, Comment, Like, Follow, Node, Inbox
 from .forms import CustomUserForm, CommentForm, ProfileForm, EntryList
-from golden.serializers import CommentSerializer, EntryInboxSerializer, LikeInboxSerializer, CommentsInfoSerializer, FollowRequestInboxSerializer, NodeSerializer, FollowSerializer
+from golden.serializers import *
+from golden.distributor import *
 from golden.utils import get_or_create_foreign_author, post_to_remote_inbox, build_accept_activity, fetch_remote_entries, sync_remote_entry, send_new_entry,  send_update_activity
 
 # Import login authentication stuff
@@ -339,6 +340,8 @@ def profile_view(request):
         """
         results = []
 
+        following_ids = set(author.following.values_list("id", flat=True))
+
         # Local authors
         local_qs = Author.objects.exclude(id=author.id)
         if query:
@@ -349,7 +352,8 @@ def profile_view(request):
                 "id": a.id,
                 "username": a.username,
                 "host": a.host,
-                "is_local": True
+                "is_local": True,
+                "is_following": a.id in following_ids
             })
 
         # Remote authors
@@ -409,9 +413,59 @@ def profile_view(request):
         if "unfollow" in request.POST:
             target_id = request.POST.get("unfollow")
             target = get_object_or_404(Author, id=target_id)
+
+            if target.local:
+            # Local unfollow
             author.following.remove(target)
             Follow.objects.filter(actor=author, object=target.id).delete()
+        else:
+            # Remote unfollow: send "Undo" Follow activity
+            activity = {
+                "type": "Undo",
+                "actor": str(author.id),
+                "object": {
+                    "type": "Follow",
+                    "actor": str(author.id),
+                    "object": target.id
+                }
+            }
+            push_remote_inbox(target.inbox_url, activity)
+
             return redirect("profile")
+
+        if "follow_remote" in request.POST:
+        # New POST key for following a remote author
+        target_id = request.POST.get("follow_remote")
+        target = get_object_or_404(Author, id=target_id)
+
+        if target.local:
+            # Already handled by local follow logic
+            author.following.add(target)
+            Follow.objects.get_or_create(actor=author, object=target)
+        else:
+            # Remote follow: send Follow activity to remote author's inbox
+            remote_author = ensure_remote_author({
+                "id": target.id,
+                "host": target.host,
+                "username": target.username,
+                "profileImage": target.profileImage,
+                "github": target.github
+            })
+
+            activity = {
+                "type": "Follow",
+                "actor": str(author.id),
+                "object": {
+                    "id": target.id,
+                    "host": target.host,
+                    "username": target.username,
+                    "profileImage": target.profileImage
+                }
+            }
+
+            push_remote_inbox(target.inbox_url, activity)
+
+        return redirect("profile")
 
         if "remove_friend" in request.POST:
             target_id = request.POST.get("remove_friend")
@@ -431,7 +485,7 @@ def profile_view(request):
                 form.save()
             return redirect("profile")
         
-
+        """
         if request.POST.get("action") == "follow" and "author_id" in request.POST:
             print("test pls work")
             print(request.POST.get("author_id"),request.POST.get("web"),request.POST.get("username"))
@@ -543,7 +597,8 @@ def profile_view(request):
                 print("ERROR SENDING REMOTE FOLLOW:", e)
 
             return redirect("profile")
-
+        """
+        
     friends_qs, friend_ids = get_friends_context(author)
     query = request.GET.get("q", "").strip()
     authors = get_search_authors(author, query)
@@ -892,8 +947,30 @@ def entry_detail(request, entry_uuid):
     }
     return render(request, 'entry_detail.html', context)
 
+@api_view(['GET'])
+def list_inbox(request, author_id):
+    """
+    List all inbox activities for a given author.
+    """
+    try:
+        author = Author.objects.get(id=author_id)
+    except Author.DoesNotExist:
+        return Response({"error": "Author not found"}, status=404)
+
+    inbox_items = Inbox.objects.filter(author=author)
+    serializer = InboxSerializer(inbox_items, many=True)
+    return Response(serializer.data)
+
 @api_view(['POST'])
 def inbox(request, author_id):
+    """
+    Remote nodes call this endpoint.
+    We:
+    1. identify the inbox owner
+    2. validate + normalize the activity
+    3. store the activity in the inbox
+    4. run local handlers (create/update/delete/comment/like/follow)
+    """
     print("IT GOT TO INBOX?!")
     try:
         host = request.build_absolute_uri('/')  # "https://node1/"
@@ -907,18 +984,24 @@ def inbox(request, author_id):
     print("this is recieving data", data)
     activity_type = data.get("type", "").lower()
 
-    if activity_type == "create":
-        return handle_create(data, author)
-    elif activity_type == "like":
-        return handle_like(data, author)
-    elif activity_type == "comment":
-        return handle_comment(data, author)
-    elif activity_type == "follow":
-        return handle_follow(data, author)
-    elif activity_type == "update":
-        return handle_update(data, author)
-    else:
-        return Response({"error": "Unsupported type"}, status=400)
+    dispatch_table = {
+        "entry": handle_create,
+        "create": handle_create,
+        "post": handle_create,
+        "update": handle_update,
+        "delete": handle_delete,
+        "like": handle_like,
+        "comment": handle_comment,
+        "follow": handle_follow,
+        "follow-back": handle_follow_back,
+    }
+
+    if activity_type not in dispatch_table:
+        return Response({"error": f"Unsupported type {activity_type}"}, status=400)
+
+    Inbox.objects.create(author=author, data=data)
+
+    return dispatch_table[activity_type](data, author)
     
 def handle_update(data, author):
     """

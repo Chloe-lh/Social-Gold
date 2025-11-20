@@ -228,6 +228,12 @@ class EntryInboxSerializer(serializers.Serializer):
 
 
     def validate_type(self, value):
-        if value.lower() != "entry":
-            raise serializers.ValidationError("type must be 'entry'")
+        if value.lower() not in ["entry", "create", "post"]:
+            raise serializers.ValidationError("type must be entry/create/post")
         return value
+
+class InboxSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Inbox
+        fields = ['id', 'author', 'data', 'received_at']
+        read_only_fields = ['id', 'received_at']

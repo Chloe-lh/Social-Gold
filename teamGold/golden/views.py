@@ -492,14 +492,14 @@ def profile_view(request):
                 return redirect("profile")
             
             else:
-                inbox_url = urljoin(author_id, "inbox/")
+                inbox_url = urljoin(target_id, "inbox/")
                 follow_activity = {
                     "type": "Follow",
                     "summary": f"{actor.username} wants to follow a remote author",
                     "author": str(author.id),
                     "object": target_id,
-                    "id": f"{actor.id}/follow/{uuid.uuid4()}",
-                    "state": "REQUESTED",,
+                    "id": f"{author.id}/follow/{uuid.uuid4()}",
+                    "state": "REQUESTED",
                     "published": timezone.now().isoformat(),
                     "target_is_local": False,
                 }

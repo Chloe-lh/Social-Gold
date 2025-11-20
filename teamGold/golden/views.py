@@ -495,7 +495,7 @@ def profile_view(request):
                 inbox_url = urljoin(target_id, "inbox/")
                 follow_activity = {
                     "type": "Follow",
-                    "summary": f"{actor.username} wants to follow a remote author",
+                    "summary": f"{author.username} wants to follow a remote author",
                     "author": str(author.id),
                     "object": target_id,
                     "id": f"{author.id}/follow/{uuid.uuid4()}",

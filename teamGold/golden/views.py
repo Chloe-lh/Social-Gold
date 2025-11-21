@@ -230,19 +230,19 @@ def profile_view(request):
         """
         Fetch all authors from a remote node.
         """
-        api_url = f"{node.id}/api/authors/"  # Build API URL from node.id
-        print("TESTY'TEST'SET'SE'", api_url)
+        api_url =  urljoin(node.id, 'api/authors/')  # Build API URL from node.id
+        #print("TESTY'TEST'SET'SE'", api_url)
         try:
-            print("aattemping to send request")
+            #print("aattemping to send request")
             response = requests.get(
                 api_url,
                 timeout=5,
                 auth=(node.auth_user, node.auth_pass) if node.auth_user else None
             )
-            print("remote author get request send. awaiting status", response.status_code)
-            print("THIS IS FHE RESPONSE", response.json())
+            #print("remote author get request send. awaiting status", response.status_code)
+            #print("THIS IS FHE RESPONSE", response.json())
             if response.status_code == 200:
-                print("it is a success. now, just need to return it")
+                #print("it is a success. now, just need to return it")
                 data = response.json()
                 return data.get("items", [])
         except requests.exceptions.RequestException as e:
@@ -358,7 +358,7 @@ def profile_view(request):
             })
 
         # Remote authors
-        nodes = Node.objects.filter(is_active=True)#.exclude(id=author.host)  # exclude local node
+        nodes = Node.objects.filter(is_active=True)
 
         for node in nodes:
             #print("NODE", node)
@@ -455,58 +455,39 @@ def profile_view(request):
             target_id = request.POST.get("author_id")
             target_author = Author.objects.filter(id=target_id).first()
 
-            if target_author is not None:
+            # Build Follow activity
+            follow_activity = {
+                "type": "Follow",
+                "summary": f"{author.username} wants to follow you",
+                "author": author.id,         
+                "object": target_id, 
+                "id": f"{author.id}/follow/{uuid.uuid4()}",
+                "state": "REQUESTED",
+                "published": timezone.now().isoformat(),
+                "target_is_local": is_local(str(target_id)),
+            }
 
-                # Build ActivityPub Follow activity
-                follow_activity = {
-                    "type": "Follow",
-                    "summary": f"{author.username} wants to follow {target_author.username}",
-                    "author": str(author.id),         
-                    "object": str(target_author.id), 
-                    "id": f"{author.id}/follow/{uuid.uuid4()}",
-                    "state": "REQUESTED",
-                    "published": timezone.now().isoformat(),
-                    "target_is_local": is_local(str(target_author.id)),
+            distribute_activity(follow_activity, author)
+
+            follow, created = Follow.objects.get_or_create(
+            actor=author,
+            object=target_id,
+            defaults={
+                'id': f"{author.id}/follow/{uuid.uuid4()}",
+                'summary': f"{author.username} wants to follow {target_id}",
+                'published': timezone.now(),
+                'state': "REQUESTED",
                 }
+            )
 
-                # Send the activity to target author's inbox (local or remote)
-                distribute_activity(follow_activity, author)
+            if not created:
+                # Update the follow request timestamp/state
+                follow.state = "REQUESTED"
+                follow.published = timezone.now()
+                follow.save()
 
-                follow, created = Follow.objects.get_or_create(
-                actor=author,
-                object=target_author.id,
-                defaults={
-                    'id': f"{author.id}/follow/{uuid.uuid4()}",
-                    'summary': f"{author.username} wants to follow {target_author.username}",
-                    'published': timezone.now(),
-                    'state': "REQUESTED",
-                    }
-                )
-
-                if not created:
-                    # Update the follow request timestamp/state
-                    follow.state = "REQUESTED"
-                    follow.published = timezone.now()
-                    follow.save()
-
-                return redirect("profile")
-            
-            else:
-                inbox_url = urljoin(target_id, "inbox/")
-                follow_activity = {
-                    "type": "Follow",
-                    "summary": f"{author.username} wants to follow a remote author",
-                    "author": str(author.id),
-                    "object": target_id,
-                    "id": f"{author.id}/follow/{uuid.uuid4()}",
-                    "state": "REQUESTED",
-                    "published": timezone.now().isoformat(),
-                    "target_is_local": False,
-                }
-                push_remote_inbox(inbox_url, follow_activity)
-
-                return redirect("profile")
             return redirect("profile")
+        
 
         if "remove_friend" in request.POST:
             target_id = request.POST.get("remove_friend")
@@ -645,17 +626,18 @@ def profile_view(request):
     authors = get_search_authors(author, query)
 
     for a in authors:
-        if a.get("is_local"):
-            # Django Author object
-            follow = Follow.objects.filter(actor=author, object=a["id"]).first()
-            a["follow_state"] = follow.state if follow else "NONE"
-            a["is_following"] = author.following.filter(id=a["id"]).exists()
-            a["is_friend"] = str(a["id"]) in friend_ids
-        else:
+        #if a.get("is_local"):
+        # Django Author object
+        follow = Follow.objects.filter(actor=author, object=a["id"]).first()
+        a["follow_state"] = follow.state if follow else "NONE"
+        a["is_following"] = author.following.filter(id=a["id"]).exists()
+        a["is_friend"] = str(a["id"]) in friend_ids
+        # we don't need this
+        #else:
             # Remote authors — assume not following/friends by default
-            a["follow_state"] = "NONE"
-            a["is_following"] = False
-            a["is_friend"] = False 
+            #a["follow_state"] = "NONE"
+            #a["is_following"] = False
+            #a["is_friend"] = False 
 
     entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("-published")
     followers = author.followers_set.all()
@@ -1004,15 +986,34 @@ def list_inbox(request, author_id):
 
 @csrf_exempt
 def inbox_view(request, author_id):
-    if request.method == "POST":
-        data = json.loads(request.body)
-        author = Author.objects.get(id=author_id)
-        Inbox.objects.create(
-            id=f"{settings.SITE_URL}/api/inbox/{uuid.uuid4()}",
-            author=author,
-            data=data
-        )
-        return JsonResponse({"success": True})
+    full_id = f"{settings.SITE_URL}/api/authors/{author_id}"
+    try:
+        author = Author.objects.get(id=full_id)
+    except Author.DoesNotExist:
+        return JsonResponse({"error": "Author not found"}, status=404)
+
+    if request.method == "GET":
+        inbox_items = Inbox.objects.filter(author=author).order_by("-received_at")
+        return JsonResponse({
+            "type": "inbox",
+            "author": str(author.id),
+            "items": [item.data for item in inbox_items]
+        })
+
+    elif request.method == "POST":
+        try:
+            body = json.loads(request.body)
+        except:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+        
+        try:
+            Inbox.objects.create(author=author, data=body)
+        except Exception as e:
+            return JsonResponse({"error": f"Failed to create inbox item: {e}"}, status=500)
+
+        return JsonResponse({"status": "created"}, status=201)
+
+    return JsonResponse({"error": "Method not allowed"}, status=405)
 
 """
 @api_view(['POST'])

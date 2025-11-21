@@ -230,7 +230,7 @@ def profile_view(request):
         """
         Fetch all authors from a remote node.
         """
-        api_url = f"{node.id}api/authors/"  # Build API URL from node.id
+        api_url =  urljoin(node.id, "api/authors/")  # Build API URL from node.id
         print("TESTY'TEST'SET'SE'", api_url)
         try:
             print("aattemping to send request")

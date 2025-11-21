@@ -990,18 +990,25 @@ def list_inbox(request, author_id):
 
 @csrf_exempt
 def inbox_view(request, author_id):
+    try:
+        author = Author.objects.get(id=author_id)
+    except Author.DoesNotExist:
+        return Response({"error": "Author not found"}, status=404)
+
+    # Ensure the author has an inbox row
+    Inbox.objects.get_or_create(
+        author=author,
+        defaults={"id": f"{uuid.uuid4()}"}
+    )
+
+    # ---- GET: Return inbox contents ----
     if request.method == "GET":
-        items = [
-            {
-                "id": str(item.id),
-                "author": item.author,
-                "data": item.data,
-                "received_at": item.received_at.isoformat(),
-                "processed": item.processed,
-            }
-            for item in author.inbox_items.all()
-        ]
-        return JsonResponse({"type": "inbox", "items": items}, safe=False)
+        inbox_items = Inbox.objects.filter(author=author).order_by("-received_at")
+        return Response({
+            "type": "inbox",
+            "author": str(author.id),
+            "items": [item.data for item in inbox_items]
+        })
 
     if request.method == "POST":
         data = json.loads(request.body)

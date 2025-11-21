@@ -52,10 +52,12 @@ def send_activity(target_id, activity):
     """
     
     target_author = Author.objects.filter(id=target_id).first()
+    print("TARGET AUTHOR:", target_author)
 
     if target_author:
         # Local author: store in DB inbox
         Inbox.objects.create(author=target_author, data=activity)
+        print("PUSHED TO LOCAL INBOX")
     else:
         # Remote author: build inbox URL from FQID
         inbox_url = urljoin(target_id, "inbox/")

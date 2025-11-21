@@ -453,6 +453,7 @@ def profile_view(request):
         if request.POST.get("action") == "follow":
             # New POST key for following a remote author
             target_id = request.POST.get("author_id")
+            print("TARGET ID", target_id)
             target_author = Author.objects.filter(id=target_id).first()
 
             # Build ActivityPub Follow activity
@@ -1009,7 +1010,7 @@ def inbox_view(request, author_id):
             Inbox.objects.create(author=author, data=body)
         except Exception as e:
             return JsonResponse({"error": f"Failed to create inbox item: {e}"}, status=500)
-            
+
         return JsonResponse({"status": "created"}, status=201)
 
     return JsonResponse({"error": "Method not allowed"}, status=405)

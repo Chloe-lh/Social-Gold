@@ -632,6 +632,7 @@ def profile_view(request):
         a["follow_state"] = follow.state if follow else "NONE"
         a["is_following"] = author.following.filter(id=a["id"]).exists()
         a["is_friend"] = str(a["id"]) in friend_ids
+        # we don't need this
         #else:
             # Remote authors — assume not following/friends by default
             #a["follow_state"] = "NONE"
@@ -642,6 +643,9 @@ def profile_view(request):
     followers = author.followers_set.all()
     following = author.following.all()
     follow_requests = Follow.objects.filter(object=author.id, state="REQUESTED")
+    new_follow_requests = Follow.objects.filter(id=author.id, state="REQUESTED")
+    print(follow_requests)
+    print("NEW FOLLOW REQ", new_follow_requests)
     author.description = markdown.markdown(author.description)
 
     context = {

@@ -15,11 +15,8 @@ def push_remote_inbox(url, activity):
     Push activity to a remote node's inbox URL.
     """
     try:
-        print("gets here)")
         resp = requests.post(url, json=activity, timeout=5)
-        print("gets here 2")
         resp.raise_for_status()
-        print("gets here 3")
         return True
     except requests.RequestException as e:
         print("Remote inbox error:", e, resp.text if 'resp' in locals() else "")
@@ -58,11 +55,9 @@ def send_activity(target_id, activity):
     if target_author:
         # Local author: store in DB inbox
         Inbox.objects.create(author=target_author, data=activity)
-        print("PUSHED TO LOCAL INBOX")
     else:
         # Remote author: build inbox URL from FQID
         inbox_url = f"{target_id}/inbox/"
-        print(inbox_url)
         push_remote_inbox(inbox_url, activity)
 
 def distribute_activity(activity, actor):
@@ -146,7 +141,7 @@ def process_inbox(author):
     """Process all unprocessed activities in this author's inbox."""
     inbox_items = Inbox.objects.filter(author=author, processed=False)
 
-    if not inbox_items.exists():
+    if inbox_items.exists():
         for item in inbox_items:
             activity = item.data
             activity_type = activity.get("type", "").lower()

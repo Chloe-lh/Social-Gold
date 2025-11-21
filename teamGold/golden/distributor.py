@@ -51,7 +51,7 @@ def send_activity(target_id, activity):
     """
     Send an activity to a single target (local or remote).
     """
-    
+    print("TARGET ID:", target_id)
     target_author = Author.objects.filter(id=target_id).first()
     print("TARGET AUTHOR:", target_author)
 
@@ -61,7 +61,7 @@ def send_activity(target_id, activity):
         print("PUSHED TO LOCAL INBOX")
     else:
         # Remote author: build inbox URL from FQID
-        inbox_url = urljoin(target_id, "inbox/")
+        inbox_url = f"{target_id}/inbox/"
         print(inbox_url)
         push_remote_inbox(inbox_url, activity)
 

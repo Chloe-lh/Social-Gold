@@ -460,8 +460,8 @@ def profile_view(request):
             follow_activity = {
                 "type": "Follow",
                 "summary": f"{author.username} wants to follow you",
-                "author": str(author.id),         
-                "object": str(target_id), 
+                "author": author.id,         
+                "object": target_id, 
                 "id": f"{author.id}/follow/{uuid.uuid4()}",
                 "state": "REQUESTED",
                 "published": timezone.now().isoformat(),

@@ -148,7 +148,7 @@ def process_inbox(author):
 
             if activity_type == "follow":
                 # Extract actor and object
-                actor_id = activity.get("author")
+                actor_id = activity.get("object")
                 actor_author = Author.objects.filter(id=actor_id).first()
 
                 # Create Follow request in DB if it doesn't exist

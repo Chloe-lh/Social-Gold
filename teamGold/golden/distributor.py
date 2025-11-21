@@ -154,7 +154,7 @@ def process_inbox(author):
                 # Create Follow request in DB if it doesn't exist
                 follow, created = Follow.objects.get_or_create(
                     actor=actor_author,
-                    object=author,
+                    object=activity.get("author"),
                     defaults={
                         "id": activity.get("id") or f"{actor_author.id}/follow/{uuid.uuid4()}",
                         "summary": activity.get("summary", ""),

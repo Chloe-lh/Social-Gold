@@ -653,7 +653,7 @@ def profile_view(request):
         "entries": entries,
         "followers": followers,
         "following": following,
-        "follow_requests": follow_requests,
+        "follow_requests": new_follow_requests,
         "friends": friends_qs,
         "form": form,
         "authors": authors,

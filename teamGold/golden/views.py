@@ -230,7 +230,7 @@ def profile_view(request):
         """
         Fetch all authors from a remote node.
         """
-        api_url = f"{node.id}/api/authors/"  # Build API URL from node.id
+        api_url = f"{node.id}api/authors/"  # Build API URL from node.id
         print("TESTY'TEST'SET'SE'", api_url)
         try:
             print("aattemping to send request")
@@ -358,7 +358,7 @@ def profile_view(request):
             })
 
         # Remote authors
-        nodes = Node.objects.filter(is_active=True)#.exclude(id=author.host)  # exclude local node
+        nodes = Node.objects.filter(is_active=True)
 
         for node in nodes:
             #print("NODE", node)
@@ -479,7 +479,7 @@ def profile_view(request):
             object=target_id,
             defaults={
                 'id': f"{author.id}/follow/{uuid.uuid4()}",
-                'summary': f"{author.username} wants to follow {target_author}",
+                'summary': f"{author.username} wants to follow {target_id}",
                 'published': timezone.now(),
                 'state': "REQUESTED",
                 }

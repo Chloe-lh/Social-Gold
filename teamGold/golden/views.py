@@ -231,18 +231,18 @@ def profile_view(request):
         Fetch all authors from a remote node.
         """
         api_url =  urljoin(node.id, 'api/authors/')  # Build API URL from node.id
-        print("TESTY'TEST'SET'SE'", api_url)
+        #print("TESTY'TEST'SET'SE'", api_url)
         try:
-            print("aattemping to send request")
+            #print("aattemping to send request")
             response = requests.get(
                 api_url,
                 timeout=5,
                 auth=(node.auth_user, node.auth_pass) if node.auth_user else None
             )
-            print("remote author get request send. awaiting status", response.status_code)
-            print("THIS IS FHE RESPONSE", response.json())
+            #print("remote author get request send. awaiting status", response.status_code)
+            #print("THIS IS FHE RESPONSE", response.json())
             if response.status_code == 200:
-                print("it is a success. now, just need to return it")
+                #print("it is a success. now, just need to return it")
                 data = response.json()
                 return data.get("items", [])
         except requests.exceptions.RequestException as e:
@@ -626,17 +626,17 @@ def profile_view(request):
     authors = get_search_authors(author, query)
 
     for a in authors:
-        if a.get("is_local"):
-            # Django Author object
-            follow = Follow.objects.filter(actor=author, object=a["id"]).first()
-            a["follow_state"] = follow.state if follow else "NONE"
-            a["is_following"] = author.following.filter(id=a["id"]).exists()
-            a["is_friend"] = str(a["id"]) in friend_ids
-        else:
+        #if a.get("is_local"):
+        # Django Author object
+        follow = Follow.objects.filter(actor=author, object=a["id"]).first()
+        a["follow_state"] = follow.state if follow else "NONE"
+        a["is_following"] = author.following.filter(id=a["id"]).exists()
+        a["is_friend"] = str(a["id"]) in friend_ids
+        #else:
             # Remote authors — assume not following/friends by default
-            a["follow_state"] = "NONE"
-            a["is_following"] = False
-            a["is_friend"] = False 
+            #a["follow_state"] = "NONE"
+            #a["is_following"] = False
+            #a["is_friend"] = False 
 
     entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("-published")
     followers = author.followers_set.all()

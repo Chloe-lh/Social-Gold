@@ -990,6 +990,19 @@ def list_inbox(request, author_id):
 
 @csrf_exempt
 def inbox_view(request, author_id):
+    if request.method == "GET":
+        items = [
+            {
+                "id": str(item.id),
+                "author": item.author,
+                "data": item.data,
+                "received_at": item.received_at.isoformat(),
+                "processed": item.processed,
+            }
+            for item in author.inbox_items.all()
+        ]
+        return JsonResponse({"type": "inbox", "items": items}, safe=False)
+
     if request.method == "POST":
         data = json.loads(request.body)
         author = Author.objects.get(id=author_id)

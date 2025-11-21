@@ -643,9 +643,6 @@ def profile_view(request):
     followers = author.followers_set.all()
     following = author.following.all()
     follow_requests = Follow.objects.filter(object=author.id, state="REQUESTED")
-    new_follow_requests = Follow.objects.filter(actor=author, state="REQUESTED")
-    print(follow_requests)
-    print("NEW FOLLOW REQ", new_follow_requests)
     author.description = markdown.markdown(author.description)
 
     context = {
@@ -653,7 +650,7 @@ def profile_view(request):
         "entries": entries,
         "followers": followers,
         "following": following,
-        "follow_requests": new_follow_requests,
+        "follow_requests": follow_requests,
         "friends": friends_qs,
         "form": form,
         "authors": authors,

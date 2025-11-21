@@ -4,6 +4,27 @@ from golden.models import Entry, EntryImage, Author, Comment, Like, Follow, Node
 from golden.services import is_local
 from urllib.parse import urljoin
 
+"""
+This module connects our views and remote nodes with our local database using
+an ActivityPub-style architecture. This approach prevents direct relationships and 
+content manipulation using our database. Through this inbox method, we can send and
+receive deliveries and update our database through this protocol. 
+
+    Step #1: Views create activity dicts and call distribute_activity(activity, actor)
+
+    Step #2: distribute_activity(activity, actor) will decide who should receive that call 
+    based on its type and visibility. Afterwards, it will call send_activity() for each recipient 
+    that needs that activity. 
+
+    Step #3: send_activity() delivers the activity via an inbox model
+        * if it's a local author, then our inbox model
+        * if it's a remote author, then through the remote node's inbox URL using the HTTP POST Method. 
+
+    Step #4: process_inbox(author) will then run on the receiving side, reading all unprocessed Inbox rows
+    for that author and updated the local database as needed. Afterwards, it will mark the item in the Inbox 
+    as processed so that it can be archived. 
+"""
+
 
 def push_local_inbox(author, activity):
     """Push activity to a local inbox (DB only)."""

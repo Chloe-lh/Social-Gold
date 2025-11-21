@@ -476,7 +476,7 @@ def profile_view(request):
 
             follow, created = Follow.objects.get_or_create(
             actor=author,
-            object=target_author.id,
+            object=target_id,
             defaults={
                 'id': f"{author.id}/follow/{uuid.uuid4()}",
                 'summary': f"{author.username} wants to follow {target_author.username}",

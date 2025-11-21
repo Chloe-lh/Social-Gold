@@ -643,7 +643,7 @@ def profile_view(request):
     followers = author.followers_set.all()
     following = author.following.all()
     follow_requests = Follow.objects.filter(object=author.id, state="REQUESTED")
-    new_follow_requests = Follow.objects.filter(id=author.id, state="REQUESTED")
+    new_follow_requests = Follow.objects.filter(actor=author.id, state="REQUESTED")
     print(follow_requests)
     print("NEW FOLLOW REQ", new_follow_requests)
     author.description = markdown.markdown(author.description)

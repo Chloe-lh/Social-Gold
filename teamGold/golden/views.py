@@ -472,16 +472,6 @@ def profile_view(request):
                 distribute_activity(follow_activity, author)
             else:
                 inbox_url = urljoin(target_id, "inbox/")
-                follow_activity = {
-                    "type": "Follow",
-                    "summary": f"{author.username} wants to follow a remote author",
-                    "author": str(author.id),
-                    "object": target_id,
-                    "id": f"{author.id}/follow/{uuid.uuid4()}",
-                    "state": "REQUESTED",
-                    "published": timezone.now().isoformat(),
-                    "target_is_local": False,
-                }
                 push_remote_inbox(inbox_url, follow_activity)
 
             follow, created = Follow.objects.get_or_create(

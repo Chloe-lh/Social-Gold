@@ -53,7 +53,8 @@ urlpatterns = [
 
     # --------------------------- COMMENTS ---------------------------------
     # Accept full-FQID inbox POSTs (remote POST)
-    path("api/authors/<path:author_serial>/inbox/", InboxView.as_view(), name="inbox-accept-fullfqid"),
+    # i just commented thiss line out bcoz it was interfering with the inbox view for all other stuff
+    #path("api/authors/<path:author_serial>/inbox/", InboxView.as_view(), name="inbox-accept-fullfqid"),
     # Author-nested alias for getting comments on an entry from a certain author
     # supports POST and GET
     path("api/authors/<path:author_serial>/entries/<path:entry_serial>/comments/", EntryCommentAPIView.as_view(), name="author-entry-comments"),

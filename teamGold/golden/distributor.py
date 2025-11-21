@@ -15,8 +15,11 @@ def push_remote_inbox(url, activity):
     Push activity to a remote node's inbox URL.
     """
     try:
+        print("gets here)")
         resp = requests.post(url, json=activity, timeout=5)
+        print("gets here 2")
         resp.raise_for_status()
+        print("gets here 3")
         return True
     except requests.RequestException:
         return False
@@ -55,7 +58,8 @@ def send_activity(target_id, activity):
         Inbox.objects.create(author=target_author, data=activity)
     else:
         # Remote author: build inbox URL from FQID
-        inbox_url = f"{target_id.rstrip('/')}/inbox/"
+        inbox_url = urljoin(target_id, "inbox/")
+        print(inbox_url)
         push_remote_inbox(inbox_url, activity)
 
 def distribute_activity(activity, actor):

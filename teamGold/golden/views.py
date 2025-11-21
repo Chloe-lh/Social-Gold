@@ -230,7 +230,7 @@ def profile_view(request):
         """
         Fetch all authors from a remote node.
         """
-        api_url =  urljoin(node.id.rstrip('/') + '/', 'api/authors/')  # Build API URL from node.id
+        api_url =  urljoin(node.id, 'api/authors/')  # Build API URL from node.id
         print("TESTY'TEST'SET'SE'", api_url)
         try:
             print("aattemping to send request")
@@ -466,13 +466,6 @@ def profile_view(request):
                 "published": timezone.now().isoformat(),
                 "target_is_local": is_local(str(target_id)),
             }
-
-            if target_author is not None:
-                # Send the activity to target author's inbox (local or remote)
-                distribute_activity(follow_activity, author)
-            else:
-                inbox_url = urljoin(target_id, "inbox/")
-                push_remote_inbox(inbox_url, follow_activity)
 
             follow, created = Follow.objects.get_or_create(
             actor=author,

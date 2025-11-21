@@ -467,6 +467,8 @@ def profile_view(request):
                 "target_is_local": is_local(str(target_id)),
             }
 
+            distribute_activity(follow_activity, author)
+
             follow, created = Follow.objects.get_or_create(
             actor=author,
             object=target_id,

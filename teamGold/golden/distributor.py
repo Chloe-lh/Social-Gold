@@ -139,87 +139,88 @@ def process_inbox(author):
     """Process all unprocessed activities in this author's inbox."""
     inbox_items = Inbox.objects.filter(author=author, processed=False)
 
-    for item in inbox_items:
-        activity = item.data
-        activity_type = activity.get("type", "").lower()
+    if not inbox_items.exists():
+        for item in inbox_items:
+            activity = item.data
+            activity_type = activity.get("type", "").lower()
 
-        if activity_type == "follow":
-            # Extract actor and object
-            actor_id = activity.get("author")
-            actor_author = Author.objects.filter(id=actor_id).first()
+            if activity_type == "follow":
+                # Extract actor and object
+                actor_id = activity.get("author")
+                actor_author = Author.objects.filter(id=actor_id).first()
 
-            # Create Follow request in DB if it doesn't exist
-            follow, created = Follow.objects.get_or_create(
-                actor=actor_author,
-                object=author,
-                defaults={
-                    "id": activity.get("id") or f"{actor_author.id}/follow/{uuid.uuid4()}",
-                    "summary": activity.get("summary", ""),
-                    "published": activity.get("published", timezone.now()),
-                    "state": activity.get("state", "REQUESTED")
-                }
-            )
-
-        elif activity_type == "process_decision":
-            actor_id = activity.get("object")
-            actor_author = Author.objects.filter(id=actor_id).first()
-            state = activity.get("state")
-            target_id = activity.get("author")
-            target_author = Author.objects.filter(id=target_id).first()
-            if not target_author:
-                # Cannot update table if target author does not exist locally
-                return
-            if state == "ACCEPTED":
-                actor_author.following.add(target_author)
-            #if state == "REJECTED" -> have to update this
-
-        elif activity_type in ["create", "post", "entry"]:
-            # Handle posts: create or update local Entry table
-            from golden.models import Entry
-            obj = activity.get("object", {})
-            Entry.objects.update_or_create(
-                id=obj.get("id"),
-                defaults={
-                    "title": obj.get("title", ""),
-                    "content": obj.get("content", ""),
-                    "contentType": obj.get("contentType", "text/plain"),
-                    "author": author,
-                    "visibility": obj.get("visibility", "PUBLIC"),
-                    "published": obj.get("published", timezone.now()),
-                }
-            )
-
-        elif activity_type == "like":
-            # Similar: handle likes
-            from golden.models import Like, Entry
-            entry_id = activity.get("object")
-            entry = Entry.objects.filter(id=entry_id).first()
-            if entry:
-                Like.objects.get_or_create(
-                    id=activity.get("id") or f"{author.id}/like/{uuid.uuid4()}",
-                    entry=entry,
-                    author=author,
-                    published=activity.get("published", timezone.now())
+                # Create Follow request in DB if it doesn't exist
+                follow, created = Follow.objects.get_or_create(
+                    actor=actor_author,
+                    object=author,
+                    defaults={
+                        "id": activity.get("id") or f"{actor_author.id}/follow/{uuid.uuid4()}",
+                        "summary": activity.get("summary", ""),
+                        "published": activity.get("published", timezone.now()),
+                        "state": activity.get("state", "REQUESTED")
+                    }
                 )
 
-        elif activity_type == "comment":
-            # Handle comments
-            from golden.models import Comment, Entry
-            obj = activity.get("object", {})
-            entry = Entry.objects.filter(id=obj.get("id")).first()
-            if entry:
-                Comment.objects.get_or_create(
-                    id=activity.get("id") or f"{author.id}/comment/{uuid.uuid4()}",
-                    entry=entry,
-                    author=author,
-                    content=obj.get("content", ""),
-                    contentType=obj.get("contentType", "text/plain"),
-                    published=activity.get("published", timezone.now())
+            elif activity_type == "process_decision":
+                actor_id = activity.get("object")
+                actor_author = Author.objects.filter(id=actor_id).first()
+                state = activity.get("state")
+                target_id = activity.get("author")
+                target_author = Author.objects.filter(id=target_id).first()
+                if not target_author:
+                    # Cannot update table if target author does not exist locally
+                    return
+                if state == "ACCEPTED":
+                    actor_author.following.add(target_author)
+                #if state == "REJECTED" -> have to update this
+
+            elif activity_type in ["create", "post", "entry"]:
+                # Handle posts: create or update local Entry table
+                from golden.models import Entry
+                obj = activity.get("object", {})
+                Entry.objects.update_or_create(
+                    id=obj.get("id"),
+                    defaults={
+                        "title": obj.get("title", ""),
+                        "content": obj.get("content", ""),
+                        "contentType": obj.get("contentType", "text/plain"),
+                        "author": author,
+                        "visibility": obj.get("visibility", "PUBLIC"),
+                        "published": obj.get("published", timezone.now()),
+                    }
                 )
 
-        else:
-            raise ValueError(f"Unrecognized activity type: '{activity.get('type')}'")
+            elif activity_type == "like":
+                # Similar: handle likes
+                from golden.models import Like, Entry
+                entry_id = activity.get("object")
+                entry = Entry.objects.filter(id=entry_id).first()
+                if entry:
+                    Like.objects.get_or_create(
+                        id=activity.get("id") or f"{author.id}/like/{uuid.uuid4()}",
+                        entry=entry,
+                        author=author,
+                        published=activity.get("published", timezone.now())
+                    )
 
-        # Mark the inbox item as processed
-        item.processed = True
-        item.save()
+            elif activity_type == "comment":
+                # Handle comments
+                from golden.models import Comment, Entry
+                obj = activity.get("object", {})
+                entry = Entry.objects.filter(id=obj.get("id")).first()
+                if entry:
+                    Comment.objects.get_or_create(
+                        id=activity.get("id") or f"{author.id}/comment/{uuid.uuid4()}",
+                        entry=entry,
+                        author=author,
+                        content=obj.get("content", ""),
+                        contentType=obj.get("contentType", "text/plain"),
+                        published=activity.get("published", timezone.now())
+                    )
+
+            else:
+                raise ValueError(f"Unrecognized activity type: '{activity.get('type')}'")
+
+            # Mark the inbox item as processed
+            item.processed = True
+            item.save()

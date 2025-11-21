@@ -458,7 +458,7 @@ def profile_view(request):
             # Build ActivityPub Follow activity
             follow_activity = {
                 "type": "Follow",
-                "summary": f"{author.username} wants to follow a user",
+                "summary": f"{author.username} wants to follow you",
                 "author": str(author.id),         
                 "object": str(target_id), 
                 "id": f"{author.id}/follow/{uuid.uuid4()}",
@@ -990,35 +990,34 @@ def list_inbox(request, author_id):
 
 @csrf_exempt
 def inbox_view(request, author_id):
+    full_id = f"{settings.SITE_URL}/api/authors/{author_id}"
     try:
-        author = Author.objects.get(id=author_id)
+        author = Author.objects.get(id=full_id)
     except Author.DoesNotExist:
-        return Response({"error": "Author not found"}, status=404)
+        return JsonResponse({"error": "Author not found"}, status=404)
 
-    # Ensure the author has an inbox row
-    Inbox.objects.get_or_create(
-        author=author,
-        defaults={"id": f"{uuid.uuid4()}"}
-    )
-
-    # ---- GET: Return inbox contents ----
     if request.method == "GET":
         inbox_items = Inbox.objects.filter(author=author).order_by("-received_at")
-        return Response({
+        return JsonResponse({
             "type": "inbox",
             "author": str(author.id),
             "items": [item.data for item in inbox_items]
         })
 
-    if request.method == "POST":
-        data = json.loads(request.body)
-        author = Author.objects.get(id=author_id)
+    elif request.method == "POST":
+        try:
+            body = json.loads(request.body)
+        except:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+
         Inbox.objects.create(
             id=f"{settings.SITE_URL}/api/inbox/{uuid.uuid4()}",
             author=author,
             data=data
         )
-        return JsonResponse({"success": True})
+        return JsonResponse({"status": "created"}, status=201)
+
+    return JsonResponse({"error": "Method not allowed"}, status=405)
 
 """
 @api_view(['POST'])

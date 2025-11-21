@@ -22,6 +22,7 @@ def push_remote_inbox(url, activity):
         print("gets here 3")
         return True
     except requests.RequestException:
+        print("Remote inbox error:", e, resp.text if 'resp' in locals() else "")
         return False
 
 

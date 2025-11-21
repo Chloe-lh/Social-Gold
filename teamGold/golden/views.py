@@ -1004,12 +1004,12 @@ def inbox_view(request, author_id):
             body = json.loads(request.body)
         except:
             return JsonResponse({"error": "Invalid JSON"}, status=400)
-
-        Inbox.objects.create(
-            id=f"{settings.SITE_URL}/api/inbox/{uuid.uuid4()}",
-            author=author,
-            data=data
-        )
+        
+        try:
+            Inbox.objects.create(author=author, data=body)
+        except Exception as e:
+            return JsonResponse({"error": f"Failed to create inbox item: {e}"}, status=500)
+            
         return JsonResponse({"status": "created"}, status=201)
 
     return JsonResponse({"error": "Method not allowed"}, status=405)

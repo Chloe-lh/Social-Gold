@@ -618,10 +618,13 @@ def profile_view(request):
                         "profileImage": ra.get("profileImage")
                     })
         return results
-
+    
+    print(f"Logged in user: {request.user}")
     author = Author.from_user(request.user)
+    print(f"Author: {author}")
     remote_follow_requests = []
     inbox_items = Inbox.objects.filter(author=author, processed=False)
+    print(f"Fetched {len(inbox_items)} inbox items for {author.username}")
 
     form = ProfileForm(instance=author)
 
@@ -636,6 +639,7 @@ def profile_view(request):
     # Local follow requests
     local_follow_requests = Follow.objects.filter(object=str(author.id), state="REQUESTED")
     all_follow_requests = list(local_follow_requests) + remote_follow_requests
+    print(f"Total follow requests: {len(all_follow_requests)} (Local: {len(local_follow_requests)}, Remote: {len(remote_follow_requests)})")
 
     if request.method == "GET":
         sync_github_activity(author)

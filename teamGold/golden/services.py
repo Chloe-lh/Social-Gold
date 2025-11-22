@@ -6,9 +6,6 @@ import logging
 from datetime import timezone
 from urllib.parse import unquote, urlparse
 import uuid
-import requests
-from django.conf import settings
-from requests.exceptions import RequestException
 
 def normalize_fqid(fqid: str) -> str:
     if not fqid:
@@ -184,106 +181,30 @@ def paginate(request, allowed):
     page_obj = paginator.get_page(page_number)
     return page_obj
 
-def sync_remote_entry(remote_entry, node):
-    """
-    Sync a remote entry (fetched from a node) with the local database.
-
-    :param remote_entry: The entry data retrieved from the remote node.
-    :param node: The remote node where the entry was fetched.
-    :return: The local Entry object, or None if the sync failed.
-    """
+'''
+Extracts remote node object from fqid (https://node1.com/api/authors/<uuid>/)
+    will return node instance or None if host is local or not trusted
+'''
+def get_remote_node_from_fqid(fqid):
+    if not fqid: return None
+    fqid = unquote(str(fqid)).rstrip('/')
     try:
-        entry_id = remote_entry.get('id')
-        title = remote_entry.get('title', '')
-        content = remote_entry.get('content', '')
-        author_data = remote_entry.get('author', {})
-        author_id = author_data.get('id')
-        
-        # Assuming you have a function to get or create an author
-        author = Author.objects.get(id=author_id)
-
-        # Create or update the entry
-        entry, created = Entry.objects.update_or_create(
-            id=entry_id,
-            defaults={
-                'author': author,
-                'title': title,
-                'content': content,
-                'visibility': 'PUBLIC', 
-            }
-        )
-        
-        return entry
-    except Exception as e:
-        print(f"Error syncing remote entry: {e}")
+        parsed = urlparse(fqid)
+        if not parsed.scheme or not parsed.netloc:
+            return None
+        remote_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
+    except Exception:
         return None
-    
-def fetch_remote_entries(node, timeout=5):
-    """
-    Fetch entries from a remote node's API.
+    if settings.LOCAL_NODE_URL == remote_base:
+        return None
 
-    :param node: The Node instance representing the remote server.
-    :param timeout: Timeout duration for the HTTP request.
-    :return: A list of remote entries (parsed JSON response).
-    """
-    try:
-        # Construct the URL for the entries API endpoint on the remote node
-        url = f"{node.id.rstrip('/')}/api/entries/"
+    node = Node.objects.filter(id__startswith=remote_base).first()
+    if not node:
+        return None
+    if not node.is_active:
+        return None
+    return node
 
-        # If the node has authentication details, use them
-        auth = None
-        if node.auth_user:
-            auth = (node.auth_user, node.auth_pass)
-
-        # Send GET request to fetch entries
-        response = requests.get(url, auth=auth, timeout=timeout, headers={"Accept": "application/json"})
-
-        # If successful, return the list of entries
-        if response.status_code == 200:
-            return response.json().get('items', [])
-        else:
-            # Log and return an empty list in case of errors
-            print(f"Error fetching entries from {url}: {response.status_code}")
-            return []
-    except RequestException as e:
-        # Log the exception
-        print(f"Failed to fetch entries from {node.id}: {str(e)}")
-        return []
-
-def fetch_or_create_author(author_url):
-    """
-    Fetch or create a remote author by their URL.
-    """
-    from golden.models import Author
-
-    # Check if author already exists locally
-    author = Author.objects.filter(id=author_url).first()
-
-    if not author:
-        # If the author doesn't exist, fetch their data from the remote node and create a new author entry
-        author_data = fetch_remote_author_data(author_url)
-        if author_data:
-            author = Author.objects.create(
-                id=author_url,
-                username=author_data.get("username"),
-                host=author_data.get("host"),
-                profileImage=author_data.get("profileImage"),
-                # Other fields as needed
-            )
-    return author
-
-def fetch_remote_author_data(author_url):
-    """
-    Fetch remote author data from the given URL (using ActivityPub or other protocols).
-    """
-    try:
-        response = requests.get(f"{author_url}/api/authors/")
-        if response.status_code == 200:
-            return response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching remote author data: {e}")
-    return None
-    
 def notify(author, data):
     """
     Notify followers of `author` by POSTing `data` to each follower's node inbox.

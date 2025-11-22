@@ -44,21 +44,48 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         Inbox.objects.create(author=recipient, data=activity)
         return
 
-    recipient_id = normalize_fqid(str(recipient.id))
-    inbox_url = urljoin(f"{recipient.host.rstrip('/')}/", f"api/authors/{recipient_id}/inbox/")
+    # For remote inbox, construct the URL properly
+    # The inbox endpoint expects: /api/authors/<author_id>/inbox/
+    # Extract the UUID or author ID part from the full FQID
+    recipient_id = str(recipient.id).rstrip('/')
+    
+    # Extract the author ID part (UUID) from the FQID
+    # FQID format: https://node.com/api/authors/{uuid}
+    if '/api/authors/' in recipient_id:
+        author_id_part = recipient_id.split('/api/authors/')[-1]
+    else:
+        # Fallback: use the last part of the URL
+        author_id_part = recipient_id.split('/')[-1]
+    
+    # Construct inbox URL: host/api/authors/{uuid}/inbox/
+    inbox_url = f"{recipient.host.rstrip('/')}/api/authors/{author_id_part}/inbox/"
 
+    # Get node authentication if available
+    from .models import Node
+    from urllib.parse import urlparse
+    parsed = urlparse(recipient.host)
+    node_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
+    node = Node.objects.filter(id__startswith=node_base).first()
+    auth = None
+    if node and node.auth_user:
+        auth = (node.auth_user, node.auth_pass)
+        logging.info(f"Using auth for node {node.id}: user={node.auth_user}")
+    
     try:
         response = requests.post(
             inbox_url,
             data=json.dumps(activity),
             headers={"Content-Type": "application/json"},
-            auth=None,
+            auth=auth,
             timeout=10,
         )
         if response.status_code >= 400:
+            logging.error(f"Failed to send activity to {inbox_url}: HTTP {response.status_code} - {response.text}")
             raise Exception(f"Error {response.status_code}: {response.text}")
+        logging.info(f"Successfully sent activity to {inbox_url} (HTTP {response.status_code})")
     except requests.exceptions.RequestException as e:
         logging.error(f"Failed to send activity to {inbox_url}: {e}")
+        raise
 
 def get_followers(author: Author):
     """Return all authors who follow this author (FOLLOW.state=ACCEPTED)."""

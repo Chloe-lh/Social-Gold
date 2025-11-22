@@ -1575,7 +1575,16 @@ def inbox_view(request, author_id):
     # FIRST: try to exact match the author (most likely local)
     author = Author.objects.filter(id__in=expected_ids).first()
 
-    # SECOND: try to fallback and fuzzy match for remote slashes/https differences
+    # SECOND: try exact match with the author_id as-is (for remote full FQIDs)
+    if not author:
+        author = Author.objects.filter(id=author_id).first()
+        if not author:
+            # Try with trailing slash variations
+            author = Author.objects.filter(id=author_id.rstrip('/')).first()
+            if not author:
+                author = Author.objects.filter(id=f"{author_id}/").first()
+
+    # THIRD: try to fallback and fuzzy match for remote slashes/https differences
     if not author:
         author = Author.objects.filter(id__icontains=author_id).first()
 

@@ -43,55 +43,27 @@ def normalize_fqid(fqid: str) -> str:
 
 
 def send_activity_to_inbox(recipient: Author, activity: dict):
-    """
-    Deliver activity to a single recipient's inbox.
-    Local recipients → DB inbox insert
-    Remote recipients → POST to remote inbox endpoint
-    """
-    import logging
-    logger = logging.getLogger(__name__)
-
-    # LOCAL DELIVERY
+    """Send activity to local or remote inbox."""
     if recipient.host.rstrip("/") == settings.SITE_URL.rstrip("/"):
+        # Local delivery to the inbox
         Inbox.objects.create(author=recipient, data=activity)
-        logger.info(f"Local delivery to {recipient.username}")
         return
 
-    # REMOTE DELIVERY
     recipient_id = normalize_fqid(str(recipient.id))
-    inbox_url = urljoin(recipient.host.rstrip('/') + '/', f"api/authors/{recipient_id}/inbox/")
+    inbox_url = urljoin(f"{recipient.host.rstrip('/')}/", f"api/authors/{recipient_id}/inbox/")
 
     try:
-        auth = None
-        node = Node.objects.filter(id__icontains=recipient.host).first()
-        if node and node.auth_user and node.auth_pass:
-            auth = (node.auth_user, node.auth_pass)
-
-        logger.info(f"Sending activity to {inbox_url} for recipient {recipient.id}")
         response = requests.post(
             inbox_url,
             data=json.dumps(activity),
-            headers={
-                "Content-Type": "application/json",
-            },
-            auth=auth,
+            headers={"Content-Type": "application/json"},
+            auth=None,
             timeout=10,
         )
-        
-        logger.info(f"Response from {inbox_url}: {response.status_code}")
-        
         if response.status_code >= 400:
-            logger.error(f"Failed remote inbox delivery to {inbox_url}: {response.status_code} - {response.text[:200]}")
-        else:
-            logger.info(f"Successfully delivered activity to {inbox_url}")
-            
-    except requests.exceptions.Timeout:
-        logger.error(f"Timeout delivering to {inbox_url}")
-    except requests.exceptions.ConnectionError:
-        logger.error(f"Connection error delivering to {inbox_url}")
-    except Exception as e:
-        logger.exception(f"Exception during remote inbox delivery to {inbox_url}: {e}")
-
+            raise Exception(f"Error {response.status_code}: {response.text}")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Failed to send activity to {inbox_url}: {e}")
 
 def get_followers(author: Author):
     """Return all authors who follow this author (FOLLOW.state=ACCEPTED)."""

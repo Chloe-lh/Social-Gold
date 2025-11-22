@@ -597,12 +597,11 @@ def profile_view(request):
             local_qs = local_qs.filter(username__icontains=query)
 
         for a in local_qs:
-            # Extract UUID from FQID for URL-friendly identifier
             uuid_part = fqid_to_uuid(a.id)
             results.append({
-                "id": a.id,  # Full FQID for database operations
-                "uuid": uuid_part,  # UUID part for URLs (use this in templates)
-                "url_id": uuid_part,  # For template URLs - use UUID for local authors
+                "id": a.id,  
+                "uuid": uuid_part, 
+                "url_id": uuid_part, 
                 "username": a.username,
                 "host": a.host,
                 "is_local": True,
@@ -616,19 +615,17 @@ def profile_view(request):
                 if query.lower() in ra.get("username", "").lower():
                     results.append({
                         "id": ra.get("id"),
+                        "uuid": fqid_to_uuid(ra.get("id")),
                         "username": ra.get("username"),
                         "host": ra.get("host"),
                         "is_local": False,
                         "web": ra.get("web"),
-                        "github":ra.get("github"),
+                        "github": ra.get("github"),
                         "profileImage": ra.get("profileImage")
-                    })
+                })
         return results
     
-    print(f"Logged in user: {request.user}")
-    print(f"Request URL: {request.path}")
     author = Author.from_user(request.user)
-    print(f"Author: {author}")
     
     # Process inbox FIRST to create Follow objects from remote follow requests
     process_inbox(author)
@@ -637,7 +634,6 @@ def profile_view(request):
 
     # Fetch all follow requests (both local and remote) - they're all in Follow table after processing
     all_follow_requests = Follow.objects.filter(object=str(author.id), state="REQUESTED")
-    print(f"Total follow requests: {len(all_follow_requests)}")
 
     if request.method == "GET":
         sync_github_activity(author)
@@ -1172,7 +1168,6 @@ def api_follow_action(request):
     target = get_object_or_404(Author, id=target_id)
     actor = Author.from_user(request.user)
 
-    # Ensure that the user isn't trying to follow themselves
     if actor == target:
         return HttpResponseForbidden("You cannot follow yourself.")
 
@@ -1186,7 +1181,6 @@ def api_follow_action(request):
         follow.state = "REQUESTED"
         follow.save()
 
-    # Create the follow activity and send full author data for both actors
     activity = create_follow_activity(actor, target)
     distribute_activity(activity, actor=actor)
 

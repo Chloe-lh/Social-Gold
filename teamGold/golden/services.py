@@ -11,9 +11,8 @@ from django.conf import settings
 from requests.exceptions import RequestException
 
 def normalize_fqid(fqid: str) -> str:
-    if not fqid:
-        return ""
-    return str(fqid).rstrip("/")
+    """Normalize FQID by removing trailing slashes and ensuring consistent format."""
+    return fqid.rstrip("/").lower()  # Ensure lowercase and consistent format
 
 def is_local(fqid: str) -> bool:
     author_host = urlparse(fqid).netloc
@@ -112,15 +111,10 @@ def generate_like_fqid(author):
     like_uuid = uuid.uuid4()
     return f"{author.id}/liked/{like_uuid}"
 
-def fqid_to_uuid(fqid):
-    """
-    Convert a full FQID to UUID.
-    """
-    if not fqid:
-        return None
-    unquoted_fqid = unquote(str(fqid))
-    uid = unquoted_fqid.strip("/").split("/")[-1]
-    return uid
+def fqid_to_uuid(fqid: str) -> str:
+    """Convert a full FQID to UUID, ensuring correct extraction."""
+    fqid = fqid.rstrip("/")
+    return fqid.split("/")[-1]
 
 '''
 pagination for listing comments and likes
@@ -185,28 +179,13 @@ def fetch_remote_entries(node, timeout=5):
     :return: A list of remote entries (parsed JSON response).
     """
     try:
-        # Construct the URL for the entries API endpoint on the remote node
         url = f"{node.id.rstrip('/')}/api/entries/"
-
-        # If the node has authentication details, use them
-        auth = None
-        if node.auth_user:
-            auth = (node.auth_user, node.auth_pass)
-
-        # Send GET request to fetch entries
-        response = requests.get(url, auth=auth, timeout=timeout, headers={"Accept": "application/json"})
-
-        # If successful, return the list of entries
+        response = requests.get(url, timeout=timeout, headers={"Accept": "application/json"})
         if response.status_code == 200:
-            return response.json().get('items', [])
-        else:
-            # Log and return an empty list in case of errors
-            print(f"Error fetching entries from {url}: {response.status_code}")
-            return []
-    except RequestException as e:
-        # Log the exception
-        print(f"Failed to fetch entries from {node.id}: {str(e)}")
-        return []
+            return response.json().get("items", [])
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error fetching entries from {url}: {e}")
+    return []
 
 def fetch_or_create_author(author_url):
     """
@@ -248,7 +227,6 @@ def get_or_create_foreign_author(remote_id: str) -> Author:
     We ensure the ID is stored consistently as an FQID.
     """
     remote_id = normalize_fqid(remote_id)
-    
     author, created = Author.objects.get_or_create(
         id=remote_id,  # Store remote author ID as FQID
         defaults={'username': f"remote_author_{uuid.uuid4()}", 'host': urlparse(remote_id).netloc}

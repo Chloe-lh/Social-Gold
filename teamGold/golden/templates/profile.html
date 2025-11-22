@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% load static %}
+{% load author_filters %}
 {% block head %}
 <link rel="stylesheet" href="{% static 'golden/css/global.css' %}">
 <link rel="stylesheet" href="{% static 'golden/css/profile.css' %}">
@@ -81,7 +82,7 @@
       {% if followers %}
         {% for f in followers %}
           <section class="author-list-item follower-row">
-            <a href="{% url 'public-profile' f.id %}" class="follower-username">{{ f.username }}</a>
+            <a href="{% url 'public-profile' f.id|author_url_id %}" class="follower-username">{{ f.username }}</a>
             {% if f in friends %}
               <img class="friend-icon" src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
             {% endif %}
@@ -98,7 +99,7 @@
       {% if following %}
         {% for f in following %}
           <section class="author-list-item follower-row">
-            <a href="{% url 'public-profile' f.id %}" class="follower-username">{{ f.username }}</a>
+            <a href="{% url 'public-profile' f.id|author_url_id %}" class="follower-username">{{ f.username }}</a>
             {% if f in friends %}
               <img class="friend-icon" src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
             {% endif %}
@@ -123,7 +124,7 @@
       <ul style="list-style: none; padding: 0;">
         {% for req in follow_requests %}
         <li class="request-row">
-          <a href="{% url 'public-profile' req.actor.id %}">{{ req.actor.username }} wants to follow you</span>
+          <a href="{% url 'public-profile' req.actor.id|author_url_id %}">{{ req.actor.username }} wants to follow you</span>
             <form method="POST" style="display:inline;">
               {% csrf_token %}
               <input type="hidden" name="follow_id" value="{{ req.id }}">
@@ -164,7 +165,7 @@
       <ul>
       {% for a in authors %}
         <li style="padding: 10px; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center;">
-          <a href="{% url 'public-profile' a.id %}">{{ a.username }}</a>
+          <a href="{% url 'public-profile' a.url_id|default:a.uuid|default:a.id %}">{{ a.username }}</a>
 
           {% if a.is_friend %}
             <button class="follow-btn" disabled>

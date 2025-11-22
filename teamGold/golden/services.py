@@ -10,6 +10,7 @@ import logging
 from django.core.paginator import Paginator
 from datetime import datetime, timezone
 from golden.models import Author
+from .services import is_local
 
 
 import requests
@@ -126,9 +127,29 @@ def generate_like_fqid(author):
 convert from fqid to uuid
 '''
 def fqid_to_uuid(fqid):
-    unquoted_fqid = unquote(fqid)
+    """Extract UUID from a full FQID for URL-friendly identifiers."""
+    if not fqid:
+        return None
+    unquoted_fqid = unquote(str(fqid))
+    # Remove trailing slash and get the last segment
     uid = unquoted_fqid.strip("/").split("/")[-1]
     return uid
+
+def get_author_url_id(author):
+    """
+    Get URL-friendly identifier for an author.
+    For local authors: returns UUID part
+    For remote authors: returns full FQID (URL-encoded if needed)
+    """
+    if not author or not author.id:
+        return None
+    
+    if is_local(author.id):
+        # Local author - use UUID for cleaner URLs
+        return fqid_to_uuid(author.id)
+    else:
+        # Remote author - use full FQID
+        return str(author.id).rstrip('/')
 '''
 pagination for listing comments and likes
     params: allowed - filtered list of items 
@@ -165,9 +186,6 @@ def is_local(author_id: str) -> bool:
     return str(author_id).startswith(local_prefix)
 
 
-# ! edited code 
-
-
 def get_or_create_foreign_author(fqid: str, host: str = None, username: str = None):
     """
     Ensures a remote author exists locally.
@@ -179,10 +197,38 @@ def get_or_create_foreign_author(fqid: str, host: str = None, username: str = No
         host: Optional host URL to use if fqid is just a UUID
         username: Optional username to use instead of guessing from FQID
     """
-    # If we already have this author, return it
+    # If we already have this author by ID, return it
     author = Author.objects.filter(id=fqid).first()
     if author:
+        # Update username if provided and different
+        if username and author.username != username:
+            author.username = username
+            author.save()
         return author
+    
+    # Also check by username if username is provided
+    # This ensures nodeadmin and the UUID represent the same person
+    if username:
+        # Check if this is a local author by examining the FQID
+        is_local_author = is_local(fqid) if fqid.startswith('http') else (host is None or host == settings.SITE_URL.rstrip('/'))
+        
+        # Try to find by username to see if author already exists
+        existing = Author.objects.filter(username=username).first()
+        if existing:
+            # If found by username, update the ID if it's different (shouldn't happen normally)
+            if existing.id != fqid:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Found author '{username}' with different ID: {existing.id} vs {fqid}")
+                # For local authors, prefer the existing ID to avoid duplicates
+                if is_local(existing.id) and is_local_author:
+                    # Update the FQID to match if they're both local
+                    if not fqid.startswith('http') and host:
+                        # Reconstruct full FQID and update
+                        full_fqid = f"{settings.SITE_URL.rstrip('/')}/api/authors/{fqid}"
+                        if full_fqid != existing.id:
+                            logger.warning(f"Author '{username}' exists but IDs don't match. Using existing: {existing.id}")
+            return existing
     
     # Check if fqid is a full URL or just a UUID
     if "/api/authors/" in fqid or fqid.startswith("http"):

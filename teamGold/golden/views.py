@@ -22,6 +22,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.http import (HttpResponseBadRequest, HttpResponseForbidden, JsonResponse)
 from django.shortcuts import get_object_or_404, redirect, render
+from django.http import Http404
 from django.utils.html import escape
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic.edit import FormView
@@ -175,7 +176,9 @@ def stream_view(request):
     Primary view to see all entries and their filtered variations 
     """
     # current user as Author
-    user_author = request.user
+    user_author = Author.from_user(request.user)
+    if not user_author:
+        return redirect('login')
     process_inbox(user_author)
 
     follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
@@ -595,8 +598,13 @@ def profile_view(request):
             local_qs = local_qs.filter(username__icontains=query)
 
         for a in local_qs:
+            # Extract UUID from FQID for URL-friendly identifier
+            from golden.services import fqid_to_uuid
+            uuid_part = fqid_to_uuid(a.id)
             results.append({
-                "id": a.id,
+                "id": a.id,  # Full FQID for database operations
+                "uuid": uuid_part,  # UUID part for URLs (use this in templates)
+                "url_id": uuid_part,  # For template URLs - use UUID for local authors
                 "username": a.username,
                 "host": a.host,
                 "is_local": True,
@@ -718,6 +726,17 @@ def profile_view(request):
             
             # Get or create the target author (local or remote)
             target = Author.objects.filter(id=target_id).first()
+            
+            # Also try to find by username if it's a local author (UUID)
+            # This ensures nodeadmin and UUID represent the same person
+            if not target:
+                target_username = request.POST.get("displayName") or request.POST.get("username")
+                from golden.services import is_local
+                # Check if it looks like a local UUID
+                if target_username and ('-' not in str(target_id).split('/')[-1] or is_local(target_id)):
+                    # Try finding by username first for local authors
+                    target = Author.objects.filter(username=target_username).first()
+            
             if not target:
                 # If author doesn't exist locally, create a foreign author stub
                 # Try to find the author in search results to get host/username
@@ -797,6 +816,25 @@ def profile_view(request):
     entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("-published")
     followers = author.followers_set.all()
     following = author.following.all()
+    
+    # Add URL-friendly IDs to followers and following for templates
+    # For local authors, use UUID; for remote, use full FQID
+    from golden.services import fqid_to_uuid, is_local
+    followers_with_urls = []
+    for f in followers:
+        url_id = fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')
+        followers_with_urls.append({'author': f, 'url_id': url_id})
+    
+    following_with_urls = []
+    for f in following:
+        url_id = fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')
+        following_with_urls.append({'author': f, 'url_id': url_id})
+    
+    # Also add URL-friendly IDs to follow requests
+    follow_requests_with_urls = []
+    for req in all_follow_requests:
+        actor_url_id = fqid_to_uuid(req.actor.id) if is_local(req.actor.id) else req.actor.id.rstrip('/')
+        follow_requests_with_urls.append({'request': req, 'actor_url_id': actor_url_id})
 
     # Sanitize the description for safe HTML display
     author.description = sanitize_markdown_to_html(author.description)
@@ -805,9 +843,12 @@ def profile_view(request):
     context = {
         "author": author,
         "entries": entries,
-        "followers": followers,
-        "following": following,
-        "follow_requests": all_follow_requests,
+        "followers": followers,  # Keep original for compatibility
+        "followers_with_urls": followers_with_urls,  # With URL-friendly IDs
+        "following": following,  # Keep original for compatibility
+        "following_with_urls": following_with_urls,  # With URL-friendly IDs
+        "follow_requests": all_follow_requests,  # Keep original
+        "follow_requests_with_urls": follow_requests_with_urls,  # With URL-friendly IDs
         "friends": friends_qs,
         "form": ProfileForm(instance=author),  
         "authors": authors,  
@@ -823,8 +864,42 @@ def public_profile_view(request, author_id):
 
     Only shows basic author info (name, github, email, etc.) and list of their entries.
     Tabs and editing are removed.
+    
+    Handles both UUID format (68e52a5b-b117-44ef-82b8-25800fa9fc9b) and full FQID format.
     """
-    author = get_object_or_404(Author, id=author_id)
+    from golden.services import fqid_to_uuid, is_local
+    from django.conf import settings
+    
+    # Try to find author by full FQID first
+    author = Author.objects.filter(id=author_id).first()
+    
+    # If not found and it looks like a UUID, try constructing the full FQID
+    if not author:
+        # Check if it's a UUID (contains dashes and no slashes)
+        if '-' in author_id and '/' not in author_id:
+            # It's a UUID - try to find by constructing local FQID
+            local_fqid = f"{settings.SITE_URL.rstrip('/')}/api/authors/{author_id}"
+            author = Author.objects.filter(id=local_fqid).first()
+            
+            # Also try matching by username as fallback
+            if not author:
+                author = Author.objects.filter(username=author_id).first()
+        
+        # If still not found and it's a full URL, try extracting UUID
+        elif author_id.startswith('http'):
+            # Extract UUID from full FQID
+            uuid_part = fqid_to_uuid(author_id)
+            if uuid_part:
+                # Try with extracted UUID
+                if is_local(author_id):
+                    local_fqid = f"{settings.SITE_URL.rstrip('/')}/api/authors/{uuid_part}"
+                    author = Author.objects.filter(id=local_fqid).first()
+                else:
+                    # Remote author - find by full FQID
+                    author = Author.objects.filter(id=author_id.rstrip('/')).first()
+    
+    if not author:
+        raise Http404("Author not found")
 
     # Convert description to HTML
     author.description = sanitize_markdown_to_html(author.description)

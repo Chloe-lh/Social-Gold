@@ -3,7 +3,6 @@ from django.conf import settings
 from urllib.parse import unquote, urlparse
 from rest_framework.response import Response
 from .models import Node
-import requests
 import json
 from django.db import transaction
 from .models import Author
@@ -11,6 +10,8 @@ import logging
 from django.core.paginator import Paginator
 from datetime import datetime, timezone
 
+import requests
+from requests.auth import HTTPBasicAuth
 
 def notify(author, data):
     """

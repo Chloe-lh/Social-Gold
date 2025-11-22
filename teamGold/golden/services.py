@@ -146,12 +146,23 @@ def sync_remote_entry(remote_entry, node):
     try:
         entry_id = remote_entry.get('id')
         title = remote_entry.get('title', '')
-        content = remote_entry.get('content', '')
+        raw_content = remote_entry.get('content', '')
         author_data = remote_entry.get('author', {})
         author_id = author_data.get('id')
         
-        # Assuming you have a function to get or create an author
-        author = Author.objects.get(id=author_id)
+        # Get or create the author
+        author = Author.objects.filter(id=author_id).first()
+        if not author:
+            author = get_or_create_foreign_author(author_id)
+        
+        if not author:
+            print(f"Error syncing remote entry: Could not get or create author {author_id}")
+            return None
+
+        # Absolutize image URLs in content (convert relative to absolute)
+        from .distributor import absolutize_remote_images
+        base_url = node.id.rstrip('/')
+        content = absolutize_remote_images(raw_content, base_url)
 
         # Create or update the entry
         entry, created = Entry.objects.update_or_create(
@@ -160,13 +171,17 @@ def sync_remote_entry(remote_entry, node):
                 'author': author,
                 'title': title,
                 'content': content,
-                'visibility': 'PUBLIC', 
+                'contentType': remote_entry.get('contentType', 'text/plain'),
+                'visibility': remote_entry.get('visibility', 'PUBLIC'),
+                'published': remote_entry.get('published'),
             }
         )
         
         return entry
     except Exception as e:
         print(f"Error syncing remote entry: {e}")
+        import traceback
+        traceback.print_exc()
         return None
     
 def fetch_remote_entries(node, timeout=5):

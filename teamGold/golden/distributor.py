@@ -122,8 +122,13 @@ def absolutize_remote_images(html, base_url):
 
     for img in soup.find_all("img"):
         src = img.get("src")
-        if src and not src.startswith("http"):
-            img["src"] = urljoin(base_url.rstrip("/") + "/", src.lstrip("/"))
+        if src:
+            # Convert relative URLs (starting with /) to absolute URLs
+            if src.startswith("/"):
+                img["src"] = urljoin(base_url.rstrip("/") + "/", src.lstrip("/"))
+            # Also handle relative URLs without leading slash (but skip data: URLs and already absolute URLs)
+            elif not src.startswith("http") and not src.startswith("data:"):
+                img["src"] = urljoin(base_url.rstrip("/") + "/", src)
 
     return str(soup)
 

@@ -648,23 +648,24 @@ def profile_view(request):
         if "follow_id" in request.POST and "action" in request.POST:
             follow_id = request.POST.get("follow_id")
             action = request.POST.get("action")
-            
+
             if not follow_id:
                 return redirect("profile")
-            
+
             follow_request = None
             target = None
 
-            # Check if the follow request is remote
             if follow_id.startswith('api/authors'):
                 follow_request = next((fr for fr in remote_follow_requests if fr.get("id") == follow_id), None)
                 if follow_request:
-                    # Handle remote author follow request
-                    target = Author.objects.get(id=follow_request.get('actor'))
+                    target = Author.objects.get(id=follow_request.get('actor')) # Assign target for remote request
             else:
                 # Handle local follow request
                 follow_request = Follow.objects.get(id=follow_id)
-                target = follow_request.actor
+                target = follow_request.actor # Assign target for local request
+
+            if target is None:
+                return HttpResponseForbidden("Invalid follow target.")
 
             if action == "approve":
                 if follow_request:
@@ -676,13 +677,13 @@ def profile_view(request):
                         distribute_activity(activity, actor=author)
                 target.following.add(author)  # Add author to the target's following list
                 target.save()
+
             elif action == "reject":
                 if follow_request:
                     if isinstance(follow_request, Follow):
                         follow_request.state = "REJECTED"
                         follow_request.save()
                     else:
-                        # Handle remote reject
                         activity = create_reject_follow_activity(author, target.id)
                         distribute_activity(activity, actor=author)
 
@@ -714,7 +715,6 @@ def profile_view(request):
         if request.POST.get("action") == "follow":
             target_id = request.POST.get("author_id")
 
-            # Ensure target is defined
             if target_id:
                 target = get_object_or_404(Author, id=target_id)
             else:
@@ -722,7 +722,7 @@ def profile_view(request):
 
             follow, created = Follow.objects.get_or_create(
                 actor=author,
-                object=str(target.id),
+                object=str(target.id), 
                 defaults={
                     "id": f"{author.id}/follow/{uuid.uuid4()}",
                     "summary": f"{author.username} wants to follow {target.username}",
@@ -736,7 +736,7 @@ def profile_view(request):
                 follow.published = dj_timezone.now()
                 follow.save()
 
-            activity = create_follow_activity(author, target.id)
+            activity = create_follow_activity(author, target) 
             distribute_activity(activity, actor=author)
             messages.success(request, "Follow request sent")
 
@@ -771,14 +771,10 @@ def profile_view(request):
 
             return redirect("profile")
 
-    # Function to get the author's friends and friend ids
     friends_qs, friend_ids = get_friends_context(author)
-
-    # Process search query
     query = request.GET.get("q", "").strip()
     authors = get_search_authors(author, query)
 
-    # Add follow information to each author in the search results
     for a in authors:
         if a.get("is_local"):
             follow = Follow.objects.filter(actor=author, object=a["id"]).first()
@@ -811,7 +807,6 @@ def profile_view(request):
         "query": escape(query),  
     }
 
-    # Render the profile page with the context
     return render(request, "profile.html", context)
 
 @login_required

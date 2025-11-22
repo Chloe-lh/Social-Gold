@@ -137,7 +137,7 @@ def create_like_activity(author, liked_object_fqid):
 
 # ! needs work 
 
-def create_follow_activity(author, target_id):
+def create_follow_activity(author, target):
     """
     Creates a follow activity when author wants to follow target.
     """
@@ -152,7 +152,7 @@ def create_follow_activity(author, target_id):
         },
         "object": {
             "type": "author",
-            "id": target_id,
+            "id": target.id,
             "host": target.host,
             "displayName": target.username,
             "profileImage": target.profileImage if target.profileImage else None,

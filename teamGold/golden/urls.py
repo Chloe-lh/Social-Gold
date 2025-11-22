@@ -1,8 +1,8 @@
 from django.urls import path
 from django.contrib.auth import views as auth_views
+from . import views
 
 # API view imports (use the modules under golden.api)
-from . import views
 from .api.profileAPIView import ProfileAPIView
 from .api.nodeAPIView import NodeAPIView
 from .api.friendsAPIView import AuthorFriendsView, FollowAPIView
@@ -10,7 +10,6 @@ from .api.entryAPIView import EntryAPIView, EntryImageAPIView
 from .api.commentAPIView import EntryCommentAPIView, SingleCommentAPIView
 from .api.likeAPIView import LikeAPIView
 from .api.inbox import InboxView
-
 
 '''
 These URL Patterns registers all views 
@@ -22,7 +21,7 @@ urlpatterns = [
     path("signup/", views.signup, name="signup"),
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
     path('profile/', views.profile_view, name='profile'),
-    path('profile/<int:author_id>/', views.public_profile_view, name='public-profile'),
+    path("authors/<path:author_id>/", views.public_profile_view, name="public-profile"),
     # profile should contain: main profile that contains a list of the author's entries
     # profile also contains the following: followers, following, and requests
     path('profile/followers/', views.followers, name='followers'),
@@ -46,12 +45,6 @@ urlpatterns = [
     path("api/Profile/<path:id>/", ProfileAPIView.as_view(), name="get-profile"),
     path("api/Node/<path:id>/", NodeAPIView.as_view(), name="get-node"),
     path("api/Follow/<path:id>/", FollowAPIView.as_view(), name="get-follow"),
-    # List all follow requests for an author
-    path("api/authors/<path:author_id>/follow-requests/", views.api_follow_requests, name="api_follow_requests"),
-    # Accept a follow request
-    path("api/follow-requests/<path:follow_id>/accept/", views.api_accept_follow, name="api_accept_follow"),
-    # Reject a follow request
-    path("api/follow-requests/<path:follow_id>/reject/", views.api_reject_follow, name="api_reject_follow"),
     path("api/Author/<path:author_id>/friends/", AuthorFriendsView.as_view()),
     path("api/Like/<path:id>/", LikeAPIView.as_view(), name="get-like"),
     # Backwards-compatible Entry comments alias must come before the generic Entry route

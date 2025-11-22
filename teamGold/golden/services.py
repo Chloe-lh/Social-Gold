@@ -10,62 +10,93 @@ import requests
 from django.conf import settings
 from requests.exceptions import RequestException
 
-logger = logging.getLogger(__name__)
+def normalize_fqid(fqid: str) -> str:
+    if not fqid:
+        return ""
+    return str(fqid).rstrip("/")
 
-def get_or_create_foreign_author(fqid: str, host: str = None, username: str = None):
+def is_local(fqid: str) -> bool:
+    author_host = urlparse(fqid).netloc
+    site_host = urlparse(settings.SITE_URL).netloc
+    return author_host == site_host
+
+def get_or_create_author(fqid: str) -> Author:
     """
-    Ensures a remote author exists locally.
-    example: https://node3.herokuapp.com/api/authors/abc123-uuid
-
-    Args:
-        fqid: Full Qualified ID (FQID) of the author, e.g. "https://node.com/api/authors/uuid"
-              Can also be just a UUID if host is provided
-        host: Optional host URL to use if fqid is just a UUID
-        username: Optional username to use instead of guessing from FQID
+    Fetch or create a remote or local author.
+    If the author is not found locally, we attempt to create a stub for the remote author.
     """
-    author = Author.objects.filter(id=fqid).first()
-    if author:
-        if username and author.username != username:
-            author.username = username
-            author.save()
-        return author
-    
-    if username:
-        is_local_author = is_local(fqid) if fqid.startswith('http') else (host is None or host == settings.SITE_URL.rstrip('/'))
-        
-        existing = Author.objects.filter(username=username).first()
-        if existing:
-            if existing.id != fqid:
-                logger.warning(f"Found author '{username}' with different ID: {existing.id} vs {fqid}")
-                if is_local(existing.id) and is_local_author:
-                    if not fqid.startswith('http') and host:
-                        full_fqid = f"{settings.SITE_URL.rstrip('/')}/api/authors/{fqid}"
-                        if full_fqid != existing.id:
-                            logger.warning(f"Author '{username}' exists but IDs don't match. Using existing: {existing.id}")
-            return existing
-    
-    if "/api/authors/" in fqid or fqid.startswith("http"):
-        full_fqid = fqid.rstrip("/")
-        host = host or full_fqid.split("/api/authors/")[0]
-        guessed_username = username or full_fqid.split("/")[-1]
-        author_id = full_fqid
-    elif host:
-        uuid_part = fqid.rstrip("/")
-        host = host.rstrip("/")
-        author_id = f"{host}/api/authors/{uuid_part}"
-        guessed_username = username or uuid_part
-    else:
-        logger.error(f"Cannot create foreign author: invalid FQID format '{fqid}', host='{host}'")
-        return None
-    
-    author = Author.objects.create(
-        id=author_id,
-        username=guessed_username or "Unknown",
-        host=host,
-        is_approved=True,
-    )
-
+    fqid = normalize_fqid(fqid)
+    author, created = Author.objects.get_or_create(id=fqid)
     return author
+
+def create_activity(author, activity_type, object_data, suffix="posts"):
+    activity_id = f"{author.id.rstrip('/')}/{suffix}/{uuid.uuid4()}"
+    activity = {
+        "type": activity_type,
+        "id": activity_id,
+        "actor": str(author.id),
+        "published": timezone.now().isoformat(),
+        "summary": f"{author.username} performed a {activity_type} activity",
+        "object": object_data
+    }
+    return activity
+
+def create_follow_activity(author, target):
+    object_data = {
+        "type": "Follow",
+        "actor": str(author.id),
+        "object": str(target.id),
+        "published": timezone.now().isoformat(),
+        "state": "REQUESTED"
+    }
+    return create_activity(author, "Follow", object_data, "follow")
+
+def process_remote_activity(activity_data):
+    activity_type = activity_data.get("type", "").lower()
+    actor_url = activity_data.get("actor")
+    object_url = activity_data.get("object")
+
+    actor = get_or_create_author(actor_url)
+    object_author = get_or_create_author(object_url)
+
+    # Process different activity types
+    if activity_type == "follow":
+        process_follow_activity(actor, object_author)
+    elif activity_type == "accept":
+        process_accept_activity(actor, object_author)
+    elif activity_type == "reject":
+        process_reject_activity(actor, object_author)
+    
+    return True
+
+def process_follow_activity(actor, target):
+    follow, created = Follow.objects.get_or_create(actor=actor, object=target)
+    follow.state = "REQUESTED"
+    follow.save()
+
+def get_remote_node_from_fqid(fqid):
+    """
+    Extract the remote node from an FQID. This method checks if the FQID is local or remote.
+    If remote, it attempts to resolve the remote node using the provided FQID.
+    """
+    if is_local(fqid):
+        return None  
+    fqid = normalize_fqid(fqid)
+    node = Node.objects.filter(id__startswith=urlparse(fqid).netloc).first()
+    
+    if node and node.is_active:
+        return node
+    return None
+
+
+
+
+
+
+
+
+
+# ! OLD ASS CODE !
 
 def generate_comment_fqid(author):
     """
@@ -110,30 +141,6 @@ def paginate(request, allowed):
     paginator = Paginator(allowed, page_size)
     page_obj = paginator.get_page(page_number)
     return page_obj
-
-'''
-Extracts remote node object from fqid (https://node1.com/api/authors/<uuid>/)
-    will return node instance or None if host is local or not trusted
-'''
-def get_remote_node_from_fqid(fqid):
-    if not fqid: return None
-    fqid = unquote(str(fqid)).rstrip('/')
-    try:
-        parsed = urlparse(fqid)
-        if not parsed.scheme or not parsed.netloc:
-            return None
-        remote_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
-    except Exception:
-        return None
-    if settings.LOCAL_NODE_URL == remote_base:
-        return None
-
-    node = Node.objects.filter(id__startswith=remote_base).first()
-    if not node:
-        return None
-    if not node.is_active:
-        return None
-    return node
 
 def sync_remote_entry(remote_entry, node):
     """
@@ -200,6 +207,53 @@ def fetch_remote_entries(node, timeout=5):
         # Log the exception
         print(f"Failed to fetch entries from {node.id}: {str(e)}")
         return []
+
+def fetch_or_create_author(author_url):
+    """
+    Fetch or create a remote author by their URL.
+    """
+    from golden.models import Author
+
+    # Check if author already exists locally
+    author = Author.objects.filter(id=author_url).first()
+
+    if not author:
+        # If the author doesn't exist, fetch their data from the remote node and create a new author entry
+        author_data = fetch_remote_author_data(author_url)
+        if author_data:
+            author = Author.objects.create(
+                id=author_url,
+                username=author_data.get("username"),
+                host=author_data.get("host"),
+                profileImage=author_data.get("profileImage"),
+                # Other fields as needed
+            )
+    return author
+
+def fetch_remote_author_data(author_url):
+    """
+    Fetch remote author data from the given URL (using ActivityPub or other protocols).
+    """
+    try:
+        response = requests.get(f"{author_url}/api/authors/")
+        if response.status_code == 200:
+            return response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching remote author data: {e}")
+    return None
+
+def get_or_create_foreign_author(remote_id: str) -> Author:
+    """
+    This function ensures that we can create or retrieve an author from a remote node.
+    We ensure the ID is stored consistently as an FQID.
+    """
+    remote_id = normalize_fqid(remote_id)
+    
+    author, created = Author.objects.get_or_create(
+        id=remote_id,  # Store remote author ID as FQID
+        defaults={'username': f"remote_author_{uuid.uuid4()}", 'host': urlparse(remote_id).netloc}
+    )
+    return author
     
 def notify(author, data):
     """

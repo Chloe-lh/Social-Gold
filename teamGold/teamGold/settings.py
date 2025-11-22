@@ -172,3 +172,25 @@ LOCAL_NODE_URL = SITE_URL
 
 STATIC_ROOT = BASE_DIR / "staticfiles" 
 STATIC_URL = "/static/"
+
+# Logging added 
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'golden': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
+}

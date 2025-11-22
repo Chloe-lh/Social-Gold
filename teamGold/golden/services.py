@@ -213,6 +213,9 @@ def sync_remote_entries(node, local_user_author):
     return synced_entries
 
 def fetch_remote_entries(node, timeout=5):
+    import logging
+    logger = logging.getLogger(__name__)
+    
     url = f"{node.id.rstrip('/')}/api/entries/"
 
     auth = None
@@ -220,12 +223,26 @@ def fetch_remote_entries(node, timeout=5):
         auth = HTTPBasicAuth(node.auth_user, node.auth_pass)
 
     try:
-        r = requests.get(url, auth=auth, timeout=timeout)
+        logger.info(f"Fetching entries from {url}")
+        r = requests.get(
+            url, 
+            auth=auth, 
+            timeout=timeout,
+            headers={
+                "Accept": "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\""
+            }
+        )
+        logger.info(f"Response from {url}: {r.status_code}")
+        
         if r.status_code != 200:
+            logger.warning(f"Non-200 response from {url}: {r.status_code}")
             return []
         data = r.json()
-        return data.get("items", [])
-    except requests.RequestException:
+        items = data.get("items", [])
+        logger.info(f"Fetched {len(items)} entries from {url}")
+        return items
+    except requests.RequestException as e:
+        logger.error(f"Request exception fetching from {url}: {e}")
         return []
 
 def sync_remote_entry(item, node):

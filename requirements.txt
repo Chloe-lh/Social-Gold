@@ -25,3 +25,4 @@ django-csp==4.0
 django-storages==1.14.6
 bleach==6.3.0
 boto3==1.41.2
+beautifulsoup4==4.14.2

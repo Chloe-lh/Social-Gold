@@ -6,6 +6,8 @@ from urllib.parse import urljoin
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
 import uuid
+import json
+from bs4 import BeautifulSoup
 
 """
 This module connects our views and remote nodes with our local database using
@@ -32,12 +34,21 @@ receive deliveries and update our database through this protocol.
 # * Distributor Helper Functions
 # * ============================================================
 
+def normalize_fqid(fqid: str) -> str:
+    """Normalize FQID by removing trailing slashes and ensuring consistent format."""
+    if not fqid:
+        return ""
+    return str(fqid).rstrip("/")
+
 def send_activity_to_inbox(recipient: Author, activity: dict):
     """
     Deliver activity to a single recipient's inbox.
     Local recipients → DB inbox insert
     Remote recipients → POST to remote inbox endpoint
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     # LOCAL DELIVERY
     if recipient.host.rstrip("/") == settings.SITE_URL.rstrip("/"):
         Inbox.objects.create(author=recipient, data=activity)
@@ -55,15 +66,33 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         if node and node.auth_user and node.auth_pass:
             auth = (node.auth_user, node.auth_pass)
 
-        requests.post(
+        logger.info(f"Sending activity to {inbox_url} for recipient {recipient.id}")
+        logger.debug(f"Activity type: {activity.get('type')}, Actor: {activity.get('actor')}")
+
+        response = requests.post(
             inbox_url,
             data=json.dumps(activity),
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\"",
+                "Accept": "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\""
+            },
             auth=auth,
-            timeout=5,
+            timeout=10,
         )
+        
+        logger.info(f"Response from {inbox_url}: {response.status_code}")
+        
+        if response.status_code >= 400:
+            logger.error(f"Failed remote inbox delivery to {inbox_url}: {response.status_code} - {response.text[:200]}")
+        else:
+            logger.info(f"Successfully delivered activity to {inbox_url}")
+            
+    except requests.exceptions.Timeout:
+        logger.error(f"Timeout delivering to {inbox_url}")
+    except requests.exceptions.ConnectionError:
+        logger.error(f"Connection error delivering to {inbox_url}")
     except Exception as e:
-        print(f"[WARN] Failed remote inbox delivery to {inbox_url}: {e}")
+        logger.exception(f"Exception during remote inbox delivery to {inbox_url}: {e}")
 
 def get_followers(author: Author):
     """Return all authors who follow this author (FOLLOW.state=ACCEPTED)."""
@@ -91,7 +120,6 @@ def absolutize_remote_images(html, base_url):
     if not html or not base_url:
         return html
     
-    from bs4 import BeautifulSoup
     soup = BeautifulSoup(html, "html.parser")
 
     for img in soup.find_all("img"):
@@ -261,43 +289,87 @@ def process_inbox(author: Author):
         # FEATURE: ACCEPT FOLLOW
         elif activity_type == "accept":
             follow_obj = obj or {}
-            follower_id = follow_obj.get("actor")
-            target_id = follow_obj.get("object")
+            
+            # Check if obj is a string (Follow ID) or dict (Follow object)
+            if isinstance(follow_obj, str):
+                # It's a Follow ID, look it up
+                follow = Follow.objects.filter(id=follow_obj).first()
+                if follow:
+                    follow.state = "ACCEPTED"
+                    follow.published = parse_datetime(activity.get("published")) or timezone.now()
+                    follow.save()
+                    
+                    # Update following relationship
+                    follower = follow.actor
+                    target = Author.objects.filter(id=follow.object).first()
+                    if follower and target:
+                        follower.following.add(target)
+            else:
+                # It's a Follow object dict
+                follower_id = follow_obj.get("actor")
+                target_id = follow_obj.get("object")
 
-            follower = Author.objects.filter(id=follower_id).first()
-            target = Author.objects.filter(id=target_id).first()
+                follower = Author.objects.filter(id=follower_id).first()
+                target = Author.objects.filter(id=target_id).first()
 
-            if follower and target:
-                Follow.objects.filter(actor=follower, object=target_id).delete()
-                Follow.objects.create(
-                    id=activity.get("id"),
-                    actor=follower,
-                    object=target_id,
-                    state="ACCEPTED",
-                    summary=activity.get("summary", ""),
-                    published=parse_datetime(activity.get("published")) or timezone.now()
-                )
-                follower.following.add(target)
+                if follower and target:
+                    # Find and update the Follow object
+                    follow = Follow.objects.filter(actor=follower, object=target_id).first()
+                    if follow:
+                        follow.state = "ACCEPTED"
+                        follow.published = parse_datetime(activity.get("published")) or timezone.now()
+                        follow.save()
+                    else:
+                        # Create if it doesn't exist
+                        Follow.objects.create(
+                            id=activity.get("id") or f"{follower.id}/follow/{uuid.uuid4()}",
+                            actor=follower,
+                            object=target_id,
+                            state="ACCEPTED",
+                            summary=activity.get("summary", ""),
+                            published=parse_datetime(activity.get("published")) or timezone.now()
+                        )
+                    
+                    # Update following relationship
+                    follower.following.add(target)
 
         # FEATURE: REJECT FOLLOW
         elif activity_type == "reject":
             follow_obj = obj or {}
-            follower_id = follow_obj.get("actor")
-            target_id = follow_obj.get("object")
+            
+            # Check if obj is a string (Follow ID) or dict (Follow object)
+            if isinstance(follow_obj, str):
+                # It's a Follow ID, look it up
+                follow = Follow.objects.filter(id=follow_obj).first()
+                if follow:
+                    follow.state = "REJECTED"
+                    follow.published = parse_datetime(activity.get("published")) or timezone.now()
+                    follow.save()
+            else:
+                # It's a Follow object dict
+                follower_id = follow_obj.get("actor")
+                target_id = follow_obj.get("object")
 
-            follower = Author.objects.filter(id=follower_id).first()
-            target = Author.objects.filter(id=target_id).first()
+                follower = Author.objects.filter(id=follower_id).first()
+                target = Author.objects.filter(id=target_id).first()
 
-            if follower and target:
-                Follow.objects.filter(actor=follower, object=target_id).delete()
-                Follow.objects.create(
-                    id=activity.get("id"),
-                    actor=follower,
-                    object=target_id,
-                    state="REJECTED",
-                    summary=activity.get("summary", ""),
-                    published=parse_datetime(activity.get("published")) or timezone.now()
-                )
+                if follower and target:
+                    # Find and update the Follow object
+                    follow = Follow.objects.filter(actor=follower, object=target_id).first()
+                    if follow:
+                        follow.state = "REJECTED"
+                        follow.published = parse_datetime(activity.get("published")) or timezone.now()
+                        follow.save()
+                    else:
+                        # Create if it doesn't exist
+                        Follow.objects.create(
+                            id=activity.get("id") or f"{follower.id}/follow/{uuid.uuid4()}",
+                            actor=follower,
+                            object=target_id,
+                            state="REJECTED",
+                            summary=activity.get("summary", ""),
+                            published=parse_datetime(activity.get("published")) or timezone.now()
+                        )
 
         # FEATURE: UNFOLLOW
         elif activity_type == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "follow":

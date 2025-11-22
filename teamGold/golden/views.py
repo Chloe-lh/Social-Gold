@@ -586,7 +586,7 @@ def profile_view(request):
                 source=author.github,
                 origin=author.github,
                 published=created_at,
-                is_posted=timezone.now()
+                is_posted=dj_timezone.now()
             )
 
     def get_search_authors(author: Author, query: str):
@@ -636,88 +636,104 @@ def profile_view(request):
         if "follow_id" in request.POST and "action" in request.POST:
             follow_id = request.POST.get("follow_id")
             action = request.POST.get("action")
+            
+            if not follow_id:
+                return redirect("profile")
 
-            if action not in ["approve", "reject"]:
-                return HttpResponseBadRequest("Invalid action")
-
-            follow_request = get_object_or_404(Follow, id=follow_id, object=author.id)
-            follower_author = follow_request.actor
+            # Fetch the follow_request object
+            follow_request = get_object_or_404(Follow, id=follow_id)
 
             if action == "approve":
                 follow_request.state = "ACCEPTED"
-                follow_request.published = dj_timezone.now()
                 follow_request.save()
-                follower_author.following.add(author)
-                
-                activity = create_accept_follow_activity(author, follower_author.id)
+
+                target = follow_request.actor 
+                target.following.add(author)  
+                target.save()
+
+                activity = create_follow_activity(author, target.id) 
                 distribute_activity(activity, actor=author)
+
+                # ! FOR DEBUGGING
+                messages.success(request, f"You have accepted {target.username}'s follow request.")
 
             elif action == "reject":
                 follow_request.state = "REJECTED"
-                follow_request.published = dj_timezone.now()
                 follow_request.save()
 
-                activity = create_reject_follow_activity(author, follower_author.id)
-                distribute_activity(activity, actor=author)
+                # ! FOR DEBUGGING
+                messages.success(request, f"You have rejected {follow_request.actor.username}'s follow request.")
 
             return redirect("profile")
 
         if "remove_follower" in request.POST:
             target_id = request.POST.get("remove_follower")
-            target = get_object_or_404(Author, id=target_id)
-            author.following.remove(author)
+            target = Author.objects.get(id=target_id)
+            author.followers_set.remove(target)
             Follow.objects.filter(actor=target, object=author.id).delete()
-
-            # TODO: MAKE THIS ACTIVITY 
-            activity = create_remove_follower_activity(author, follower_author.id)
-            distribute_activity(activity, actor=author)
 
             return redirect("profile")
         
         if "unfollow" in request.POST:
             target_id = request.POST.get("unfollow")
-            target = get_object_or_404(Author, id=target_id)
-            author.following.remove(target)
-            Follow.objects.filter(actor=author, object=target.id).delete()
+            try:
+                target = Author.objects.get(id=target_id)
+                author.following.remove(target)
+                Follow.objects.filter(actor=author, object=target.id).delete()
 
-            activity = create_unfollow_activity(author, target_id)
-            distribute_activity(activity, actor=author)
+                activity = create_unfollow_activity(author, target_id)
+                distribute_activity(activity, actor=author)
+                messages.success(request, f"Unfollowed {target.username}")
+            except Author.DoesNotExist:
+                messages.error(request, "Author not found")
 
             return redirect("profile")
         
         if request.POST.get("action") == "follow":
             target_id = request.POST.get("author_id")
 
+            # Ensure target is defined
+            if target_id:
+                target = get_object_or_404(Author, id=target_id)
+            else:
+                return redirect("profile")
+
             follow, created = Follow.objects.get_or_create(
                 actor=author,
-                object=target_id,
+                object=str(target.id),
                 defaults={
                     "id": f"{author.id}/follow/{uuid.uuid4()}",
-                    "summary": f"{author.username} wants to follow {target_id}",
+                    "summary": f"{author.username} wants to follow {target.username}",
                     "published": dj_timezone.now(),
                     "state": "REQUESTED",
                 },
             )
+
             if not created:
                 follow.state = "REQUESTED"
                 follow.published = dj_timezone.now()
                 follow.save()
 
-            activity = create_follow_activity(author, target_id)
+            activity = create_follow_activity(author, target.id)
             distribute_activity(activity, actor=author)
+            messages.success(request, "Follow request sent")
 
             return redirect("profile")
 
         if "remove_friend" in request.POST:
             target_id = request.POST.get("remove_friend")
-            target = get_object_or_404(Author, id=target_id)
-            author.following.remove(target)
-            target.following.remove(author)
-            Follow.objects.filter(actor=author, object=target.id).delete()
-            Follow.objects.filter(actor=target, object=author.id).delete()
+            try:
+                target = Author.objects.get(id=target_id)
+                author.following.remove(target)
+                target.following.remove(author)
+                Follow.objects.filter(actor=author, object=target.id).delete()
+                Follow.objects.filter(actor=target, object=author.id).delete()
 
-            activity = create_unfriend_activity(author, target_id)
-            distribute_activity(activity, actor=author)
+                activity = create_unfriend_activity(author, target_id)
+                distribute_activity(activity, actor=author)
+                messages.success(request, f"Removed {target.username} as a friend")
+            except Author.DoesNotExist:
+                messages.error(request, "Author not found")
 
             return redirect("profile")
 
@@ -727,6 +743,9 @@ def profile_view(request):
                 form.save()
                 activity = create_profile_update_activity(author)
                 distribute_activity(activity, actor=author)
+                messages.success(request, "Profile updated successfully")
+            else:
+                messages.error(request, "Failed to update profile")
 
             return redirect("profile")
 
@@ -743,7 +762,7 @@ def profile_view(request):
     entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("-published")
     followers = author.followers_set.all()
     following = author.following.all()
-    follow_requests = Follow.objects.filter(object=author.id, state="REQUESTED")
+    follow_requests = Follow.objects.filter(object=str(author.id), state="REQUESTED")
     
     # Sanitize description for display
     author.description = sanitize_markdown_to_html(author.description)
@@ -1109,6 +1128,8 @@ def list_inbox(request, author_id):
 
 @csrf_exempt
 def inbox_view(request, author_id):
+    import logging
+    logger = logging.getLogger(__name__)
 
     # Build all acceptable forms of this author ID
     base = settings.SITE_URL.rstrip("/")
@@ -1127,6 +1148,7 @@ def inbox_view(request, author_id):
         author = Author.objects.filter(id__icontains=author_id).first()
 
     if not author:
+        logger.warning(f"Author not found for ID: {author_id}")
         return JsonResponse({"error": "Author not found"}, status=404)
 
     if request.method == "GET":
@@ -1138,14 +1160,25 @@ def inbox_view(request, author_id):
         })
 
     elif request.method == "POST":
+        # Check Content-Type
+        content_type = request.META.get('CONTENT_TYPE', '')
+        if 'application/json' not in content_type and 'application/ld+json' not in content_type:
+            logger.warning(f"Invalid Content-Type: {content_type}")
+            return JsonResponse({"error": "Invalid Content-Type. Expected application/json or application/ld+json"}, status=400)
+
         try:
             body = json.loads(request.body)
-        except Exception:
+            logger.info(f"Received inbox activity for {author.username}: type={body.get('type')}, actor={body.get('actor')}")
+            logger.debug(f"Full activity body: {json.dumps(body, indent=2)}")
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in request body: {e}")
             return JsonResponse({"error": "Invalid JSON"}, status=400)
 
         try:
             Inbox.objects.create(author=author, data=body)
+            logger.info(f"Successfully created inbox item for {author.username}")
         except Exception as e:
+            logger.exception(f"Failed to create inbox item: {e}")
             return JsonResponse({"error": f"Failed to create inbox item: {e}"}, status=500)
 
         return JsonResponse({"status": "created"}, status=201)

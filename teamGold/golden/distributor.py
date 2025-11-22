@@ -58,24 +58,8 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         return
 
     # REMOTE DELIVERY
-    # Extract author UUID from recipient.id
-    # Handle cases where recipient.id might be:
-    # - https://remote-author.com/api/authors/12345/ (correct format)
-    # - https://remote-author.com/api/authors/12345/inbox/ (incorrect but possible)
-    recipient_id = str(recipient.id).rstrip("/")
-    
-    # Remove /inbox/ suffix if present
-    if recipient_id.endswith("/inbox"):
-        recipient_id = recipient_id[:-6]  # Remove "/inbox"
-    
-    # Extract the author UUID (last segment after /api/authors/)
-    if "/api/authors/" in recipient_id:
-        author_uuid = recipient_id.split("/api/authors/")[-1].split("/")[0]
-    else:
-        # Fallback: just get the last segment
-        author_uuid = recipient_id.split("/")[-1]
-    
-    inbox_url = urljoin(recipient.host.rstrip('/') + '/', f"api/authors/{author_uuid}/inbox/")
+    recipient_id = normalize_fqid(str(recipient.id))
+    inbox_url = urljoin(recipient.host.rstrip('/') + '/', f"api/authors/{recipient_id}/inbox/")
 
     try:
         auth = None
@@ -156,7 +140,7 @@ def absolutize_remote_images(html, base_url):
 def distribute_activity(activity: dict, actor: Author):
     """
     Main distribution function - determines recipients and sends activities.
-    It prioritizes username for author comparisons and activities.
+    It prioritizes FQID for author comparisons and activities.
     """
     logger = logging.getLogger(__name__)
 
@@ -209,7 +193,7 @@ def distribute_activity(activity: dict, actor: Author):
     # COMMENT
     if type_lower == "comment" and isinstance(obj, dict):
         entry_author_id = obj.get("entry")
-        entry_author = Author.objects.filter(id=entry_author_id).first()
+        entry_author = Author.objects.filter(id=normalize_fqid(entry_author_id)).first()
         if not entry_author:
             return
 
@@ -258,9 +242,9 @@ def distribute_activity(activity: dict, actor: Author):
     # FOLLOW
     if type_lower == "follow":
         target_id = obj
-        target = Author.objects.filter(username=target_id).first()
+        target = Author.objects.filter(id=normalize_fqid(target_id)).first()
 
-        # If target doesn't exist locally by username, create stub
+        # If target doesn't exist locally by FQID, create stub
         if not target:
             target = get_or_create_foreign_author(target_id)
         
@@ -274,9 +258,8 @@ def distribute_activity(activity: dict, actor: Author):
 
         if isinstance(follow_obj, dict):
             follower_id = follow_obj.get("actor")  # Who made the follow request
-            target = Author.objects.filter(username=follower_id).first()
+            target = Author.objects.filter(id=normalize_fqid(follow_obj.get("object"))).first()
 
-            # If follower doesn't exist locally by username, create stub
             if not target and follower_id:
                 target = get_or_create_foreign_author(follower_id)
         elif isinstance(follow_obj, str):
@@ -288,13 +271,7 @@ def distribute_activity(activity: dict, actor: Author):
                 if not target:
                     target = get_or_create_foreign_author(follow.actor.username if hasattr(follow, 'actor') else follow.actor_id)
             else:
-                # Follow not found locally - might be a remote Follow ID
-                # Try to extract author ID from the Follow ID URL pattern
-                # This is a fallback for remote Follow IDs we haven't synced
-                logger.warning(f"Follow object not found for ID: {follow_obj}")
                 target = None
-        else:
-            target = None
         
         if target:
             send_activity_to_inbox(target, activity)
@@ -306,7 +283,7 @@ def distribute_activity(activity: dict, actor: Author):
     # UNFOLLOW
     if type_lower == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "follow":
         target_id = obj.get("object")
-        target = Author.objects.filter(username=target_id).first()
+        target = Author.objects.filter(id=normalize_fqid(target_id)).first()
 
         if target:
             send_activity_to_inbox(target, activity)
@@ -315,7 +292,7 @@ def distribute_activity(activity: dict, actor: Author):
     # REMOVE FRIEND
     if type_lower == "removefriend":
         target_id = obj
-        target = Author.objects.filter(username=target_id).first()
+        target = Author.objects.filter(id=normalize_fqid(target_id)).first()
 
         if target:
             send_activity_to_inbox(target, activity)
@@ -333,14 +310,11 @@ def process_inbox(author: Author):
     logger = logging.getLogger(__name__)
 
     inbox_items = Inbox.objects.filter(author=author, processed=False)
-    logger.info(f"Processing {inbox_items.count()} inbox items for {author.username}")
 
     for item in inbox_items:
         activity = item.data
         activity_type = activity.get("type", "").lower()
         obj = activity.get("object")
-
-        logger.info(f"Processing activity: type={activity_type}, id={activity.get('id')}")
 
         actor_id = activity.get("actor")
         actor = Author.objects.filter(id=actor_id).first()
@@ -350,13 +324,12 @@ def process_inbox(author: Author):
         # FOLLOW REQUEST
         if activity_type == "follow":
             follower = actor
-            target_id = obj
+            target_id = normalize_fqid(obj)
 
             if follower and target_id:
                 # Delete any existing follow request
                 Follow.objects.filter(actor=follower, object=target_id).delete()
 
-                # Create new follow request
                 Follow.objects.create(
                     id=activity.get("id"),
                     actor=follower,

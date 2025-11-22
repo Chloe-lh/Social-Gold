@@ -1141,6 +1141,7 @@ def remote_authors_list(request):
     return Response({"type": "authors", "items": results}, status=200)
 
 # Handle follow actions (POST request to follow a user)
+@api_view(['POST'])
 @login_required
 def follow_action(request):
     """ Handle a user following another user. """
@@ -1170,7 +1171,7 @@ def follow_action(request):
 
         return redirect("profile")
 
-# Handle accepting follow requests
+@api_view(['POST'])
 @login_required
 def accept_follow_action(request):
     """ Accept a follow request from another user. """
@@ -1195,7 +1196,7 @@ def accept_follow_action(request):
 
         return redirect("profile")
 
-# Handle rejecting follow requests
+@api_view(['POST'])
 @login_required
 def reject_follow_action(request):
     """ Reject a follow request from another user. """
@@ -1216,7 +1217,7 @@ def reject_follow_action(request):
 
         return redirect("profile")
 
-@login_required
+@api_view(['POST'])
 def unfollow_action(request):
     """ Unfollow a user. """
     if request.method == "POST":

@@ -29,7 +29,7 @@ urlpatterns = [
     path('stream/', views.stream_view, name="stream-link"),
 
     # Follow-related actions for views
-    path('profile/follow/', views.follow_action, name="follow-action"),  # Handle follow
+    path('profile/follow/', views.follow_action, name="follow-action"),
     path('profile/accept_follow/', views.accept_follow_action, name="accept-follow-action"),  # Accept follow
     path('profile/reject_follow/', views.reject_follow_action, name="reject-follow-action"),  # Reject follow
     path('profile/unfollow/', views.unfollow_action, name="unfollow-action"),  # Unfollow action

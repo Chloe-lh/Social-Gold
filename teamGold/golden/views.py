@@ -712,10 +712,17 @@ def profile_view(request):
         if request.POST.get("action") == "follow":
             target_id = request.POST.get("author_id")
 
-            if target_id:
-                target = get_object_or_404(Author, id=target_id)
-            else:
+            if not target_id:
                 return redirect("profile")
+            
+            # Get or create the target author (local or remote)
+            target = Author.objects.filter(id=target_id).first()
+            if not target:
+                # If author doesn't exist locally, create a foreign author stub
+                target = get_or_create_foreign_author(target_id)
+                if not target:
+                    messages.error(request, "Unable to follow author. Author not found.")
+                    return redirect("profile")
 
             follow, created = Follow.objects.get_or_create(
                 actor=author,

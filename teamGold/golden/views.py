@@ -1019,6 +1019,71 @@ def toggle_like(request):
 # * ============================================================   
 
 @api_view(['GET'])
+def api_follow_requests(request, author_id):
+    try:
+        author = Author.objects.get(id=author_id)
+    except Author.DoesNotExist:
+        return Response({"error": "Author not found"}, status=404)
+
+    follow_requests = Follow.objects.filter(object=author.id, state="REQUESTED")
+
+    items = [{
+        "id": fr.id,
+        "type": "Follow",
+        "summary": fr.summary,
+        "actor": fr.actor.id,
+        "object": fr.object,
+        "published": fr.published.isoformat(),
+        "state": fr.state,
+    } for fr in follow_requests]
+
+    return Response({"type": "follow-requests", "items": items}, status=200)
+
+@api_view(['POST'])
+def api_accept_follow(request, follow_id):
+    follow_request = get_object_or_404(Follow, id=follow_id)
+
+    # Update local DB state
+    follow_request.state = "ACCEPTED"
+    follow_request.published = dj_timezone.now()
+    follow_request.save()
+
+    # Generate activity using your architecture
+    actor_author = follow_request.object  # The one being followed
+    target_author = follow_request.actor  # The follower
+
+    # MUST use your system's activity builder
+    activity = create_accept_follow_activity(
+        actor_author,  # local author
+        target_author.id
+    )
+
+    distribute_activity(activity, actor=actor_author)
+
+    return Response({"status": "accepted"}, status=200)
+
+@api_view(['POST'])
+def api_reject_follow(request, follow_id):
+    follow_request = get_object_or_404(Follow, id=follow_id)
+
+    follow_request.state = "REJECTED"
+    follow_request.published = dj_timezone.now()
+    follow_request.save()
+
+    actor_author = follow_request.object
+    target_author = follow_request.actor
+
+    activity = create_reject_follow_activity(
+        actor_author,
+        target_author.id
+    )
+
+    distribute_activity(activity, actor=actor_author)
+
+    return Response({"status": "rejected"}, status=200)
+
+
+@api_view(['GET'])
 def remote_authors_list(request):
     authors = Author.objects.all()
     results = []

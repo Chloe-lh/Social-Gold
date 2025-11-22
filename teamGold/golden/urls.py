@@ -45,6 +45,12 @@ urlpatterns = [
     path("api/Profile/<path:id>/", ProfileAPIView.as_view(), name="get-profile"),
     path("api/Node/<path:id>/", NodeAPIView.as_view(), name="get-node"),
     path("api/Follow/<path:id>/", FollowAPIView.as_view(), name="get-follow"),
+    # List all follow requests for an author
+    path("api/authors/<path:author_id>/follow-requests/", views.api_follow_requests, name="api_follow_requests"),
+    # Accept a follow request
+    path("api/follow-requests/<path:follow_id>/accept/", api_accept_follow, name="api_accept_follow"),
+    # Reject a follow request
+    path("api/follow-requests/<path:follow_id>/reject/", api_reject_follow, name="api_reject_follow")
     path("api/Author/<path:author_id>/friends/", AuthorFriendsView.as_view()),
     path("api/Like/<path:id>/", LikeAPIView.as_view(), name="get-like"),
     # Backwards-compatible Entry comments alias must come before the generic Entry route
@@ -85,4 +91,3 @@ urlpatterns = [
     path("api/authors/<uuid:author_id>/inbox/", views.inbox_view, name="author-inbox")
 ]
     
-

@@ -152,24 +152,10 @@ def create_follow_activity(actor_author, target_id):
         "target_is_local": target_id.startswith(actor_author.host),
     }
 
-def create_follow_activity(actor_author, target_id):
-
-    activity_id = make_fqid(actor_author, "follow")
-
-    return {
-        "type": "Follow",
-        "id": activity_id,
-        "summary": f"{actor_author.username} wants to follow you",
-        "actor": str(actor_author.id),    
-        "object": str(target_id),           
-        "published": timezone.now().isoformat(),
-        "state": "REQUESTED",
-        "target_is_local": target_id.startswith(actor_author.host),
-    }
-
 def create_accept_follow_activity(acceptor_author, follower_id):
 
     activity_id = make_fqid(acceptor_author, "accept")
+    follower_host = str(follower_id).split("/api/authors/")[0]
 
     return {
         "type": "Accept",
@@ -178,17 +164,18 @@ def create_accept_follow_activity(acceptor_author, follower_id):
         "actor": str(acceptor_author.id),
         "object": {
             "type": "Follow",
-            "actor": follower_id,
+            "actor": str(follower_id),
             "object": str(acceptor_author.id),
         },
         "state": "ACCEPTED",
         "published": timezone.now().isoformat(),
-        "target_is_local": follower_id.startswith(acceptor_author.host),
+        "target_is_local": follower_host == acceptor_author.host
     }
 
 def create_reject_follow_activity(acceptor_author, follower_id):
 
     activity_id = make_fqid(acceptor_author, "reject")
+    follower_host = str(follower_id).split("/api/authors/")[0]
 
     return {
         "type": "Reject",
@@ -197,14 +184,13 @@ def create_reject_follow_activity(acceptor_author, follower_id):
         "actor": str(acceptor_author.id),
         "object": {
             "type": "Follow",
-            "actor": follower_id,
+            "actor": str(follower_id),
             "object": str(acceptor_author.id),
         },
         "state": "REJECTED",
         "published": timezone.now().isoformat(),
-        "target_is_local": follower_id.startswith(acceptor_author.host),
+        "target_is_local": follower_host == acceptor_author.host
     }
-
 
 def create_unfollow_activity(actor_author, target_id):
 
@@ -290,7 +276,7 @@ def create_delete_comment_activity(author, comment):
         }
     }
 def create_undo_comment_activity(author, comment):
-    
+
     activity_id = make_fqid(author, "undo-comment")
 
     return {

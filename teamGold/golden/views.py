@@ -1140,18 +1140,18 @@ def toggle_like(request):
 
 @api_view(['GET'])
 def api_follow_requests(request, author_id):
+    """Handle the follow requests."""
     try:
         author = Author.objects.get(id=author_id)
     except Author.DoesNotExist:
         return Response({"error": "Author not found"}, status=404)
 
     follow_requests = Follow.objects.filter(object=author.id, state="REQUESTED")
-
     items = [{
         "id": fr.id,
         "type": "Follow",
         "summary": fr.summary,
-        "actor": fr.actor.id,
+        "actor": AuthorSerializer(fr.actor).data,  # Send full author data
         "object": fr.object,
         "published": fr.published.isoformat(),
         "state": fr.state,
@@ -1159,168 +1159,18 @@ def api_follow_requests(request, author_id):
 
     return Response({"type": "follow-requests", "items": items}, status=200)
 
-@api_view(['POST'])
-def api_accept_follow(request, follow_id):
-    follow_request = get_object_or_404(Follow, id=follow_id)
-
-    follow_request.state = "ACCEPTED"
-    follow_request.published = dj_timezone.now()
-    follow_request.save()
-
-    acceptor = Author.objects.filter(id=follow_request.object).first()
-    follower = follow_request.actor
-
-    if not acceptor or not follower:
-        return Response({"error": "Author data missing"}, status=400)
-
-    activity = create_accept_follow_activity(acceptor, follower.id)
-    distribute_activity(activity, actor=acceptor)
-
-    return Response({"status": "accepted"}, status=200)
 
 @api_view(['POST'])
-def api_reject_follow(request, follow_id):
-    follow_request = get_object_or_404(Follow, id=follow_id)
-
-    follow_request.state = "REJECTED"
-    follow_request.published = dj_timezone.now()
-    follow_request.save()
-
-    acceptor = Author.objects.filter(id=follow_request.object).first()
-    follower = follow_request.actor
-
-    if not acceptor or not follower:
-        return Response({"error": "Author data missing"}, status=400)
-
-    activity = create_reject_follow_activity(acceptor, follower.id)
-    distribute_activity(activity, actor=acceptor)
-
-    return Response({"status": "rejected"}, status=200)
-
-@api_view(['GET'])
-def remote_authors_list(request):
-    authors = Author.objects.all()
-    results = []
-    for a in authors:
-        results.append({
-            "id": a.id,
-            "username": a.username,
-            "host": a.host,
-            "github":a.github,
-            "web":a.web,
-            "profileImage": a.profileImage.url if a.profileImage else None,
-            
-        })
-    return Response({"type": "authors", "items": results}, status=200)
-
-# Handle follow actions (POST request to follow a user)
-@api_view(['POST'])
-@login_required
-def follow_action(request):
-    """ Handle a user following another user. """
-    if request.method == "POST":
-        target_id = request.POST.get("author_id")
-        target = get_object_or_404(Author, id=target_id)
-        actor = Author.from_user(request.user)
-
-        # Ensure that the user isn't trying to follow themselves
-        if actor == target:
-            return HttpResponseForbidden("You cannot follow yourself.")
-
-        follow, created = Follow.objects.get_or_create(
-            actor=actor,
-            object=target.id,
-            defaults={"state": "REQUESTED", "published": dj_timezone.now()},
-        )
-
-        if not created:
-            # If the follow already exists, just update the state
-            follow.state = "REQUESTED"
-            follow.save()
-
-        # Create the follow activity
-        activity = create_follow_activity(actor, target)
-        distribute_activity(activity, actor=actor)
-
-        return redirect("profile")
-
-@api_view(['POST'])
-@login_required
-def accept_follow_action(request):
-    """ Accept a follow request from another user. """
-    if request.method == "POST":
-        follow_id = request.POST.get("follow_id")
-        follow_request = get_object_or_404(Follow, id=follow_id, object=request.user.id)
-
-        if follow_request.state != "REQUESTED":
-            return HttpResponseForbidden("Invalid follow request.")
-
-        # Accept the follow request
-        follow_request.state = "ACCEPTED"
-        follow_request.save()
-
-        # Add to the actor's following list
-        actor = follow_request.actor
-        actor.following.add(request.user)
-
-        # Create the accept follow activity
-        activity = create_accept_follow_activity(request.user, actor.id)
-        distribute_activity(activity, actor=request.user)
-
-        return redirect("profile")
-
-@api_view(['POST'])
-@login_required
-def reject_follow_action(request):
-    """ Reject a follow request from another user. """
-    if request.method == "POST":
-        follow_id = request.POST.get("follow_id")
-        follow_request = get_object_or_404(Follow, id=follow_id, object=request.user.id)
-
-        if follow_request.state != "REQUESTED":
-            return HttpResponseForbidden("Invalid follow request.")
-
-        # Reject the follow request
-        follow_request.state = "REJECTED"
-        follow_request.save()
-
-        # Create the reject follow activity
-        activity = create_reject_follow_activity(request.user, follow_request.actor.id)
-        distribute_activity(activity, actor=request.user)
-
-        return redirect("profile")
-
-@api_view(['POST'])
-def unfollow_action(request):
-    """ Unfollow a user. """
-    if request.method == "POST":
-        target_id = request.POST.get("author_id")
-        target = get_object_or_404(Author, id=target_id)
-        actor = Author.from_user(request.user)
-
-        if actor == target:
-            return HttpResponseForbidden("You cannot unfollow yourself.")
-
-        # Remove the follow relationship
-        actor.following.remove(target)
-        Follow.objects.filter(actor=actor, object=target.id).delete()
-
-        # Create the unfollow activity
-        activity = create_unfollow_activity(actor, target.id)
-        distribute_activity(activity, actor=actor)
-
-        return redirect("profile")
-
-@api_view(["POST"])
 @permission_classes([IsAuthenticated])
-def api_follow_request(request, author_id):
-    """ API endpoint for following a user. """
-    target = get_object_or_404(Author, id=author_id)
+def api_follow_action(request):
+    """Handle a user following another user."""
+    target_id = request.POST.get("author_id")
+    target = get_object_or_404(Author, id=target_id)
     actor = Author.from_user(request.user)
 
     # Ensure that the user isn't trying to follow themselves
     if actor == target:
-        return Response({"error": "You cannot follow yourself."}, status=400)
+        return HttpResponseForbidden("You cannot follow yourself.")
 
     follow, created = Follow.objects.get_or_create(
         actor=actor,
@@ -1332,17 +1182,87 @@ def api_follow_request(request, author_id):
         follow.state = "REQUESTED"
         follow.save()
 
+    # Create the follow activity and send full author data for both actors
     activity = create_follow_activity(actor, target)
     distribute_activity(activity, actor=actor)
 
     return Response({"status": "Follow request sent."}, status=201)
 
-@api_view(["POST"])
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_accept_follow_action(request):
+    """Accept a follow request from another user."""
+    follow_id = request.POST.get("follow_id")
+    follow_request = get_object_or_404(Follow, id=follow_id, object=request.user.id)
+
+    if follow_request.state != "REQUESTED":
+        return HttpResponseForbidden("Invalid follow request.")
+
+    # Accept the follow request
+    follow_request.state = "ACCEPTED"
+    follow_request.save()
+
+    # Add to the actor's following list
+    actor = follow_request.actor
+    actor.following.add(request.user)
+
+    # Create the accept follow activity
+    activity = create_accept_follow_activity(request.user, actor.id)
+    distribute_activity(activity, actor=request.user)
+
+    return redirect("profile")
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_reject_follow_action(request):
+    """Reject a follow request from another user."""
+    follow_id = request.POST.get("follow_id")
+    follow_request = get_object_or_404(Follow, id=follow_id, object=request.user.id)
+
+    if follow_request.state != "REQUESTED":
+        return HttpResponseForbidden("Invalid follow request.")
+
+    # Reject the follow request
+    follow_request.state = "REJECTED"
+    follow_request.save()
+
+    # Create the reject follow activity
+    activity = create_reject_follow_activity(request.user, follow_request.actor.id)
+    distribute_activity(activity, actor=request.user)
+
+    return redirect("profile")
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_unfollow_action(request):
+    """Unfollow a user."""
+    target_id = request.POST.get("author_id")
+    target = get_object_or_404(Author, id=target_id)
+    actor = Author.from_user(request.user)
+
+    if actor == target:
+        return HttpResponseForbidden("You cannot unfollow yourself.")
+
+    # Remove the follow relationship
+    actor.following.remove(target)
+    Follow.objects.filter(actor=actor, object=target.id).delete()
+
+    # Create the unfollow activity
+    activity = create_unfollow_activity(actor, target.id)
+    distribute_activity(activity, actor=actor)
+
+    return redirect("profile")
+
+
+@api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_accept_follow(request, author_id):
-    """ API endpoint for accepting a follow request. """
+    """API endpoint for accepting a follow request."""
     follow_request = get_object_or_404(Follow, object=author_id, actor=request.user, state="REQUESTED")
-    
+
     follow_request.state = "ACCEPTED"
     follow_request.save()
 
@@ -1354,12 +1274,13 @@ def api_accept_follow(request, author_id):
 
     return Response({"status": "Follow request accepted."}, status=200)
 
-@api_view(["POST"])
+
+@api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_reject_follow(request, author_id):
-    """ API endpoint for rejecting a follow request. """
+    """API endpoint for rejecting a follow request."""
     follow_request = get_object_or_404(Follow, object=author_id, actor=request.user, state="REQUESTED")
-    
+
     follow_request.state = "REJECTED"
     follow_request.save()
 
@@ -1367,25 +1288,6 @@ def api_reject_follow(request, author_id):
     distribute_activity(activity, actor=request.user)
 
     return Response({"status": "Follow request rejected."}, status=200)
-
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def api_unfollow(request, author_id):
-    """ API endpoint for unfollowing an author. """
-    target = get_object_or_404(Author, id=author_id)
-    actor = Author.from_user(request.user)
-
-    if actor == target:
-        return Response({"error": "You cannot unfollow yourself."}, status=400)
-
-    # Remove the follow relationship
-    actor.following.remove(target)
-    Follow.objects.filter(actor=actor, object=target.id).delete()
-
-    activity = create_unfollow_activity(actor, target.id)
-    distribute_activity(activity, actor=actor)
-
-    return Response({"status": "Unfollowed successfully."}, status=200)
 
 @api_view(['GET'])
 def list_inbox(request, author_id):

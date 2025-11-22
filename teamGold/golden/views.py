@@ -36,7 +36,7 @@ from golden.distributor import distribute_activity, process_inbox
 from golden.models import (Author, Comment, Entry, EntryImage, Follow, Like, Node, Inbox)
 from golden.serializers import *
 from golden.services import *
-from golden.services import get_or_create_foreign_author, fqid_to_uuid, is_local, fetch_remote_entries, sync_remote_entry
+from golden.services import get_or_create_foreign_author, fqid_to_uuid, is_local
 from golden.activities import ( # Kenneth: If you're adding new activities, please make sure they are uploaded here 
     create_accept_follow_activity,
     create_comment_activity,
@@ -496,18 +496,31 @@ def profile_view(request):
 
     def get_remote_authors(node):
         """Fetch all authors from a remote node."""
-        api_url =  urljoin(node.id, 'api/authors/') 
+        api_url = urljoin(node.id.rstrip('/') + '/', 'api/authors/')
         try:
             response = requests.get(
                 api_url,
-                timeout=5,
-                auth=(node.auth_user, node.auth_pass) if node.auth_user else None
+                timeout=10,
+                auth=(node.auth_user, node.auth_pass) if node.auth_user else None,
+                headers={'Content-Type': 'application/json'}
             )
             if response.status_code == 200:
                 data = response.json()
-                return data.get("items", [])
+                # Handle both paginated format (with "items") and direct list format
+                if isinstance(data, dict) and "items" in data:
+                    return data.get("items", [])
+                elif isinstance(data, list):
+                    return data
+                else:
+                    print(f"Unexpected response format from {node.id}/api/authors/: {type(data)}")
+                    return []
+            else:
+                print(f"Error fetching remote authors from {node.id}: HTTP {response.status_code}")
+                return []
         except requests.exceptions.RequestException as e:
             print(f"Error fetching remote authors from {node.id}: {e}")
+        except Exception as e:
+            print(f"Unexpected error fetching remote authors from {node.id}: {e}")
         return []
 
     def get_friends_context(author: Author):
@@ -586,103 +599,215 @@ def profile_view(request):
             )
 
     def get_search_authors(author: Author, query: str):
-        """Inner function to perform a search queryset specifically for profile.html"""
+        """
+        Search for authors, both local and remote.
+        Simplified version matching working local implementation pattern.
+        """
         results = []
-        process_inbox(author)
-
-        following_ids = set(author.following.values_list("id", flat=True))
+        query = query.strip() if query else ""
         
+        # Local authors - search ALL authors in database (includes local + remote stubs)
         local_qs = Author.objects.exclude(id=author.id)
-        if query: 
-            local_qs = local_qs.filter(username__icontains=query)
-
+        if query:
+            local_qs = local_qs.filter(Q(username__icontains=query) | Q(name__icontains=query))
+        
         for a in local_qs:
-            # Extract UUID from FQID for URL-friendly identifier
-            uuid_part = fqid_to_uuid(a.id)
+            is_local_author = is_local(a.id)
             results.append({
-                "id": a.id,  # Full FQID for database operations
-                "uuid": uuid_part,  # UUID part for URLs (use this in templates)
-                "url_id": uuid_part,  # For template URLs - use UUID for local authors
+                "id": a.id,
+                "url_id": fqid_to_uuid(a.id) if is_local_author else str(a.id).rstrip('/'),
                 "username": a.username,
-                "host": a.host,
-                "is_local": True,
-                "is_following": a.id in following_ids
+                "displayName": getattr(a, 'displayName', None) or getattr(a, 'name', None) or a.username,
+                "profileImage": getattr(a, 'profileImage', '') or '',
+                "github": getattr(a, 'github', '') or '',
+                "web": getattr(a, 'web', '') or '',
+                "is_local": is_local_author,
+                "host": a.host or str(a.id).split('/api/authors/')[0] if '/api/authors/' in str(a.id) else '',
             })
 
+        # Remote authors - fetch from active nodes
         nodes = Node.objects.filter(is_active=True)
         for node in nodes:
             remote_authors = get_remote_authors(node)
             for ra in remote_authors:
-                if query.lower() in ra.get("username", "").lower():
-                    results.append({
-                        "id": ra.get("id"),
-                        "username": ra.get("username"),
-                        "host": ra.get("host"),
-                        "is_local": False,
-                        "web": ra.get("web"),
-                        "github":ra.get("github"),
-                        "profileImage": ra.get("profileImage")
-                    })
+                if not ra or not isinstance(ra, dict):
+                    continue
+                
+                ra_id = ra.get("id") or ra.get("@id") or str(ra.get("url", ""))
+                if not ra_id:
+                    continue
+                
+                ra_id_clean = str(ra_id).rstrip('/')
+                
+                # Skip if already in results (from database)
+                if any(r.get("id") == ra_id_clean for r in results):
+                    continue
+                
+                # Get username and displayName
+                ra_username = ra.get("username") or ra.get("displayName")
+                if not ra_username and "/api/authors/" in str(ra_id):
+                    ra_username = str(ra_id).split("/api/authors/")[-1].rstrip("/")
+                if not ra_username:
+                    ra_username = str(ra_id).split("/")[-1] or "Unknown"
+                
+                ra_displayName = ra.get("displayName") or ra.get("display_name") or ra_username
+                
+                # Get host
+                ra_host = ra.get("host")
+                if not ra_host and "/api/authors/" in str(ra_id):
+                    parsed = urlparse(ra_id)
+                    ra_host = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
+                if not ra_host:
+                    ra_host = node.id.rstrip('/')
+                
+                # Search matching - if query exists, filter by username and displayName
+                # If query is empty, show all remote authors
+                if query:
+                    username_match = query.lower() in ra_username.lower() if ra_username else False
+                    displayName_match = query.lower() in ra_displayName.lower() if ra_displayName else False
+                    if not username_match and not displayName_match:
+                        continue
+                
+                results.append({
+                    "id": ra_id_clean,
+                    "url_id": fqid_to_uuid(ra_id) if is_local(ra_id) else str(ra_id).rstrip('/'),
+                    "username": ra_username,
+                    "displayName": ra_displayName,
+                    "profileImage": ra.get("profileImage") or ra.get("profile_image") or (ra.get("icon", {}).get("url", '') if isinstance(ra.get("icon"), dict) else ra.get("icon", '')) or '',
+                    "github": ra.get("github") or '',
+                    "web": ra.get("web") or '',
+                    "is_local": False,
+                    "host": ra_host,
+                })
+
         return results
-        
-    author = Author.from_user(request.user)
-    if not author:
-        messages.error(request, "User author profile not found. Please contact support.")
-        return redirect('login')
+    
+    author = Author.from_user(request.user)  # Assuming 'author' is the logged-in user
+    
+    # Fetch followers and following for the current author
+    followers_qs = Author.objects.filter(following=author)
+    following_qs = Author.objects.filter(followers_set=author)
+
+    # Add 'url_id' or 'uuid' to each author (local vs remote)
+    for a in followers_qs:
+        a.url_id = fqid_to_uuid(a.id) if is_local(a.id) else a.id  # Local -> uuid, Remote -> FQID
+
+    for a in following_qs:
+        a.url_id = fqid_to_uuid(a.id) if is_local(a.id) else a.id  # Local -> uuid, Remote -> FQID
 
     # Process inbox FIRST to create Follow objects from remote follow requests
+    # This must happen before querying for follow requests
     process_inbox(author)
-
-    # Prepare the form for profile editing
+    
     form = ProfileForm(instance=author)
 
-    # Fetch all follow requests (both local and remote) - they are all in the Follow table after processing
-    all_follow_requests = Follow.objects.filter(object=str(author.id), state="REQUESTED")
+    # Fetch INCOMING follow requests (requests TO the author)
+    # Follow objects from process_inbox use normalized object IDs, so we need to normalize for matching
+    # This works for both local and remote authors - the object field stores the target author's FQID
+    author_id_str = str(author.id).rstrip('/')
+    author_id_normalized = normalize_fqid(author_id_str)
     
-    if request.method == "POST" and request.is_ajax():  # Handle AJAX requests for follow/unfollow
-        action = request.POST.get("action")
-        target_id = request.POST.get("author_id")
-        target = get_object_or_404(Author, id=target_id)
-
-        if action == "follow":
-            if is_local(target.id):
-                # Local follow: use Follow model
-                follow, created = Follow.objects.get_or_create(
-                    actor=author,
-                    object=target.id,
-                    defaults={"state": "REQUESTED", "published": dj_timezone.now()},
-                )
-                if created:
-                    activity = create_follow_activity(author, target)
-                    distribute_activity(activity, actor=author)
-                    return JsonResponse({"status": "success"})
-            else:
-                # Remote follow: handle via external API
-                activity = create_follow_activity(author, target)
-                distribute_activity(activity, actor=author)
-                return JsonResponse({"status": "success"})
+    # Query for incoming requests - need to match the object field (which is the target being followed)
+    # Try multiple variations to handle normalization differences (for both local and remote)
+    # We check both normalized (lowercase) and raw versions to handle existing data
+    # Build query conditions
+    query_conditions = (
+        Q(object=author_id_normalized) | 
+        Q(object=author_id_str) | 
+        Q(object__iexact=author_id_str) |
+        Q(object__iexact=author_id_normalized) |
+        # Also check with trailing slash variations
+        Q(object=f"{author_id_str}/") |
+        Q(object=f"{author_id_normalized}/")
+    )
+    
+    # Also try matching by UUID/FQID suffix if applicable
+    if '/' in author_id_str:
+        author_uuid_or_id = author_id_str.split('/')[-1]
+        query_conditions |= Q(object__icontains=author_uuid_or_id)
+    
+    # Query for incoming requests - use a more comprehensive approach
+    # First try the exact matches
+    incoming_follow_requests = Follow.objects.filter(
+        state="REQUESTED"
+    ).filter(query_conditions).distinct()
+    
+    # If no results, try a more lenient approach - check if any part of the object field matches
+    if incoming_follow_requests.count() == 0:
+        # Try matching by author ID in any form (case-insensitive, with/without trailing slash)
+        author_id_variations = [
+            author_id_str,
+            author_id_normalized,
+            author_id_str.rstrip('/'),
+            author_id_normalized.rstrip('/'),
+            author_id_str.lower(),
+            author_id_normalized.lower(),
+        ]
+        # Add UUID if it's a local author
+        if '/' in author_id_str:
+            uuid_part = author_id_str.split('/')[-1]
+            if uuid_part and '-' in uuid_part:  # Looks like a UUID
+                author_id_variations.append(uuid_part)
+                author_id_variations.append(uuid_part.lower())
         
-        elif action == "unfollow":
-            if is_local(target.id):
-                # Local unfollow
-                follow_request = Follow.objects.filter(actor=author, object=target.id).first()
-                if follow_request:
-                    follow_request.delete()
-                activity = create_unfollow_activity(author, target.id)
-                distribute_activity(activity, actor=author)
-                return JsonResponse({"status": "success"})
-            else:
-                # Remote unfollow
-                activity = create_unfollow_activity(author, target.id)
-                distribute_activity(activity, actor=author)
-                return JsonResponse({"status": "success"})
+        # Build a more lenient query
+        lenient_conditions = Q()
+        for variation in author_id_variations:
+            lenient_conditions |= Q(object__iexact=variation) | Q(object__icontains=variation)
+        
+        incoming_follow_requests = Follow.objects.filter(
+            state="REQUESTED"
+        ).filter(lenient_conditions).distinct()
+    
+    print(f"[FOLLOW REQUEST DEBUG] Looking for incoming requests where object matches author")
+    print(f"[FOLLOW REQUEST DEBUG] Author ID (raw): '{author_id_str}'")
+    print(f"[FOLLOW REQUEST DEBUG] Author ID (normalized): '{author_id_normalized}'")
+    print(f"[FOLLOW REQUEST DEBUG] Found {incoming_follow_requests.count()} incoming follow requests")
+    
+    # Debug: Show all Follow objects with REQUESTED state to see what we have
+    all_requested_follows = Follow.objects.filter(state="REQUESTED")
+    print(f"[FOLLOW REQUEST DEBUG] Total Follow objects with REQUESTED state: {all_requested_follows.count()}")
+    for follow in all_requested_follows[:10]:  # Show first 10 for debugging
+        follow_obj_str = str(follow.object)
+        follow_obj_normalized = normalize_fqid(follow_obj_str)
+        actor_name = follow.actor.username if follow.actor else 'None'
+        actor_id = str(follow.actor.id) if follow.actor else 'None'
+        print(f"[FOLLOW REQUEST DEBUG]   Follow ID: {follow.id}")
+        print(f"[FOLLOW REQUEST DEBUG]     actor: {actor_name} (id: {actor_id})")
+        print(f"[FOLLOW REQUEST DEBUG]     object (raw): '{follow_obj_str}'")
+        print(f"[FOLLOW REQUEST DEBUG]     object (normalized): '{follow_obj_normalized}'")
+        print(f"[FOLLOW REQUEST DEBUG]     state: {follow.state}")
+        
+        # Check if this follow request is for the current author
+        follow_obj_str_clean = follow_obj_str.rstrip('/')
+        author_id_str_clean = author_id_str.rstrip('/')
+        follow_obj_normalized_lower = follow_obj_normalized.lower()
+        author_id_normalized_lower = author_id_normalized.lower()
+        
+        match_reasons = []
+        if follow_obj_normalized == author_id_normalized:
+            match_reasons.append("normalized exact match")
+        if follow_obj_str_clean == author_id_str_clean:
+            match_reasons.append("raw exact match")
+        if follow_obj_normalized_lower == author_id_normalized_lower:
+            match_reasons.append("normalized lowercase match")
+        if follow_obj_str_clean.lower() == author_id_str_clean.lower():
+            match_reasons.append("raw lowercase match")
+            
+        if match_reasons:
+            print(f"[FOLLOW REQUEST DEBUG]     ^^^ MATCHES! Reasons: {', '.join(match_reasons)}")
+        else:
+            print(f"[FOLLOW REQUEST DEBUG]     ^^^ NO MATCH - Comparison:")
+            print(f"[FOLLOW REQUEST DEBUG]       follow_obj_normalized='{follow_obj_normalized}' vs author_id_normalized='{author_id_normalized}'")
+            print(f"[FOLLOW REQUEST DEBUG]       follow_obj_str_clean='{follow_obj_str_clean}' vs author_id_str_clean='{author_id_str_clean}'")
+    
+    # Fetch OUTGOING follow requests (requests FROM the author)
+    outgoing_follow_requests = Follow.objects.filter(actor=author, state="REQUESTED")
 
-        return JsonResponse({"status": "error"})
+    if request.method == "GET":
+        # Sync Github Activity - assuming this function exists and is relevant
+        sync_github_activity(author)
 
-    # Regular profile view handling...
-    # Add your other code here for handling non-AJAX requests.
-
-    # Handle follow/unfollow for regular requests
     if request.method == "POST":
         if "follow_id" in request.POST and "action" in request.POST:
             follow_id = request.POST.get("follow_id")
@@ -691,7 +816,20 @@ def profile_view(request):
             if not follow_id:
                 return redirect("profile")
             
-            follow_request = Follow.objects.filter(id=follow_id, object=author.id).first()
+            # Normalize author ID to match Follow objects created by process_inbox
+            author_id_normalized = normalize_fqid(str(author.id))
+            author_id_str = str(author.id).rstrip('/')
+            
+            # Query for the follow request - handle both normalized and raw IDs (for local and remote)
+            follow_request = Follow.objects.filter(
+                id=follow_id
+            ).filter(
+                Q(object=author_id_normalized) | 
+                Q(object=author_id_str) | 
+                Q(object__iexact=author_id_str) |
+                Q(object__iexact=author_id_normalized)
+            ).first()
+            
             if not follow_request:
                 messages.error(request, "Follow request not found")
                 return redirect("profile")
@@ -699,35 +837,31 @@ def profile_view(request):
             target_author = follow_request.actor
             
             if action == "approve":
-                if isinstance(follow_request, Follow):
-                    follow_request.state = "ACCEPTED"
-                    follow_request.save()
-                
-                # Update following relationship
+                follow_request.state = "ACCEPTED"
+                follow_request.save()
                 target_author.following.add(author)
-
+                
                 # Mark inbox item as processed if it exists
                 inbox_item = Inbox.objects.filter(author=author, data__id=follow_id, processed=False).first()
                 if inbox_item:
                     inbox_item.processed = True
                     inbox_item.save()
-                
-                # Send Accept activity - pass the Follow ID to reference the original Follow activity
-                activity = create_accept_follow_activity(author, follow_id) 
+
+                # Send Accept activity
+                activity = create_accept_follow_activity(author, follow_id)
                 distribute_activity(activity, actor=author)
 
             elif action == "reject":
-                if isinstance(follow_request, Follow):
-                    follow_request.state = "REJECTED"
-                    follow_request.save()
-                
+                follow_request.state = "REJECTED"
+                follow_request.save()
+
                 # Mark inbox item as processed if it exists
                 inbox_item = Inbox.objects.filter(author=author, data__id=follow_id, processed=False).first()
                 if inbox_item:
                     inbox_item.processed = True
                     inbox_item.save()
 
-                # Send Reject activity - pass the Follow ID to reference the original Follow activity
+                # Send Reject activity
                 activity = create_reject_follow_activity(author, follow_id)
                 distribute_activity(activity, actor=author)
 
@@ -737,7 +871,17 @@ def profile_view(request):
             target_id = request.POST.get("remove_follower")
             target = Author.objects.get(id=target_id)
             author.followers_set.remove(target)
-            Follow.objects.filter(actor=target, object=author.id).delete()
+            # Normalize author ID for consistent matching
+            author_id_normalized = normalize_fqid(str(author.id))
+            author_id_str = str(author.id).rstrip('/')
+            Follow.objects.filter(
+                actor=target
+            ).filter(
+                Q(object=author_id_normalized) | 
+                Q(object=author_id_str) | 
+                Q(object__iexact=author_id_str) |
+                Q(object__iexact=author_id_normalized)
+            ).delete()
 
             return redirect("profile")
         
@@ -746,7 +890,15 @@ def profile_view(request):
             try:
                 target = Author.objects.get(id=target_id)
                 author.following.remove(target)
-                Follow.objects.filter(actor=author, object=target.id).delete()
+                # Normalize target ID for consistent matching
+                target_id_normalized = normalize_fqid(str(target.id))
+                target_id_str = str(target.id).rstrip('/')
+                Follow.objects.filter(actor=author).filter(
+                    Q(object=target_id_normalized) | 
+                    Q(object=target_id_str) | 
+                    Q(object__iexact=target_id_str) |
+                    Q(object__iexact=target_id_normalized)
+                ).delete()
 
                 activity = create_unfollow_activity(author, target_id)
                 distribute_activity(activity, actor=author)
@@ -766,39 +918,38 @@ def profile_view(request):
             # Get or create the target author (local or remote)
             target = Author.objects.filter(id=target_id).first()
             
-            # Also try to find by username if it's a local author (UUID)
-            # This ensures nodeadmin and UUID represent the same person
+            # Try to find by username if it's a local author (UUID)
             if not target:
                 target_username = request.POST.get("displayName") or request.POST.get("username")
-                # Check if it looks like a local UUID
                 if target_username and ('-' not in str(target_id).split('/')[-1] or is_local(target_id)):
-                    # Try finding by username first for local authors
                     target = Author.objects.filter(username=target_username).first()
             
             if not target:
                 # If author doesn't exist locally, create a foreign author stub
-                # Try to find the author in search results to get host/username
-                target_username = request.POST.get("displayName") or request.POST.get("username")
-                target = get_or_create_foreign_author(target_id, host=target_host, username=target_username)
+                target_username = request.POST.get("username") or request.POST.get("displayName")
+                try:
+                    target = get_or_create_foreign_author(target_id, host=target_host, username=target_username)
+                except TypeError:
+                    # Defensive: if services signature mismatched or unexpected error
+                    messages.error(request, "Unable to follow author due to internal error.")
+                    return redirect("profile")
+
                 if not target:
                     messages.error(request, "Unable to follow author. Author not found.")
                     return redirect("profile")
 
+            # Normalize target.id to ensure consistent matching with Follow objects from process_inbox
+            target_id_normalized = normalize_fqid(str(target.id))
             follow, created = Follow.objects.get_or_create(
                 actor=author,
-                object=str(target.id), 
+                object=target_id_normalized,  # Use normalized ID for consistency
                 defaults={
-                    "id": f"{author.id}/follow/{uuid.uuid4()}",
+                    "id": f"{author.id.rstrip('/')}/follow/{uuid.uuid4()}",
                     "summary": f"{author.username} wants to follow {target.username}",
                     "published": dj_timezone.now(),
                     "state": "REQUESTED",
                 },
             )
-
-            if not created:
-                follow.state = "REQUESTED"
-                follow.published = dj_timezone.now()
-                follow.save()
 
             activity = create_follow_activity(author, target) 
             distribute_activity(activity, actor=author)
@@ -835,41 +986,121 @@ def profile_view(request):
 
             return redirect("profile")
 
+    # IMPORTANT: Process inbox BEFORE querying for follow requests
+    # This ensures any incoming follow requests from remote nodes are processed first
+    process_inbox(author)
+    
     # Retrieve entries, followers, and following
     entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("-published")
     followers = author.followers_set.all()
     following = author.following.all()
 
     # Add URL-friendly IDs to followers and following for templates
-    followers_with_urls = []
-    for f in followers:
-        url_id = fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')
-        followers_with_urls.append({'author': f, 'url_id': url_id})
-
-    following_with_urls = []
-    for f in following:
-        url_id = fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')
-        following_with_urls.append({'author': f, 'url_id': url_id})
-
-    # Also add URL-friendly IDs to follow requests
+    followers_with_urls = [
+        {'author': f, 'url_id': fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')} for f in followers
+    ]
+    
+    following_with_urls = [
+        {'author': f, 'url_id': fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')} for f in following
+    ]
+    
+    # Get friends (mutual follows) and add URL-friendly IDs
+    friends_qs = author.friends
+    friends_with_urls = [
+        {'author': f, 'url_id': fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')} for f in friends_qs
+    ]
+    
+    # Fetch and process OUTGOING follow requests (requests you sent)
+    # For outgoing requests, req.actor is you, req.object is the person you requested to follow
     follow_requests_with_urls = []
-    for req in all_follow_requests:
-        actor_url_id = fqid_to_uuid(req.actor.id) if is_local(req.actor.id) else req.actor.id.rstrip('/')
-        follow_requests_with_urls.append({'request': req, 'actor_url_id': actor_url_id})
+    for req in outgoing_follow_requests:
+        # Get the target author (the person you're requesting to follow)
+        # Use normalized ID for lookup to handle both local and remote authors
+        target_id = req.object
+        target_id_normalized = normalize_fqid(str(target_id))
+        target_id_str = str(target_id).rstrip('/')
+        
+        # Try to find target by normalized or raw ID (handles both local and remote)
+        target = Author.objects.filter(
+            Q(id=target_id_normalized) | Q(id=target_id_str) | Q(id__iexact=target_id_str)
+        ).first()
+        
+        if target:
+            follow_requests_with_urls.append({
+                'request': req, 
+                'target': target,
+                'target_url_id': fqid_to_uuid(target.id) if is_local(target.id) else target.id.rstrip('/')
+            })
+        else:
+            # If target not found, still add the request with the target_id for display
+            # This handles remote authors that haven't been fetched yet
+            follow_requests_with_urls.append({
+                'request': req,
+                'target': None,  # Target not in local DB yet
+                'target_url_id': target_id_str,
+                'target_id': target_id_str
+            })
+    
+    # Also process INCOMING follow requests for approval/rejection
+    incoming_follow_requests_with_urls = []
+    for req in incoming_follow_requests:
+        # Make sure actor exists (it should be a ForeignKey, but check just in case)
+        if req.actor:
+            incoming_follow_requests_with_urls.append({
+                'request': req, 
+                'actor_url_id': fqid_to_uuid(req.actor.id) if is_local(req.actor.id) else req.actor.id.rstrip('/')
+            })
+        else:
+            print(f"[FOLLOW REQUEST DEBUG] WARNING: Follow request {req.id} has no actor!")
 
     # Sanitize the description for safe HTML display
     author.description = sanitize_markdown_to_html(author.description)
 
     # Prepare the context to render the profile page
+    query = request.GET.get("q", "").strip()
+    authors = get_search_authors(author, query)
+    
+    # Populate follow state and friend status for each author (like your working code)
+    friends_qs, friend_ids = get_friends_context(author)
+    # Convert friends queryset to list for template checks
+    friends_list = list(friends_qs)
+    
+    for a in authors:
+        # Normalize author ID for consistent Follow object matching (for both local and remote)
+        a_id_normalized = normalize_fqid(str(a["id"]))
+        a_id_str = str(a["id"]).rstrip('/')
+        
+        if a.get("is_local"):
+            # Local author - check follow relationship using normalized ID
+            follow = Follow.objects.filter(actor=author).filter(
+                Q(object=a_id_normalized) | Q(object=a_id_str) | Q(object__iexact=a_id_str)
+            ).first()
+            a["follow_state"] = follow.state if follow else "NONE"
+            a["is_following"] = author.following.filter(id=a["id"]).exists()
+            a["is_friend"] = str(a["id"]) in friend_ids
+        else:
+            # Remote author - check if we have a follow relationship stored using normalized ID
+            follow = Follow.objects.filter(actor=author).filter(
+                Q(object=a_id_normalized) | Q(object=a_id_str) | Q(object__iexact=a_id_str)
+            ).first()
+            a["follow_state"] = follow.state if follow else "NONE"
+            a["is_following"] = follow.state == "ACCEPTED" if follow else False
+            a["is_friend"] = False  # Remote friends require bidirectional check
+    
+    print(f"[SEARCH DEBUG] Profile view - Query: '{query}', Results: {len(authors)}")
+    
     context = {
         "author": author,
         "entries": entries,
-        "followers": followers,  # Keep original for compatibility
-        "followers_with_urls": followers_with_urls,  # With URL-friendly IDs
-        "following": following,  # Keep original for compatibility
-        "following_with_urls": following_with_urls,  # With URL-friendly IDs
-        "follow_requests": all_follow_requests,  # Keep original
-        "follow_requests_with_urls": follow_requests_with_urls,  # With URL-friendly IDs
+        "followers_with_urls": followers_with_urls,
+        "following_with_urls": following_with_urls,
+        "friends_with_urls": friends_with_urls,  # Friends tab data
+        "follow_requests_with_urls": follow_requests_with_urls,  # Outgoing requests (requests you sent)
+        "incoming_follow_requests_with_urls": incoming_follow_requests_with_urls,  # Incoming requests (requests you received)
+        "friends": friends_list,  # Use friends_list for template 'in' checks
+        "form": ProfileForm(instance=author),  
+        "authors": authors,
+        "query": query,
     }
 
     return render(request, "profile.html", context)

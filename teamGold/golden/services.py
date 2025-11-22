@@ -3,7 +3,7 @@ from django.db import transaction
 from .models import Author
 from .utils import is_local 
 import logging
-from django.utils import timezone as dj_timezone
+from datetime import timezone
 from urllib.parse import unquote, urlparse
 import uuid
 import requests
@@ -33,7 +33,7 @@ def create_activity(author, activity_type, object_data, suffix="posts"):
         "type": activity_type,
         "id": activity_id,
         "actor": str(author.id),
-        "published": dj_timezone.now().isoformat(),
+        "published": timezone.now().isoformat(),
         "summary": f"{author.username} performed a {activity_type} activity",
         "object": object_data
     }
@@ -44,7 +44,7 @@ def create_follow_activity(author, target):
         "type": "Follow",
         "actor": str(author.id),
         "object": str(target.id),
-        "published": dj_timezone.now().isoformat(),
+        "published": timezone.now().isoformat(),
         "state": "REQUESTED"
     }
     return create_activity(author, "Follow", object_data, "follow")
@@ -220,22 +220,70 @@ def fetch_remote_author_data(author_url):
         print(f"Error fetching remote author data: {e}")
     return None
 
-def get_or_create_foreign_author(remote_id: str, host: str = None) -> Author:
+def get_or_create_foreign_author(remote_id: str, host: str = None, username: str = None) -> Author:
     """
     Ensure we can create or retrieve an author from a remote node.
 
     Accepts an optional `host` parameter (used by callers that already
     know the host) to avoid parsing or unnecessary network calls.
+    Accepts an optional `username` parameter to set the username when creating.
     """
     remote_id = normalize_fqid(remote_id)
-    host_val = host or urlparse(remote_id).netloc
+    
+    # Check if author already exists by FQID
+    author = Author.objects.filter(id=remote_id).first()
+    if author:
+        # If username was provided and differs, update it
+        if username and author.username != username:
+            author.username = username
+            author.save(update_fields=['username'])
+        return author
+    
+    # Also check by username if username is provided (to avoid duplicates)
+    if username:
+        existing = Author.objects.filter(username=username, host=host or urlparse(remote_id).netloc).first()
+        if existing:
+            # Update the ID if it's different
+            if existing.id != remote_id:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Found author '{username}' with different ID: {existing.id} vs {remote_id}")
+            return existing
+    
+    # Check if remote_id is a full URL or just a UUID
+    host_val = host
+    if not host_val:
+        if "/api/authors/" in remote_id or remote_id.startswith("http"):
+            parsed = urlparse(remote_id)
+            host_val = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
+        else:
+            # If it's just a UUID and no host provided, we can't create a proper FQID
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Cannot create foreign author from UUID without host: {remote_id}")
+            return None
+    
+    # If remote_id is just a UUID, reconstruct the full FQID
+    if not "/api/authors/" in remote_id and not remote_id.startswith("http"):
+        uuid_part = remote_id.rstrip("/")
+        remote_id = f"{host_val}/api/authors/{uuid_part}"
+    
+    guessed_username = username or remote_id.split("/")[-1] if "/" in remote_id else remote_id
+    
     author, created = Author.objects.get_or_create(
         id=remote_id,  # Store remote author ID as FQID
         defaults={
-            'username': f"remote_author_{uuid.uuid4()}",
+            'username': guessed_username,
             'host': host_val,
+            'is_approved': True,
         }
     )
+    
+    # Update username if provided and different
+    if username and author.username != username:
+        author.username = username
+        author.save(update_fields=['username'])
+    
     return author
     
 def notify(author, data):

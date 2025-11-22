@@ -1,7 +1,7 @@
 import requests
 from django.utils import timezone
 from golden.models import Entry, EntryImage, Author, Comment, Like, Follow, Node, Inbox
-from golden.services import get_or_create_foreign_author
+from golden.services import get_or_create_foreign_author, normalize_fqid
 from urllib.parse import urljoin
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
@@ -34,56 +34,31 @@ receive deliveries and update our database through this protocol.
 # * ============================================================
 # * Distributor Helper Functions
 # * ============================================================
-
-def normalize_fqid(fqid: str) -> str:
-    """Normalize FQID by removing trailing slashes and ensuring consistent format."""
-    if not fqid:
-        return ""
-    return str(fqid).rstrip("/")
+# Note: normalize_fqid is imported from golden.services to ensure consistency
 
 
 def send_activity_to_inbox(recipient: Author, activity: dict):
     """Send activity to local or remote inbox."""
-    logger = logging.getLogger(__name__)
-    
-    if not recipient:
-        logger.warning("Attempted to send activity to None recipient")
-        return
-    
-    # Local delivery
     if recipient.host.rstrip("/") == settings.SITE_URL.rstrip("/"):
-        logger.debug(f"Delivering activity locally to {recipient.username}")
+        # Local delivery to the inbox
         Inbox.objects.create(author=recipient, data=activity)
         return
 
-    # Remote delivery - extract UUID from recipient ID
+    recipient_id = normalize_fqid(str(recipient.id))
+    inbox_url = urljoin(f"{recipient.host.rstrip('/')}/", f"api/authors/{recipient_id}/inbox/")
+
     try:
-        recipient_id = normalize_fqid(str(recipient.id))
-        
-        # If recipient_id is a full URL, extract the UUID part
-        if recipient_id.startswith('http'):
-            recipient_id = recipient_id.split('/')[-1]
-        
-        recipient_host = recipient.host.rstrip('/')
-        inbox_url = f"{recipient_host}/api/authors/{recipient_id}/inbox/"
-        
-        logger.debug(f"Posting activity to remote inbox: {inbox_url}")
         response = requests.post(
             inbox_url,
             data=json.dumps(activity),
             headers={"Content-Type": "application/json"},
+            auth=None,
             timeout=10,
         )
-        
         if response.status_code >= 400:
-            logger.error(f"Remote inbox rejected activity: {response.status_code} {response.text[:200]}")
-        else:
-            logger.info(f"Successfully delivered activity to {inbox_url}")
-            
+            raise Exception(f"Error {response.status_code}: {response.text}")
     except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to send activity to remote inbox for {recipient.id}: {e}")
-    except Exception as e:
-        logger.exception(f"Unexpected error sending activity to {recipient.id}: {e}")
+        logging.error(f"Failed to send activity to {inbox_url}: {e}")
 
 def get_followers(author: Author):
     """Return all authors who follow this author (FOLLOW.state=ACCEPTED)."""
@@ -317,12 +292,25 @@ def process_inbox(author: Author):
         if activity_type == "follow":
             follower = actor
             target_id = normalize_fqid(obj)
+            
+            # Debug: Log what we're creating
+            logger.info(f"[process_inbox] Processing Follow activity from {follower.username if follower else 'Unknown'} (id: {actor_id})")
+            logger.info(f"[process_inbox] Follow activity object (raw): '{obj}'")
+            logger.info(f"[process_inbox] Follow activity object (normalized): '{target_id}'")
+            logger.info(f"[process_inbox] Inbox author (who is being followed): {author.username} (id: {author.id})")
 
             if follower and target_id:
+                # Verify target_id matches the inbox author (person being followed)
+                author_id_normalized = normalize_fqid(str(author.id))
+                if target_id != author_id_normalized:
+                    logger.warning(f"[process_inbox] WARNING: target_id '{target_id}' doesn't match inbox author ID '{author_id_normalized}'")
+                    logger.warning(f"[process_inbox] Using inbox author ID instead for Follow object")
+                    target_id = author_id_normalized
+                
                 # Delete any existing follow request
                 Follow.objects.filter(actor=follower, object=target_id).delete()
 
-                Follow.objects.create(
+                follow_obj = Follow.objects.create(
                     id=activity.get("id"),
                     actor=follower,
                     object=target_id,
@@ -330,7 +318,12 @@ def process_inbox(author: Author):
                     summary=activity.get("summary", ""),
                     published=parse_datetime(activity.get("published")) or timezone.now()
                 )
-                logger.info(f"Created follow request: {follower.username} -> {target_id}")
+                # Mark inbox item as processed
+                item.processed = True
+                item.save()
+                logger.info(f"[process_inbox] Created follow request: {follower.username if follower else 'Unknown'} -> {target_id}")
+                logger.info(f"[process_inbox] Follow object created: actor={follow_obj.actor.id}, object={follow_obj.object}, state={follow_obj.state}")
+                logger.info(f"[process_inbox] Marked inbox item {item.id} as processed")
 
         # ACCEPT FOLLOW
         elif activity_type == "accept":

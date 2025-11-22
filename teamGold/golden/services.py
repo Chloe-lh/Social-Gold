@@ -6,6 +6,9 @@ import logging
 from datetime import timezone
 from urllib.parse import unquote, urlparse
 import uuid
+import requests
+from django.conf import settings
+from requests.exceptions import RequestException
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +135,72 @@ def get_remote_node_from_fqid(fqid):
         return None
     return node
 
+def sync_remote_entry(remote_entry, node):
+    """
+    Sync a remote entry (fetched from a node) with the local database.
+
+    :param remote_entry: The entry data retrieved from the remote node.
+    :param node: The remote node where the entry was fetched.
+    :return: The local Entry object, or None if the sync failed.
+    """
+    try:
+        entry_id = remote_entry.get('id')
+        title = remote_entry.get('title', '')
+        content = remote_entry.get('content', '')
+        author_data = remote_entry.get('author', {})
+        author_id = author_data.get('id')
+        
+        # Assuming you have a function to get or create an author
+        author = Author.objects.get(id=author_id)
+
+        # Create or update the entry
+        entry, created = Entry.objects.update_or_create(
+            id=entry_id,
+            defaults={
+                'author': author,
+                'title': title,
+                'content': content,
+                'visibility': 'PUBLIC', 
+            }
+        )
+        
+        return entry
+    except Exception as e:
+        print(f"Error syncing remote entry: {e}")
+        return None
+    
+def fetch_remote_entries(node, timeout=5):
+    """
+    Fetch entries from a remote node's API.
+
+    :param node: The Node instance representing the remote server.
+    :param timeout: Timeout duration for the HTTP request.
+    :return: A list of remote entries (parsed JSON response).
+    """
+    try:
+        # Construct the URL for the entries API endpoint on the remote node
+        url = f"{node.id.rstrip('/')}/api/entries/"
+
+        # If the node has authentication details, use them
+        auth = None
+        if node.auth_user:
+            auth = (node.auth_user, node.auth_pass)
+
+        # Send GET request to fetch entries
+        response = requests.get(url, auth=auth, timeout=timeout, headers={"Accept": "application/json"})
+
+        # If successful, return the list of entries
+        if response.status_code == 200:
+            return response.json().get('items', [])
+        else:
+            # Log and return an empty list in case of errors
+            print(f"Error fetching entries from {url}: {response.status_code}")
+            return []
+    except RequestException as e:
+        # Log the exception
+        print(f"Failed to fetch entries from {node.id}: {str(e)}")
+        return []
+    
 def notify(author, data):
     """
     Notify followers of `author` by POSTing `data` to each follower's node inbox.

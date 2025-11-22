@@ -22,7 +22,7 @@ urlpatterns = [
     path("signup/", views.signup, name="signup"),
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
     path('profile/', views.profile_view, name='profile'),
-    path("authors/<path:author_id>/", views.public_profile_view, name="public-profile"),
+    path('profile/<int:author_id>/', views.public_profile_view, name='public-profile'),
     # profile should contain: main profile that contains a list of the author's entries
     # profile also contains the following: followers, following, and requests
     path('profile/followers/', views.followers, name='followers'),

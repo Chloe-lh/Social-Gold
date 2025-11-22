@@ -40,6 +40,7 @@ def normalize_fqid(fqid: str) -> str:
         return ""
     return str(fqid).rstrip("/")
 
+# Helper function to send activity to inbox (local or remote)
 def send_activity_to_inbox(recipient: Author, activity: dict):
     """
     Deliver activity to a single recipient's inbox.
@@ -48,15 +49,13 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
     """
     import logging
     logger = logging.getLogger(__name__)
-    
+
     # LOCAL DELIVERY
     if recipient.host.rstrip("/") == settings.SITE_URL.rstrip("/"):
         Inbox.objects.create(author=recipient, data=activity)
         return
 
     # REMOTE DELIVERY
-    # Extract the UUID from the recipient's FQID:
-    # ex. "..api/authors/1234-uuid/inbox"
     author_uuid = str(recipient.id).rstrip("/").split("/")[-1]
     inbox_url = urljoin(recipient.host.rstrip('/') + '/', f"api/authors/{author_uuid}/inbox/")
 
@@ -67,8 +66,6 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
             auth = (node.auth_user, node.auth_pass)
 
         logger.info(f"Sending activity to {inbox_url} for recipient {recipient.id}")
-        logger.debug(f"Activity type: {activity.get('type')}, Actor: {activity.get('actor')}")
-
         response = requests.post(
             inbox_url,
             data=json.dumps(activity),
@@ -77,7 +74,7 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
                 "Accept": "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\""
             },
             auth=auth,
-            timeout=10,
+            timeout=5,
         )
         
         logger.info(f"Response from {inbox_url}: {response.status_code}")

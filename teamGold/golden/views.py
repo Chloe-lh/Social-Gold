@@ -780,10 +780,15 @@ def profile_view(request):
 
     # Add follow information to each author in the search results
     for a in authors:
-        follow = Follow.objects.filter(actor=author, object=a["id"]).first()
-        a["follow_state"] = follow.state if follow else "NONE"
-        a["is_following"] = author.following.filter(id=a["id"]).exists()
-        a["is_friend"] = str(a["id"]) in friend_ids
+        if a.get("is_local"):
+            follow = Follow.objects.filter(actor=author, object=a["id"]).first()
+            a["follow_state"] = follow.state if follow else "NONE"
+            a["is_following"] = author.following.filter(id=a["id"]).exists()
+            a["is_friend"] = str(a["id"]) in friend_ids
+        else: 
+            a["follow_state"] = "NONE"
+            a["is_following"] = False
+            a["is_friend"] = False
 
     # Retrieve entries, followers, and following
     entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("-published")
@@ -799,7 +804,7 @@ def profile_view(request):
         "entries": entries,
         "followers": followers,
         "following": following,
-        "follow_requests": all_follow_requests,  # Use combined follow requests
+        "follow_requests": all_follow_requests,
         "friends": friends_qs,
         "form": ProfileForm(instance=author),  
         "authors": authors,  
@@ -808,7 +813,6 @@ def profile_view(request):
 
     # Render the profile page with the context
     return render(request, "profile.html", context)
-
 
 @login_required
 def public_profile_view(request, author_id):

@@ -13,7 +13,6 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 import os
 import dj_database_url
-from urllib.parse import urlparse
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -32,12 +31,6 @@ SECRET_KEY = 'django-insecure-oif3=#^zzt94!56t^62^*yb92_*#y4!8rple=)68i@+)b95iq@
 DEBUG = True
 
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver","*"]
-
-if os.environ.get('DYNO'):
-    # Get the current Heroku app's hostname dynamically
-    site_url = os.getenv('SITE_URL', 'http://your-default-domain.com')
-    parsed_url = urlparse(site_url)
-    ALLOWED_HOSTS.append(parsed_url.hostname)
 
 INSTALLED_APPS = [
     'golden',

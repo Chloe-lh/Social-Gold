@@ -137,20 +137,28 @@ def create_like_activity(author, liked_object_fqid):
 
 # ! needs work 
 
-def create_follow_activity(actor_author, target_id):
-
-    activity_id = make_fqid(actor_author, "follow")
-
-    return {
-        "type": "Follow",
-        "id": activity_id,
-        "summary": f"{actor_author.username} wants to follow you",
-        "actor": str(actor_author.id),      
-        "object": str(target_id),           
-        "published": timezone.now().isoformat(),
-        "state": "REQUESTED",
-        "target_is_local": target_id.startswith(actor_author.host),
+def create_follow_activity(author, target_id):
+    """
+    Creates a follow activity when author wants to follow target.
+    """
+    activity = {
+        "type": "Follow", 
+        "actor": {
+            "type": "author",
+            "id": author.id,
+            "host": author.host,
+            "displayName": author.username,
+            "profileImage": author.profileImage if author.profileImage else None,
+        },
+        "object": {
+            "type": "author",
+            "id": target_id,
+            "host": target.host,
+            "displayName": target.username,
+            "profileImage": target.profileImage if target.profileImage else None,
+        },
     }
+    return activity
 
 def create_accept_follow_activity(acceptor_author, follower_id):
     activity_id = make_fqid(acceptor_author, "accept")

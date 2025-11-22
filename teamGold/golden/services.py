@@ -168,20 +168,45 @@ def is_local(author_id: str) -> bool:
 # ! edited code 
 
 
-def get_or_create_foreign_author(fqid: str):
+def get_or_create_foreign_author(fqid: str, host: str = None, username: str = None):
     """
     Ensures a remote author exists locally.
     example: https://node3.herokuapp.com/api/authors/abc123-uuid
+    
+    Args:
+        fqid: Full Qualified ID (FQID) of the author, e.g. "https://node.com/api/authors/uuid"
+              Can also be just a UUID if host is provided
+        host: Optional host URL to use if fqid is just a UUID
+        username: Optional username to use instead of guessing from FQID
     """
+    # If we already have this author, return it
     author = Author.objects.filter(id=fqid).first()
     if author:
         return author
     
-    host = fqid.split("/api/authors/")[0]
-    guessed_username = fqid.rstrip("/").split("/")[-1]
+    # Check if fqid is a full URL or just a UUID
+    if "/api/authors/" in fqid or fqid.startswith("http"):
+        # Full FQID provided
+        full_fqid = fqid.rstrip("/")
+        host = host or full_fqid.split("/api/authors/")[0]
+        guessed_username = username or full_fqid.split("/")[-1]
+        author_id = full_fqid
+    elif host:
+        # Only UUID provided, reconstruct full FQID using host
+        uuid_part = fqid.rstrip("/")
+        host = host.rstrip("/")
+        author_id = f"{host}/api/authors/{uuid_part}"
+        guessed_username = username or uuid_part
+    else:
+        # Can't create author without proper FQID or host
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Cannot create foreign author: invalid FQID format '{fqid}', host='{host}'")
+        return None
+    
     author = Author.objects.create(
-        id=fqid,
-        username=guessed_username,
+        id=author_id,
+        username=guessed_username or "Unknown",
         host=host,
         is_approved=True,
     )

@@ -711,6 +711,7 @@ def profile_view(request):
 
         if request.POST.get("action") == "follow":
             target_id = request.POST.get("author_id")
+            target_host = request.POST.get("host")
 
             if not target_id:
                 return redirect("profile")
@@ -719,7 +720,9 @@ def profile_view(request):
             target = Author.objects.filter(id=target_id).first()
             if not target:
                 # If author doesn't exist locally, create a foreign author stub
-                target = get_or_create_foreign_author(target_id)
+                # Try to find the author in search results to get host/username
+                target_username = request.POST.get("displayName") or request.POST.get("username")
+                target = get_or_create_foreign_author(target_id, host=target_host, username=target_username)
                 if not target:
                     messages.error(request, "Unable to follow author. Author not found.")
                     return redirect("profile")

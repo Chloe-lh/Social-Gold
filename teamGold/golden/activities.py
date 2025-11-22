@@ -150,10 +150,12 @@ def create_like_activity(author, liked_object_fqid):
 def create_follow_activity(author, target):
     """
     Creates a follow activity when author wants to follow target.
+    Format matches ActivityPub specification.
     """
     activity_id = make_fqid(author, "follow")
     
     activity = {
+        "@context": "https://www.w3.org/ns/activitystreams",
         "type": "Follow",
         "id": activity_id,
         "summary": f"{author.username} wants to follow you",

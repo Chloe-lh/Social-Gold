@@ -20,6 +20,8 @@ from django.core.paginator import Paginator
 # LOCAL IMPORTS
 from golden.models import Author, Entry, Comment, Like, Node
 from golden.services import generate_like_fqid, notify, paginate
+from golden.distributor import distribute_activity
+from golden.activities import create_like_activity
 
 # SWAGGER
 from drf_yasg.utils import swagger_auto_schema
@@ -112,47 +114,10 @@ class LikeAPIView(APIView):
         like = serializer.save(entry=entry, liked_author=request.user, liking_author=None)
         entry.save(update_fields=['likes'])
 
-        # Build a JSON-friendly comment payload for forwarding/notification.
-        like_data = {
-            "type":"like",
-            "author": MinimalAuthorSerializer(like_author).data,
-            "published":timezone.now().isoformat(),
-            "id": getattr(like, 'id', None) ,  #id of like
-            "object":entry.id   # id of entry
-        }
-        # if the entry author is remote, attempt to POST the comment
-        # to that node's inbox. Determine the parent node by matching the author's host.
-        try:
-            # parse host from the entry's author's id (FQID)
-            actor_id = getattr(entry.author, 'id', None)
-            if actor_id:
-                parsed = urlparse(actor_id)
-                actor_host = f"{parsed.scheme}://{parsed.netloc}"
-                parent_node = Node.objects.filter(id__startswith=actor_host).first()
-            else:
-                parent_node = None
-
-            if parent_node and parent_node.id.rstrip('/') != settings.LOCAL_NODE_URL.rstrip('/'): # REMOTE NODE
-                inbox_url = parent_node.id.rstrip('/') + '/inbox'
-                auth = None
-                if getattr(parent_node, 'auth_user', None):
-                    auth = (parent_node.auth_user, parent_node.auth_pass)
-
-                resp = requests.post(
-                    inbox_url,
-                    json=like_data,
-                    auth=auth,
-                    headers={'Content-Type': 'application/json'},
-                    timeout=5,
-                )
-                if not (200 <= resp.status_code < 300):
-                    print("Failed to send comment to parent node %s: %s", inbox_url, resp.status_code)
-            else: #LOCAL NODE
-                notify(like_author, like_data)
-
-        except Exception as e:
-            # never fail the API call because of network issues; comment was saved locally
-            return Response(data, status.HTTP_404_NOT_FOUND)
+        # Use distribute_activity to handle both local and remote delivery
+        # This automatically routes to the correct inbox (local DB or remote API)
+        activity = create_like_activity(like_author, entry.id)
+        distribute_activity(activity, actor=like_author)
 
         # Return the newly created comment as nested JSON (includes nested author)
         serialized = LikeSerializer(like)
@@ -224,48 +189,10 @@ class CommentLikeAPIView(APIView):
 
         like = serializer.save(entry=entry, author=like_author)
    
-        # Build a JSON-friendly comment payload for forwarding/notification.
-        like_data = {
-            "type": "like",
-            "author": MinimalAuthorSerializer(like_author).data, # just stores the id, can be changed later
-            "published": like.published.isoformat() if getattr(like, 'published', None) else None,
-            "id": getattr(like, 'id', None),
-            "entry": entry.id,
-        }
-        
-        # if the entry author is remote, attempt to POST the comment
-        # to that node's inbox. Determine the parent node by matching the author's host.
-        try:
-            # parse host from the entry's author's id (FQID)
-            actor_id = getattr(entry.author, 'id', None)
-            if actor_id:
-                parsed = urlparse(actor_id)
-                actor_host = f"{parsed.scheme}://{parsed.netloc}"
-                parent_node = Node.objects.filter(id__startswith=actor_host).first()
-            else:
-                parent_node = None
-
-            if parent_node and parent_node.id.rstrip('/') != settings.LOCAL_NODE_URL.rstrip('/'): # REMOTE NODE
-                inbox_url = parent_node.id.rstrip('/') + '/inbox'
-                auth = None
-                if getattr(parent_node, 'auth_user', None):
-                    auth = (parent_node.auth_user, parent_node.auth_pass)
-
-                resp = requests.post(
-                    inbox_url,
-                    json=like_data,
-                    auth=auth,
-                    headers={'Content-Type': 'application/json'},
-                    timeout=5,
-                )
-                if not (200 <= resp.status_code < 300):
-                    print("Failed to send comment to parent node %s: %s", inbox_url, resp.status_code)
-            else: #LOCAL NODE
-                notify(like_author, like_data)
-
-        except Exception as e:
-            # never fail the API call because of network issues; comment was saved locally
-            return Response(data, status.HTTP_404_NOT_FOUND)
+        # Use distribute_activity to handle both local and remote delivery
+        # This automatically routes to the correct inbox (local DB or remote API)
+        activity = create_like_activity(like_author, entry.id)
+        distribute_activity(activity, actor=like_author)
 
         # Return the newly created comment as nested JSON (includes nested author)
         serialized = LikeSerializer(like)

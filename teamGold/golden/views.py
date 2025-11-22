@@ -636,7 +636,6 @@ def profile_view(request):
         activity = item.data
         if activity.get("type").lower() == "follow" and activity.get("state") == "REQUESTED":
             remote_follow_requests.append(activity)
-            # Mark the inbox item as processed
             item.processed = True
             item.save()
 
@@ -658,7 +657,6 @@ def profile_view(request):
             target = None
 
             if follow_id.startswith('api/authors'):
-                # Handle remote request (remote follow request is just an activity)
                 follow_request = next((fr for fr in remote_follow_requests if fr.get("id") == follow_id), None)
                 if follow_request:
                     target = Author.objects.get(id=follow_request.get('actor'))  # Get the author who requested follow
@@ -673,10 +671,9 @@ def profile_view(request):
                         follow_request.state = "ACCEPTED"
                         follow_request.save()
                     else:
-                        # Handle remote accept
                         activity = create_accept_follow_activity(author, target.id)
                         distribute_activity(activity, actor=author)
-                target.following.add(author)  # Add the author to the target's following list
+                target.following.add(author)  
                 target.save()
             elif action == "reject":
                 if follow_request:
@@ -773,35 +770,42 @@ def profile_view(request):
 
             return redirect("profile")
 
+    # Function to get the author's friends and friend ids
     friends_qs, friend_ids = get_friends_context(author)
+
+    # Process search query
     query = request.GET.get("q", "").strip()
     authors = get_search_authors(author, query)
 
+    # Add follow information to each author in the search results
     for a in authors:
         follow = Follow.objects.filter(actor=author, object=a["id"]).first()
         a["follow_state"] = follow.state if follow else "NONE"
         a["is_following"] = author.following.filter(id=a["id"]).exists()
         a["is_friend"] = str(a["id"]) in friend_ids
 
+    # Retrieve entries, followers, and following
     entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("-published")
     followers = author.followers_set.all()
     following = author.following.all()
-    follow_requests = Follow.objects.filter(object=str(author.id), state="REQUESTED")
-    
-    # Sanitize description for display
+
+    # Sanitize the description for safe HTML display
     author.description = sanitize_markdown_to_html(author.description)
 
+    # Prepare the context to render the profile page
     context = {
         "author": author,
         "entries": entries,
         "followers": followers,
         "following": following,
-        "follow_requests": follow_requests,
+        "follow_requests": all_follow_requests, 
         "friends": friends_qs,
-        "form": form,
-        "authors": authors,
-        "query": escape(query),
+        "form": ProfileForm(instance=author),  
+        "authors": authors,  
+        "query": escape(query),  
     }
+
+    # Render the profile page with the context
     return render(request, "profile.html", context)
 
 @login_required

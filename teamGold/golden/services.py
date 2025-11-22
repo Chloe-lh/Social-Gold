@@ -3,7 +3,7 @@ from django.db import transaction
 from .models import Author
 from .utils import is_local 
 import logging
-from datetime import timezone
+from django.utils import timezone as dj_timezone
 from urllib.parse import unquote, urlparse
 import uuid
 import requests
@@ -14,10 +14,9 @@ def normalize_fqid(fqid: str) -> str:
     """Normalize FQID by removing trailing slashes and ensuring consistent format."""
     return fqid.rstrip("/").lower()  # Ensure lowercase and consistent format
 
-def is_local(fqid: str) -> bool:
-    author_host = urlparse(fqid).netloc
-    site_host = urlparse(settings.SITE_URL).netloc
-    return author_host == site_host
+def is_local(author_id):
+    author = Author.objects.filter(id=author_id).first()
+    return author is not None and author.host == settings.SITE_URL
 
 def get_or_create_author(fqid: str) -> Author:
     """
@@ -34,7 +33,7 @@ def create_activity(author, activity_type, object_data, suffix="posts"):
         "type": activity_type,
         "id": activity_id,
         "actor": str(author.id),
-        "published": timezone.now().isoformat(),
+        "published": dj_timezone.now().isoformat(),
         "summary": f"{author.username} performed a {activity_type} activity",
         "object": object_data
     }
@@ -45,7 +44,7 @@ def create_follow_activity(author, target):
         "type": "Follow",
         "actor": str(author.id),
         "object": str(target.id),
-        "published": timezone.now().isoformat(),
+        "published": dj_timezone.now().isoformat(),
         "state": "REQUESTED"
     }
     return create_activity(author, "Follow", object_data, "follow")
@@ -221,15 +220,21 @@ def fetch_remote_author_data(author_url):
         print(f"Error fetching remote author data: {e}")
     return None
 
-def get_or_create_foreign_author(remote_id: str) -> Author:
+def get_or_create_foreign_author(remote_id: str, host: str = None) -> Author:
     """
-    This function ensures that we can create or retrieve an author from a remote node.
-    We ensure the ID is stored consistently as an FQID.
+    Ensure we can create or retrieve an author from a remote node.
+
+    Accepts an optional `host` parameter (used by callers that already
+    know the host) to avoid parsing or unnecessary network calls.
     """
     remote_id = normalize_fqid(remote_id)
+    host_val = host or urlparse(remote_id).netloc
     author, created = Author.objects.get_or_create(
         id=remote_id,  # Store remote author ID as FQID
-        defaults={'username': f"remote_author_{uuid.uuid4()}", 'host': urlparse(remote_id).netloc}
+        defaults={
+            'username': f"remote_author_{uuid.uuid4()}",
+            'host': host_val,
+        }
     )
     return author
     

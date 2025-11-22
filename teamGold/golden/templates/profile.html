@@ -104,7 +104,7 @@
               <img class="friend-icon" src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
             {% endif %}
 
-            <form method="POST" class="unfollow-form">
+            <form method="POST" class="unfollow-form" action="{% url 'profile' %}">
               {% csrf_token %}
               <button type="submit" name="unfollow" value="{{ f.id }}" class="unfollow-btn">
                 <img src="{% static 'golden/icons/user-remove-icon.png' %}" alt="unfollow this person">
@@ -125,7 +125,7 @@
         {% for req in follow_requests %}
         <li class="request-row">
           <a href="{% url 'public-profile' req.actor.id|author_url_id %}">{{ req.actor.username }} wants to follow you</span>
-            <form method="POST" style="display:inline;">
+            <form method="POST" action="{% url 'profile' %}" style="display:inline;">
               {% csrf_token %}
               <input type="hidden" name="follow_id" value="{{ req.id }}">
               <input type="hidden" name="action" value="approve">
@@ -134,7 +134,7 @@
               </button>
             </form>
         
-            <form method="POST" style="display:inline;">
+            <form method="POST" action="{% url 'profile' %}" style="display:inline;">
             {% csrf_token %}
               <input type="hidden" name="follow_id" value="{{ req.id }}">
               <input type="hidden" name="action" value="reject">
@@ -156,7 +156,7 @@
 
       <!-- Search Bar Feature -->
       <form method="GET" action="">
-        <input type="text" name="q" placeholder="Search users..." ="{{ query }}" class="search-bar">
+        <input type="text" name="q" placeholder="Search users..." value="{{ query }}" class="search-bar">
         <button type="submit"> Search for User </button>
       </form>
 
@@ -165,8 +165,11 @@
       <ul>
       {% for a in authors %}
         <li style="padding: 10px; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center;">
-          <a href="{% url 'public-profile' a.url_id|default:a.uuid|default:a.id %}">{{ a.username }}</a>
-
+          {% if a.url_id %}
+            <a href="{% url 'public-profile' a.url_id %}">{{ a.username }}</a>
+          {% else %}
+            <a href="{% url 'public-profile' a.id|author_url_id %}">{{ a.username }}</a>
+          {% endif %}
           {% if a.is_friend %}
             <button class="follow-btn" disabled>
               <img src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
@@ -183,7 +186,7 @@
             </button>
 
           {% else %}
-            <form method="POST">
+            <form method="POST" action="{% url 'profile' %}">
               {% csrf_token %}
               <input type="hidden" name="action" value="follow">
               <input type="hidden" name="author_id" value="{{ a.id }}">
@@ -193,7 +196,7 @@
               <input type="hidden" name="github" value="{{ a.github }}">
               <input type="hidden" name="web" value="{{ a.web }}">
               <input type="hidden" name="host" value="{{ a.host }}">
-              <button class="follow-btn" type="submit">
+              <button class="follow-btn" type="submit" id="follow-btn-{{ a.id }}">
                 <img src="{% static 'golden/icons/user-add-icon.png' %}" alt="follow">
               </button>
             </form>
@@ -258,5 +261,47 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 });
+
+document.addEventListener("DOMContentLoaded", function () {
+    const followButtons = document.querySelectorAll('.follow-btn');
+
+    followButtons.forEach(button => {
+      button.addEventListener('click', function (event) {
+        event.preventDefault();  // Prevent form submission
+
+        const authorId = this.getAttribute('data-author-id');
+        const action = this.classList.contains('following') ? 'unfollow' : 'follow'; 
+        
+        // Send AJAX request
+        fetch("{% url 'profile' %}", {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,  // Include CSRF token
+          },
+          body: JSON.stringify({
+            'action': action,
+            'author_id': authorId,
+          })
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.status === "success") {
+            // Change button state dynamically
+            if (action === 'follow') {
+              this.classList.add('following');
+              this.innerHTML = `<img src="{% static 'golden/icons/user-remove-icon.png' %}" alt="unfollow">`; // Update button to Unfollow
+            } else {
+              this.classList.remove('following');
+              this.innerHTML = `<img src="{% static 'golden/icons/user-add-icon.png' %}" alt="follow">`; // Update button to Follow
+            }
+          } else {
+            alert('Error with the action');
+          }
+        })
+        .catch(error => console.error('Error:', error));
+      });
+    });
+  });
 </script>
 {% endblock %}

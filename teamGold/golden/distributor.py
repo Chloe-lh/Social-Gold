@@ -44,26 +44,46 @@ def normalize_fqid(fqid: str) -> str:
 
 def send_activity_to_inbox(recipient: Author, activity: dict):
     """Send activity to local or remote inbox."""
+    logger = logging.getLogger(__name__)
+    
+    if not recipient:
+        logger.warning("Attempted to send activity to None recipient")
+        return
+    
+    # Local delivery
     if recipient.host.rstrip("/") == settings.SITE_URL.rstrip("/"):
-        # Local delivery to the inbox
+        logger.debug(f"Delivering activity locally to {recipient.username}")
         Inbox.objects.create(author=recipient, data=activity)
         return
 
-    recipient_id = normalize_fqid(str(recipient.id))
-    inbox_url = urljoin(f"{recipient.host.rstrip('/')}/", f"api/authors/{recipient_id}/inbox/")
-
+    # Remote delivery - extract UUID from recipient ID
     try:
+        recipient_id = normalize_fqid(str(recipient.id))
+        
+        # If recipient_id is a full URL, extract the UUID part
+        if recipient_id.startswith('http'):
+            recipient_id = recipient_id.split('/')[-1]
+        
+        recipient_host = recipient.host.rstrip('/')
+        inbox_url = f"{recipient_host}/api/authors/{recipient_id}/inbox/"
+        
+        logger.debug(f"Posting activity to remote inbox: {inbox_url}")
         response = requests.post(
             inbox_url,
             data=json.dumps(activity),
             headers={"Content-Type": "application/json"},
-            auth=None,
             timeout=10,
         )
+        
         if response.status_code >= 400:
-            raise Exception(f"Error {response.status_code}: {response.text}")
+            logger.error(f"Remote inbox rejected activity: {response.status_code} {response.text[:200]}")
+        else:
+            logger.info(f"Successfully delivered activity to {inbox_url}")
+            
     except requests.exceptions.RequestException as e:
-        logging.error(f"Failed to send activity to {inbox_url}: {e}")
+        logger.error(f"Failed to send activity to remote inbox for {recipient.id}: {e}")
+    except Exception as e:
+        logger.exception(f"Unexpected error sending activity to {recipient.id}: {e}")
 
 def get_followers(author: Author):
     """Return all authors who follow this author (FOLLOW.state=ACCEPTED)."""

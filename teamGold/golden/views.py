@@ -36,7 +36,7 @@ from golden.distributor import distribute_activity, process_inbox
 from golden.models import (Author, Comment, Entry, EntryImage, Follow, Like, Node, Inbox)
 from golden.serializers import *
 from golden.services import *
-from golden.services import get_or_create_foreign_author, fqid_to_uuid, is_local
+from golden.services import get_or_create_foreign_author, fqid_to_uuid, is_local, fetch_remote_entries, sync_remote_entry
 from golden.activities import ( # Kenneth: If you're adding new activities, please make sure they are uploaded here 
     create_accept_follow_activity,
     create_comment_activity,
@@ -597,11 +597,12 @@ def profile_view(request):
             local_qs = local_qs.filter(username__icontains=query)
 
         for a in local_qs:
+            # Extract UUID from FQID for URL-friendly identifier
             uuid_part = fqid_to_uuid(a.id)
             results.append({
-                "id": a.id,  
-                "uuid": uuid_part, 
-                "url_id": uuid_part, 
+                "id": a.id,  # Full FQID for database operations
+                "uuid": uuid_part,  # UUID part for URLs (use this in templates)
+                "url_id": uuid_part,  # For template URLs - use UUID for local authors
                 "username": a.username,
                 "host": a.host,
                 "is_local": True,
@@ -615,29 +616,73 @@ def profile_view(request):
                 if query.lower() in ra.get("username", "").lower():
                     results.append({
                         "id": ra.get("id"),
-                        "uuid": fqid_to_uuid(ra.get("id")),
                         "username": ra.get("username"),
                         "host": ra.get("host"),
                         "is_local": False,
                         "web": ra.get("web"),
-                        "github": ra.get("github"),
+                        "github":ra.get("github"),
                         "profileImage": ra.get("profileImage")
-                })
+                    })
         return results
-    
+        
     author = Author.from_user(request.user)
-    
+    if not author:
+        messages.error(request, "User author profile not found. Please contact support.")
+        return redirect('login')
+
     # Process inbox FIRST to create Follow objects from remote follow requests
     process_inbox(author)
-    
+
+    # Prepare the form for profile editing
     form = ProfileForm(instance=author)
 
-    # Fetch all follow requests (both local and remote) - they're all in Follow table after processing
+    # Fetch all follow requests (both local and remote) - they are all in the Follow table after processing
     all_follow_requests = Follow.objects.filter(object=str(author.id), state="REQUESTED")
+    
+    if request.method == "POST" and request.is_ajax():  # Handle AJAX requests for follow/unfollow
+        action = request.POST.get("action")
+        target_id = request.POST.get("author_id")
+        target = get_object_or_404(Author, id=target_id)
 
-    if request.method == "GET":
-        sync_github_activity(author)
+        if action == "follow":
+            if is_local(target.id):
+                # Local follow: use Follow model
+                follow, created = Follow.objects.get_or_create(
+                    actor=author,
+                    object=target.id,
+                    defaults={"state": "REQUESTED", "published": dj_timezone.now()},
+                )
+                if created:
+                    activity = create_follow_activity(author, target)
+                    distribute_activity(activity, actor=author)
+                    return JsonResponse({"status": "success"})
+            else:
+                # Remote follow: handle via external API
+                activity = create_follow_activity(author, target)
+                distribute_activity(activity, actor=author)
+                return JsonResponse({"status": "success"})
+        
+        elif action == "unfollow":
+            if is_local(target.id):
+                # Local unfollow
+                follow_request = Follow.objects.filter(actor=author, object=target.id).first()
+                if follow_request:
+                    follow_request.delete()
+                activity = create_unfollow_activity(author, target.id)
+                distribute_activity(activity, actor=author)
+                return JsonResponse({"status": "success"})
+            else:
+                # Remote unfollow
+                activity = create_unfollow_activity(author, target.id)
+                distribute_activity(activity, actor=author)
+                return JsonResponse({"status": "success"})
 
+        return JsonResponse({"status": "error"})
+
+    # Regular profile view handling...
+    # Add your other code here for handling non-AJAX requests.
+
+    # Handle follow/unfollow for regular requests
     if request.method == "POST":
         if "follow_id" in request.POST and "action" in request.POST:
             follow_id = request.POST.get("follow_id")
@@ -790,38 +835,22 @@ def profile_view(request):
 
             return redirect("profile")
 
-    friends_qs, friend_ids = get_friends_context(author)
-    query = request.GET.get("q", "").strip()
-    authors = get_search_authors(author, query)
-
-    for a in authors:
-        if a.get("is_local"):
-            follow = Follow.objects.filter(actor=author, object=a["id"]).first()
-            a["follow_state"] = follow.state if follow else "NONE"
-            a["is_following"] = author.following.filter(id=a["id"]).exists()
-            a["is_friend"] = str(a["id"]) in friend_ids
-        else: 
-            a["follow_state"] = "NONE"
-            a["is_following"] = False
-            a["is_friend"] = False
-
     # Retrieve entries, followers, and following
     entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("-published")
     followers = author.followers_set.all()
     following = author.following.all()
-    
+
     # Add URL-friendly IDs to followers and following for templates
-    # For local authors, use UUID; for remote, use full FQID
     followers_with_urls = []
     for f in followers:
         url_id = fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')
         followers_with_urls.append({'author': f, 'url_id': url_id})
-    
+
     following_with_urls = []
     for f in following:
         url_id = fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')
         following_with_urls.append({'author': f, 'url_id': url_id})
-    
+
     # Also add URL-friendly IDs to follow requests
     follow_requests_with_urls = []
     for req in all_follow_requests:
@@ -841,10 +870,6 @@ def profile_view(request):
         "following_with_urls": following_with_urls,  # With URL-friendly IDs
         "follow_requests": all_follow_requests,  # Keep original
         "follow_requests_with_urls": follow_requests_with_urls,  # With URL-friendly IDs
-        "friends": friends_qs,
-        "form": ProfileForm(instance=author),  
-        "authors": authors,  
-        "query": escape(query),  
     }
 
     return render(request, "profile.html", context)
@@ -1151,7 +1176,7 @@ def api_follow_requests(request, author_id):
         "id": fr.id,
         "type": "Follow",
         "summary": fr.summary,
-        "actor": AuthorSerializer(fr.actor).data,  # Send full author data
+        "actor": AuthorSerializer(fr.actor).data, 
         "object": fr.object,
         "published": fr.published.isoformat(),
         "state": fr.state,
@@ -1159,13 +1184,13 @@ def api_follow_requests(request, author_id):
 
     return Response({"type": "follow-requests", "items": items}, status=200)
 
-
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_follow_action(request):
     """Handle a user following another user."""
     target_id = request.POST.get("author_id")
-    target = get_object_or_404(Author, id=target_id)
+    target = get_object_or_404(Author, id=normalize_fqid(target_id))
+
     actor = Author.from_user(request.user)
 
     if actor == target:
@@ -1177,15 +1202,10 @@ def api_follow_action(request):
         defaults={"state": "REQUESTED", "published": dj_timezone.now()},
     )
 
-    if not created:
-        follow.state = "REQUESTED"
-        follow.save()
-
     activity = create_follow_activity(actor, target)
     distribute_activity(activity, actor=actor)
 
     return Response({"status": "Follow request sent."}, status=201)
-
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -1211,7 +1231,6 @@ def api_accept_follow_action(request):
 
     return redirect("profile")
 
-
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_reject_follow_action(request):
@@ -1231,7 +1250,6 @@ def api_reject_follow_action(request):
     distribute_activity(activity, actor=request.user)
 
     return redirect("profile")
-
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -1254,38 +1272,6 @@ def api_unfollow_action(request):
 
     return redirect("profile")
 
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def api_accept_follow(request, author_id):
-    """API endpoint for accepting a follow request."""
-    follow_request = get_object_or_404(Follow, object=author_id, actor=request.user, state="REQUESTED")
-
-    follow_request.state = "ACCEPTED"
-    follow_request.save()
-
-    actor = follow_request.actor
-    actor.following.add(request.user)
-
-    activity = create_accept_follow_activity(request.user, actor.id)
-    distribute_activity(activity, actor=request.user)
-
-    return Response({"status": "Follow request accepted."}, status=200)
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def api_reject_follow(request, author_id):
-    """API endpoint for rejecting a follow request."""
-    follow_request = get_object_or_404(Follow, object=author_id, actor=request.user, state="REQUESTED")
-
-    follow_request.state = "REJECTED"
-    follow_request.save()
-
-    activity = create_reject_follow_activity(request.user, follow_request.actor.id)
-    distribute_activity(activity, actor=request.user)
-
-    return Response({"status": "Follow request rejected."}, status=200)
 
 @api_view(['GET'])
 def list_inbox(request, author_id):

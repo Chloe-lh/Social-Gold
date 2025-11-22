@@ -47,8 +47,8 @@ urlpatterns = [
 
     # Follow-related API Endpoints
     path("api/Follow/<path:author_id>/request/", views.api_follow_requests, name="api-follow-request"),
-    path("api/Follow/<path:author_id>/accept/", views.api_accept_follow, name="api-accept-follow"),
-    path("api/Follow/<path:author_id>/reject/", views.api_reject_follow, name="api-reject-follow"),
+    path("api/Follow/<path:author_id>/accept/", views.api_accept_follow_action, name="api-accept-follow"),
+    path("api/Follow/<path:author_id>/reject/", views.api_reject_follow_action, name="api-reject-follow"),
     path("api/Follow/<path:author_id>/unfollow/", views.api_unfollow_action, name="api-unfollow"),
 
     # Comments

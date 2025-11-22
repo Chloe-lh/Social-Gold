@@ -626,17 +626,22 @@ def profile_view(request):
         return results
 
     author = Author.from_user(request.user)
-    process_inbox(author)
-    form = ProfileForm(instance=author)
-
-    local_follow_requests = Follow.objects.filter(object=str(author.id), state="REQUESTED")
     remote_follow_requests = []
     inbox_items = Inbox.objects.filter(author=author, processed=False)
 
+    form = ProfileForm(instance=author)
+
+    # Fetch remote follow requests from the inbox
     for item in inbox_items:
         activity = item.data
         if activity.get("type").lower() == "follow" and activity.get("state") == "REQUESTED":
             remote_follow_requests.append(activity)
+            # Mark the inbox item as processed
+            item.processed = True
+            item.save()
+
+    local_follow_requests = Follow.objects.filter(object=str(author.id), state="REQUESTED")
+    all_follow_requests = list(local_follow_requests) + remote_follow_requests
 
     if request.method == "GET":
         sync_github_activity(author)
@@ -648,33 +653,40 @@ def profile_view(request):
             
             if not follow_id:
                 return redirect("profile")
+            
+            follow_request = None
+            target = None
 
-            # Fetch the follow_request object
-            follow_request = list(local_follow_requests) + remote_follow_requests
+            if follow_id.startswith('api/authors'):
+                # Handle remote request (remote follow request is just an activity)
+                follow_request = next((fr for fr in remote_follow_requests if fr.get("id") == follow_id), None)
+                if follow_request:
+                    target = Author.objects.get(id=follow_request.get('actor'))  # Get the author who requested follow
+            else:
+                # Local request (Follow model instance)
+                follow_request = Follow.objects.get(id=follow_id)
+                target = follow_request.actor  # Get the author who sent the follow request
 
             if action == "approve":
-                follow_request.state = "ACCEPTED"
-                follow_request.save()
-
-                target = follow_request.actor 
-                target.following.add(author)  
+                if follow_request:
+                    if isinstance(follow_request, Follow):
+                        follow_request.state = "ACCEPTED"
+                        follow_request.save()
+                    else:
+                        # Handle remote accept
+                        activity = create_accept_follow_activity(author, target.id)
+                        distribute_activity(activity, actor=author)
+                target.following.add(author)  # Add the author to the target's following list
                 target.save()
-
-                activity = create_accept_follow_activity(author, target.id)
-                distribute_activity(activity, actor=author)
-
-                # ! FOR DEBUGGING
-                messages.success(request, f"You have accepted {target.username}'s follow request.")
-
             elif action == "reject":
-                follow_request.state = "REJECTED"
-                follow_request.save()
-
-                activity = create_reject_follow_activity(author, follow_request.actor.id) 
-                distribute_activity(activity, actor=author)
-
-                # ! FOR DEBUGGING
-                messages.success(request, f"You have rejected {follow_request.actor.username}'s follow request.")
+                if follow_request:
+                    if isinstance(follow_request, Follow):
+                        follow_request.state = "REJECTED"
+                        follow_request.save()
+                    else:
+                        # Handle remote reject
+                        activity = create_reject_follow_activity(author, target.id)
+                        distribute_activity(activity, actor=author)
 
             return redirect("profile")
 

@@ -36,14 +36,11 @@ receive deliveries and update our database through this protocol.
 # * ============================================================
 
 def normalize_fqid(fqid: str) -> str:
-    """
-    Normalize FQID by removing trailing slashes and ensuring consistent format.
-    This will make sure the ID is in the form:
-      https://yoursite/api/authors/<uuid>
-    """
+    """Normalize FQID by removing trailing slashes and ensuring consistent format."""
     if not fqid:
         return ""
     return str(fqid).rstrip("/")
+
 
 def send_activity_to_inbox(recipient: Author, activity: dict):
     """

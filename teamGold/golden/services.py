@@ -1,20 +1,136 @@
-import uuid
-from django.conf import settings
-from urllib.parse import unquote, urlparse
-from rest_framework.response import Response
-from .models import Node
-import json
+# golden/services.py
 from django.db import transaction
 from .models import Author
+from .utils import is_local 
 import logging
-from django.core.paginator import Paginator
-from datetime import datetime, timezone
-from golden.models import Author
-from .services import is_local
+from datetime import timezone
+from urllib.parse import unquote, urlparse
+import uuid
 
+logger = logging.getLogger(__name__)
 
-import requests
-from requests.auth import HTTPBasicAuth
+def get_or_create_foreign_author(fqid: str, host: str = None, username: str = None):
+    """
+    Ensures a remote author exists locally.
+    example: https://node3.herokuapp.com/api/authors/abc123-uuid
+
+    Args:
+        fqid: Full Qualified ID (FQID) of the author, e.g. "https://node.com/api/authors/uuid"
+              Can also be just a UUID if host is provided
+        host: Optional host URL to use if fqid is just a UUID
+        username: Optional username to use instead of guessing from FQID
+    """
+    author = Author.objects.filter(id=fqid).first()
+    if author:
+        if username and author.username != username:
+            author.username = username
+            author.save()
+        return author
+    
+    if username:
+        is_local_author = is_local(fqid) if fqid.startswith('http') else (host is None or host == settings.SITE_URL.rstrip('/'))
+        
+        existing = Author.objects.filter(username=username).first()
+        if existing:
+            if existing.id != fqid:
+                logger.warning(f"Found author '{username}' with different ID: {existing.id} vs {fqid}")
+                if is_local(existing.id) and is_local_author:
+                    if not fqid.startswith('http') and host:
+                        full_fqid = f"{settings.SITE_URL.rstrip('/')}/api/authors/{fqid}"
+                        if full_fqid != existing.id:
+                            logger.warning(f"Author '{username}' exists but IDs don't match. Using existing: {existing.id}")
+            return existing
+    
+    if "/api/authors/" in fqid or fqid.startswith("http"):
+        full_fqid = fqid.rstrip("/")
+        host = host or full_fqid.split("/api/authors/")[0]
+        guessed_username = username or full_fqid.split("/")[-1]
+        author_id = full_fqid
+    elif host:
+        uuid_part = fqid.rstrip("/")
+        host = host.rstrip("/")
+        author_id = f"{host}/api/authors/{uuid_part}"
+        guessed_username = username or uuid_part
+    else:
+        logger.error(f"Cannot create foreign author: invalid FQID format '{fqid}', host='{host}'")
+        return None
+    
+    author = Author.objects.create(
+        id=author_id,
+        username=guessed_username or "Unknown",
+        host=host,
+        is_approved=True,
+    )
+
+    return author
+
+def generate_comment_fqid(author):
+    """
+    Create FQID for a comment related to the author.
+    """
+    comment_uuid = uuid.uuid4()
+    return f"{author.id}/commented/{comment_uuid}"
+
+def generate_like_fqid(author):
+    """
+    Create FQID for a like related to the author.
+    """
+    like_uuid = uuid.uuid4()
+    return f"{author.id}/liked/{like_uuid}"
+
+def fqid_to_uuid(fqid):
+    """
+    Convert a full FQID to UUID.
+    """
+    if not fqid:
+        return None
+    unquoted_fqid = unquote(str(fqid))
+    uid = unquoted_fqid.strip("/").split("/")[-1]
+    return uid
+
+'''
+pagination for listing comments and likes
+    params: allowed - filtered list of items 
+    returns: page object that is input for the correct serializer
+    (CommentSerializer(page_obj.object_list, many=True).data)
+'''
+def paginate(request, allowed):
+    try:
+        page_size = int(request.query_params.get('size', 10))
+    except Exception:
+        page_size = 10
+    try:
+        page_number = int(request.query_params.get('page', 1))
+    except Exception:
+        page_number = 1
+
+    paginator = Paginator(allowed, page_size)
+    page_obj = paginator.get_page(page_number)
+    return page_obj
+
+'''
+Extracts remote node object from fqid (https://node1.com/api/authors/<uuid>/)
+    will return node instance or None if host is local or not trusted
+'''
+def get_remote_node_from_fqid(fqid):
+    if not fqid: return None
+    fqid = unquote(str(fqid)).rstrip('/')
+    try:
+        parsed = urlparse(fqid)
+        if not parsed.scheme or not parsed.netloc:
+            return None
+        remote_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
+    except Exception:
+        return None
+    if settings.LOCAL_NODE_URL == remote_base:
+        return None
+
+    node = Node.objects.filter(id__startswith=remote_base).first()
+    if not node:
+        return None
+    if not node.is_active:
+        return None
+    return node
 
 def notify(author, data):
     """
@@ -78,278 +194,3 @@ def notify(author, data):
             results.append((getattr(follower, 'id', None), None))
 
     return results
-
-
-def get_remote_author_profile(remote_node_url, author_id):
-    url = f"{remote_node_url}/api/profile/{author_id}/"
-    response = requests.get(url)
-    if response.status_code == 200:
-        return response.json()
-    return None
-
-'''
-Extracts remote node object from fqid (https://node1.com/api/authors/<uuid>/)
-    will return node instance or None if host is local or not trusted
-'''
-def get_remote_node_from_fqid(fqid):
-    if not fqid: return None
-    fqid = unquote(str(fqid)).rstrip('/')
-    try:
-        parsed = urlparse(fqid)
-        if not parsed.scheme or not parsed.netloc:
-            return None
-        remote_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
-    except Exception:
-        return None
-    if settings.LOCAL_NODE_URL == remote_base:
-        return None
-
-    node = Node.objects.filter(id__startswith=remote_base).first()
-    if not node:
-        return None
-    if not node.is_active:
-        return None
-    return node
-
-'''
-create fqid (id) for comment
-author.id is a already createdd fqid, so append to the end
-'''
-def generate_comment_fqid(author):
-    comment_uuid = uuid.uuid4()
-    return f"{author.id}/commented/{comment_uuid}"
-
-def generate_like_fqid(author):
-    like_uuid = uuid.uuid4()
-    return f"{author.id}/liked/{like_uuid}"
-
-'''
-convert from fqid to uuid
-'''
-def fqid_to_uuid(fqid):
-    """Extract UUID from a full FQID for URL-friendly identifiers."""
-    if not fqid:
-        return None
-    unquoted_fqid = unquote(str(fqid))
-    # Remove trailing slash and get the last segment
-    uid = unquoted_fqid.strip("/").split("/")[-1]
-    return uid
-
-def get_author_url_id(author):
-    """
-    Get URL-friendly identifier for an author.
-    For local authors: returns UUID part
-    For remote authors: returns full FQID (URL-encoded if needed)
-    """
-    if not author or not author.id:
-        return None
-    
-    if is_local(author.id):
-        # Local author - use UUID for cleaner URLs
-        return fqid_to_uuid(author.id)
-    else:
-        # Remote author - use full FQID
-        return str(author.id).rstrip('/')
-'''
-pagination for listing comments and likes
-    params: allowed - filtered list of items 
-    returns: page object that is input for the correct serializer
-    (CommentSerializer(page_obj.object_list, many=True).data)
-'''
-def paginate(request, allowed):
-    try:
-        page_size = int(request.query_params.get('size', 10))
-    except Exception:
-        page_size = 10
-    try:
-        page_number = int(request.query_params.get('page', 1))
-    except Exception:
-        page_number = 1
-
-    paginator = Paginator(allowed, page_size)
-    page_obj = paginator.get_page(page_number)
-    return page_obj
-
-
-'''
-checks if a node is remote by checking if its URL (id) is different from 
-local nodes URL
-'''
-def is_remote_node(node):
-    return node.id != settings.LOCAL_NODE_URL
-
-def is_local(author_id: str) -> bool:
-    """
-    Returns True if the given author_id string belongs to this node.
-    """
-    local_prefix = settings.SITE_URL.rstrip("/") + "/api/authors/"
-    return str(author_id).startswith(local_prefix)
-
-
-def get_or_create_foreign_author(fqid: str, host: str = None, username: str = None):
-    """
-    Ensures a remote author exists locally.
-    example: https://node3.herokuapp.com/api/authors/abc123-uuid
-    
-    Args:
-        fqid: Full Qualified ID (FQID) of the author, e.g. "https://node.com/api/authors/uuid"
-              Can also be just a UUID if host is provided
-        host: Optional host URL to use if fqid is just a UUID
-        username: Optional username to use instead of guessing from FQID
-    """
-    # If we already have this author by ID, return it
-    author = Author.objects.filter(id=fqid).first()
-    if author:
-        # Update username if provided and different
-        if username and author.username != username:
-            author.username = username
-            author.save()
-        return author
-    
-    # Also check by username if username is provided
-    # This ensures nodeadmin and the UUID represent the same person
-    if username:
-        # Check if this is a local author by examining the FQID
-        is_local_author = is_local(fqid) if fqid.startswith('http') else (host is None or host == settings.SITE_URL.rstrip('/'))
-        
-        # Try to find by username to see if author already exists
-        existing = Author.objects.filter(username=username).first()
-        if existing:
-            # If found by username, update the ID if it's different (shouldn't happen normally)
-            if existing.id != fqid:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(f"Found author '{username}' with different ID: {existing.id} vs {fqid}")
-                # For local authors, prefer the existing ID to avoid duplicates
-                if is_local(existing.id) and is_local_author:
-                    # Update the FQID to match if they're both local
-                    if not fqid.startswith('http') and host:
-                        # Reconstruct full FQID and update
-                        full_fqid = f"{settings.SITE_URL.rstrip('/')}/api/authors/{fqid}"
-                        if full_fqid != existing.id:
-                            logger.warning(f"Author '{username}' exists but IDs don't match. Using existing: {existing.id}")
-            return existing
-    
-    # Check if fqid is a full URL or just a UUID
-    if "/api/authors/" in fqid or fqid.startswith("http"):
-        # Full FQID provided
-        full_fqid = fqid.rstrip("/")
-        host = host or full_fqid.split("/api/authors/")[0]
-        guessed_username = username or full_fqid.split("/")[-1]
-        author_id = full_fqid
-    elif host:
-        # Only UUID provided, reconstruct full FQID using host
-        uuid_part = fqid.rstrip("/")
-        host = host.rstrip("/")
-        author_id = f"{host}/api/authors/{uuid_part}"
-        guessed_username = username or uuid_part
-    else:
-        # Can't create author without proper FQID or host
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Cannot create foreign author: invalid FQID format '{fqid}', host='{host}'")
-        return None
-    
-    author = Author.objects.create(
-        id=author_id,
-        username=guessed_username or "Unknown",
-        host=host,
-        is_approved=True,
-    )
-
-    return author
-
-def sync_remote_entries(node, local_user_author):
-    items = fetch_remote_entries(node)
-    synced_entries = []
-
-    for item in items:
-        author_data = item.get("author", {})
-        author_id = author_data.get("id")
-
-        if not author_id:
-            continue
-
-        if not Follow.objects.filter(
-            actor=local_user_author,
-            object=author_id,
-            state="ACCEPTED"
-        ).exists():
-            continue
-
-        entry = sync_remote_entry(item, node)
-        if entry:
-            synced_entries.append(entry)
-
-    return synced_entries
-
-def fetch_remote_entries(node, timeout=5):
-    import logging
-    logger = logging.getLogger(__name__)
-    
-    url = f"{node.id.rstrip('/')}/api/entries/"
-
-    auth = None
-    if node.auth_user:
-        auth = HTTPBasicAuth(node.auth_user, node.auth_pass)
-
-    try:
-        logger.info(f"Fetching entries from {url}")
-        r = requests.get(
-            url, 
-            auth=auth, 
-            timeout=timeout,
-            headers={
-                "Accept": "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\""
-            }
-        )
-        logger.info(f"Response from {url}: {r.status_code}")
-        
-        if r.status_code != 200:
-            logger.warning(f"Non-200 response from {url}: {r.status_code}")
-            return []
-        data = r.json()
-        items = data.get("items", [])
-        logger.info(f"Fetched {len(items)} entries from {url}")
-        return items
-    except requests.RequestException as e:
-        logger.error(f"Request exception fetching from {url}: {e}")
-        return []
-
-def sync_remote_entry(item, node):
-    entry_id = item.get("id")
-    if not entry_id:
-        return None
-
-    author_data = item.get("author", {})
-    author_id = author_data.get("id")
-
-    if not author_id:
-        return None
-
-    foreign_author, _ = Author.objects.get_or_create(
-        id=author_id,
-        defaults={
-            "username": author_data.get("displayName", "Unknown"),
-            "host": author_data.get("host", node.id),
-        }
-    )
-
-    defaults = {
-        "author": foreign_author,
-        "title": item.get("title", ""),
-        "content": item.get("content", ""),
-        "contentType": item.get("contentType", "text/plain"),
-        "visibility": item.get("visibility", "PUBLIC"),
-        "origin": item.get("origin") or item.get("id"),
-        "source": item.get("source") or item.get("id"),
-        "published": item.get("published") or timezone.now(),
-        "is_posted": timezone.now(),
-    }
-
-    entry, _ = Entry.objects.update_or_create(
-        id=entry_id,
-        defaults=defaults
-    )
-
-    return entry

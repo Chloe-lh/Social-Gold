@@ -31,13 +31,12 @@ from django.utils import timezone as dj_timezone
 # IMPORT Django Local
 from .decorators import require_author
 from .forms import CommentForm, CustomUserForm, EntryForm, ProfileForm
-
 # IMPORT Golden 
 from golden.distributor import distribute_activity, process_inbox
 from golden.models import (Author, Comment, Entry, EntryImage, Follow, Like, Node, Inbox)
 from golden.serializers import *
 from golden.services import *
-from golden.services import get_or_create_foreign_author
+from golden.services import get_or_create_foreign_author, fqid_to_uuid, is_local
 from golden.activities import ( # Kenneth: If you're adding new activities, please make sure they are uploaded here 
     create_accept_follow_activity,
     create_comment_activity,
@@ -599,7 +598,6 @@ def profile_view(request):
 
         for a in local_qs:
             # Extract UUID from FQID for URL-friendly identifier
-            from golden.services import fqid_to_uuid
             uuid_part = fqid_to_uuid(a.id)
             results.append({
                 "id": a.id,  # Full FQID for database operations
@@ -731,7 +729,6 @@ def profile_view(request):
             # This ensures nodeadmin and UUID represent the same person
             if not target:
                 target_username = request.POST.get("displayName") or request.POST.get("username")
-                from golden.services import is_local
                 # Check if it looks like a local UUID
                 if target_username and ('-' not in str(target_id).split('/')[-1] or is_local(target_id)):
                     # Try finding by username first for local authors
@@ -819,7 +816,6 @@ def profile_view(request):
     
     # Add URL-friendly IDs to followers and following for templates
     # For local authors, use UUID; for remote, use full FQID
-    from golden.services import fqid_to_uuid, is_local
     followers_with_urls = []
     for f in followers:
         url_id = fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')
@@ -867,9 +863,7 @@ def public_profile_view(request, author_id):
     
     Handles both UUID format (68e52a5b-b117-44ef-82b8-25800fa9fc9b) and full FQID format.
     """
-    from golden.services import fqid_to_uuid, is_local
-    from django.conf import settings
-    
+
     # Try to find author by full FQID first
     author = Author.objects.filter(id=author_id).first()
     

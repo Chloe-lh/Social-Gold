@@ -1043,22 +1043,18 @@ def api_follow_requests(request, author_id):
 def api_accept_follow(request, follow_id):
     follow_request = get_object_or_404(Follow, id=follow_id)
 
-    # Update local DB state
     follow_request.state = "ACCEPTED"
     follow_request.published = dj_timezone.now()
     follow_request.save()
 
-    # Generate activity using your architecture
-    actor_author = follow_request.object  # The one being followed
-    target_author = follow_request.actor  # The follower
+    acceptor = Author.objects.filter(id=follow_request.object).first()
+    follower = follow_request.actor
 
-    # MUST use your system's activity builder
-    activity = create_accept_follow_activity(
-        actor_author,  # local author
-        target_author.id
-    )
+    if not acceptor or not follower:
+        return Response({"error": "Author data missing"}, status=400)
 
-    distribute_activity(activity, actor=actor_author)
+    activity = create_accept_follow_activity(acceptor, follower.id)
+    distribute_activity(activity, actor=acceptor)
 
     return Response({"status": "accepted"}, status=200)
 
@@ -1070,18 +1066,16 @@ def api_reject_follow(request, follow_id):
     follow_request.published = dj_timezone.now()
     follow_request.save()
 
-    actor_author = follow_request.object
-    target_author = follow_request.actor
+    acceptor = Author.objects.filter(id=follow_request.object).first()
+    follower = follow_request.actor
 
-    activity = create_reject_follow_activity(
-        actor_author,
-        target_author.id
-    )
+    if not acceptor or not follower:
+        return Response({"error": "Author data missing"}, status=400)
 
-    distribute_activity(activity, actor=actor_author)
+    activity = create_reject_follow_activity(acceptor, follower.id)
+    distribute_activity(activity, actor=acceptor)
 
     return Response({"status": "rejected"}, status=200)
-
 
 @api_view(['GET'])
 def remote_authors_list(request):

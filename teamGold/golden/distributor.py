@@ -1,7 +1,7 @@
 import requests
 from django.utils import timezone
 from golden.models import Entry, EntryImage, Author, Comment, Like, Follow, Node, Inbox
-from golden.services import is_local
+from golden.services import is_local, get_or_create_foreign_author
 from urllib.parse import urljoin
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
@@ -44,11 +44,14 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         return
 
     # REMOTE DELIVERY
-    inbox_url = f"{recipient.id.rstrip('/')}/inbox/"
+    # Extract the UUID from the recipient's FQID:
+    # ex. "..api/authors/1234-uuid/inbox"
+    author_uuid = str(recipient.id).rstrip("/").split("/")[-1]
+    inbox_url = urljoin(recipient.host.rstrip('/') + '/', f"api/authors/{author_uuid}/inbox/")
 
     try:
         auth = None
-        node = Node.objects.filter(id=recipient.host).first()
+        node = Node.objects.filter(id__icontains=recipient.host).first()
         if node and node.auth_user and node.auth_pass:
             auth = (node.auth_user, node.auth_pass)
 
@@ -80,23 +83,33 @@ def previously_delivered(post):
     author_ids = inbox_rows.values_list("author_id", flat=True)
     return Author.objects.filter(id__in=author_ids)
 
+def absolutize_remote_images(html, base_url):
+    """
+    If a src is relative (e.g. /media/x.jpg), it is converted to
+    base_url + that path (e.g. https://remote-node.com/media/x.jpg).
+    """
+    if not html or not base_url:
+        return html
+    
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
+
+    for img in soup.find_all("img"):
+        src = img.get("src")
+        # Skip already absolute URLs
+        if src and not src.startswith("http"):
+            img["src"] = urljoin(base_url.rstrip("/") + "/", src.lstrip("/"))
+
+    return str(soup)
+
 # * ============================================================
 # * Main Distributor
 # * ============================================================
 def distribute_activity(activity: dict, actor: Author):
-    """
-    Main distribution function for all ActivityPub activities.
-    Handles routing for Create/Update/Delete(post),
-    Comment, Like, Follow, Undo, ImageAdd/Delete
-    and delivers to correct sets of inboxes.
-    """
 
     type_lower = activity.get("type", "").lower()
     obj = activity.get("object")
 
-    # ============================================================
-    # 1️⃣ POST CREATION (Create)
-    # ============================================================
     if type_lower == "create" and isinstance(obj, dict) and obj.get("type") == "post":
         visibility = obj.get("visibility", "PUBLIC").upper()
 
@@ -113,9 +126,6 @@ def distribute_activity(activity: dict, actor: Author):
             send_activity_to_inbox(r, activity)
         return
 
-    # ============================================================
-    # 2️⃣ POST UPDATE
-    # ============================================================
     if type_lower == "update" and isinstance(obj, dict) and obj.get("type") == "post":
         visibility = obj.get("visibility", "PUBLIC").upper()
         recipients = set()
@@ -132,18 +142,12 @@ def distribute_activity(activity: dict, actor: Author):
             send_activity_to_inbox(r, activity)
         return
 
-    # ============================================================
-    # 3️⃣ DELETE POST
-    # ============================================================
     if type_lower == "delete" and isinstance(obj, dict) and obj.get("type") == "post":
         recipients = set(get_followers(actor)) | set(get_friends(actor))
         for r in recipients:
             send_activity_to_inbox(r, activity)
         return
 
-    # ============================================================
-    # 4️⃣ COMMENT
-    # ============================================================
     if type_lower == "comment" and isinstance(obj, dict):
         entry_author_id = obj.get("entry")
 
@@ -158,9 +162,6 @@ def distribute_activity(activity: dict, actor: Author):
             send_activity_to_inbox(r, activity)
         return
 
-    # ============================================================
-    # 5️⃣ LIKE
-    # ============================================================
     if type_lower == "like":
         liked_fqid = obj if isinstance(obj, str) else None
         if not liked_fqid:
@@ -181,9 +182,6 @@ def distribute_activity(activity: dict, actor: Author):
             send_activity_to_inbox(r, activity)
         return
 
-    # ============================================================
-    # 6️⃣ UNLIKE (Undo(Like))
-    # ============================================================
     if type_lower == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "like":
         liked_fqid = obj.get("object")
         entry = Entry.objects.filter(id=liked_fqid).first()
@@ -200,9 +198,6 @@ def distribute_activity(activity: dict, actor: Author):
             send_activity_to_inbox(r, activity)
         return
 
-    # ============================================================
-    # 7️⃣ FOLLOW REQUEST
-    # ============================================================
     if type_lower == "follow":
         target_id = obj
         target = Author.objects.filter(id=target_id).first()
@@ -210,9 +205,6 @@ def distribute_activity(activity: dict, actor: Author):
             send_activity_to_inbox(target, activity)
         return
 
-    # ============================================================
-    # 8️⃣ ACCEPT / REJECT FOLLOW
-    # ============================================================
     if type_lower in ["accept", "reject"]:
         follow_obj = obj or {}
         follower_id = follow_obj.get("actor")
@@ -222,9 +214,6 @@ def distribute_activity(activity: dict, actor: Author):
             send_activity_to_inbox(follower, activity)
         return
 
-    # ============================================================
-    # 9️⃣ UNFOLLOW → Undo(Follow)
-    # ============================================================
     if type_lower == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "follow":
         target_id = obj.get("object")
         target = Author.objects.filter(id=target_id).first()
@@ -238,17 +227,6 @@ def distribute_activity(activity: dict, actor: Author):
 # * ============================================================
 
 def process_inbox(author: Author):
-    """
-    Process every unprocessed inbox activity for this author.
-    This is the ONLY place where the database changes.
-    Handles Follow, Accept, Reject, Undo(Follow), Undo(Like),
-    Comments, Entries, Likes, and Delete operations.
-
-    NOTE:
-    Images are no longer processed here. Remote nodes cannot upload files.
-    Image attachments arriving via Create/Update(post) are treated only
-    as metadata and will NOT create EntryImage rows.
-    """
 
     inbox_items = Inbox.objects.filter(author=author, processed=False)
 
@@ -256,14 +234,14 @@ def process_inbox(author: Author):
         activity = item.data
         activity_type = activity.get("type", "").lower()
         obj = activity.get("object")
+
         actor_id = activity.get("actor")
-
-        # Actor may be local or remote
         actor = Author.objects.filter(id=actor_id).first()
+        if not actor and actor_id:
+            # creates a stub remote author if we don't know them yet
+            actor = get_or_create_foreign_author(actor_id)
 
-        # ============================================================
-        # FOLLOW (Follow request)
-        # ============================================================
+        # FEATURE: SEND FOLLOW REQUEST
         if activity_type == "follow":
             follower = actor
             target_id = obj
@@ -280,9 +258,7 @@ def process_inbox(author: Author):
                     published=parse_datetime(activity.get("published")) or timezone.now()
                 )
 
-        # ============================================================
-        # ACCEPT (follower_id follows target_id)
-        # ============================================================
+        # FEATURE: ACCEPT FOLLOW
         elif activity_type == "accept":
             follow_obj = obj or {}
             follower_id = follow_obj.get("actor")
@@ -303,9 +279,7 @@ def process_inbox(author: Author):
                 )
                 follower.following.add(target)
 
-        # ============================================================
-        # REJECT FOLLOW
-        # ============================================================
+        # FEATURE: REJECT FOLLOW
         elif activity_type == "reject":
             follow_obj = obj or {}
             follower_id = follow_obj.get("actor")
@@ -325,9 +299,7 @@ def process_inbox(author: Author):
                     published=parse_datetime(activity.get("published")) or timezone.now()
                 )
 
-        # ============================================================
-        # UNFOLLOW (Undo Follow)
-        # ============================================================
+        # FEATURE: UNFOLLOW
         elif activity_type == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "follow":
             follower_id = obj.get("actor")
             target_id = obj.get("object")
@@ -339,9 +311,7 @@ def process_inbox(author: Author):
                 Follow.objects.filter(actor=follower, object=target_id).delete()
                 follower.following.remove(target)
 
-        # ============================================================
-        # REMOVE FRIEND (custom)
-        # ============================================================
+        # FEATURE: REMOVE FRIEND
         elif activity_type == "removefriend":
             target_id = obj
             target = Author.objects.filter(id=target_id).first()
@@ -353,45 +323,45 @@ def process_inbox(author: Author):
                 Follow.objects.filter(actor=initiator, object=target_id).delete()
                 Follow.objects.filter(actor=target, object=initiator.id).delete()
 
-        # ============================================================
-        # ENTRY CREATE (post)
-        # Remote attachments are NOT saved as EntryImage.
-        # ============================================================
+        # FEATURE: CREATE ENTRY
         elif activity_type == "create" and isinstance(obj, dict) and obj.get("type") == "post":
             entry_id = obj.get("id")
+
+            raw_content = obj.get("content", "") or ""
+            base_url = getattr(actor, "host", "") if actor else ""
+
+            content = absolutize_remote_images(raw_content, base_url)
 
             Entry.objects.update_or_create(
                 id=entry_id,
                 defaults={
                     "title": obj.get("title", ""),
-                    "content": obj.get("content", ""),
+                    "content": content,
                     "contentType": obj.get("contentType", "text/plain"),
                     "author": actor or author,
                     "visibility": obj.get("visibility", "PUBLIC"),
                     "published": parse_datetime(obj.get("published")) or timezone.now(),
                 }
             )
-            # NOTE: obj.get("attachments") are preserved in content/HTML only.
 
-        # ============================================================
-        # ENTRY UPDATE (post)
-        # Remote attachments are NOT converted into EntryImage rows.
-        # ============================================================
+        # FEATURE: UPDATE ENTRY
         elif activity_type == "update" and isinstance(obj, dict) and obj.get("type") == "post":
             entry_id = obj.get("id")
             entry = Entry.objects.filter(id=entry_id).first()
 
             if entry:
+                raw_content = obj.get("content", entry.content) or entry.content
+                base_url = getattr(actor, "host", "") if actor else ""
+
+                content = absolutize_remote_images(raw_content, base_url)
+
                 entry.title = obj.get("title", entry.title)
-                entry.content = obj.get("content", entry.content)
+                entry.content = content
                 entry.contentType = obj.get("contentType", entry.contentType)
                 entry.visibility = obj.get("visibility", entry.visibility)
                 entry.save()
-                # NOTE: attachments ignored—remote nodes cannot upload files.
 
-        # ============================================================
-        # ENTRY DELETE (post)
-        # ============================================================
+        # FEATURE: DELETE ENTRY
         elif activity_type == "delete" and isinstance(obj, dict) and obj.get("type") == "post":
             entry_id = obj.get("id")
             entry = Entry.objects.filter(id=entry_id).first()
@@ -399,9 +369,7 @@ def process_inbox(author: Author):
                 entry.visibility = "DELETED"
                 entry.save()
 
-        # ============================================================
-        # COMMENT CREATE
-        # ============================================================
+        # FEATURE: COMMENT
         elif activity_type == "comment" and isinstance(obj, dict):
             comment_id = obj.get("id")
             entry = Entry.objects.filter(id=obj.get("entry")).first()
@@ -418,15 +386,11 @@ def process_inbox(author: Author):
                     }
                 )
 
-        # ============================================================
-        # DELETE COMMENT
-        # ============================================================
+        # FEATURE: DELETE COMMENT
         elif activity_type == "delete" and isinstance(obj, dict) and obj.get("type") == "comment":
             Comment.objects.filter(id=obj.get("id")).delete()
 
-        # ============================================================
-        # LIKE
-        # ============================================================
+        # FEATURE: LIKE
         elif activity_type == "like":
             obj_id = activity.get("object")
 
@@ -438,18 +402,13 @@ def process_inbox(author: Author):
                 published=parse_datetime(activity.get("published")) or timezone.now()
             )
 
-        # ============================================================
-        # UNLIKE (Undo Like)
-        # ============================================================
+        # FEATURE: UNLIKE
         elif activity_type == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "like":
             Like.objects.filter(author=obj.get("actor"), object=obj.get("object")).delete()
 
-        # ============================================================
-        # UNKNOWN ACTIVITY — safely ignored
-        # ============================================================
+        # Safely ignores processes that are not known to the file
         else:
             pass
 
-        # Mark processed
         item.processed = True
         item.save()

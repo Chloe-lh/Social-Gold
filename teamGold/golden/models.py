@@ -209,6 +209,10 @@ class EntryImage(models.Model):
             return f"Image for entry {self.entry.id}"
         return f"Standalone Image {self.id}"  # or just "Standalone Image"
     
+    @property
+    def url(self):
+        return self.image.url
+    
 class Comment(models.Model):
     """
     Comment object (federated). ID is the FQID of the comment.

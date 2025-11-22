@@ -29,10 +29,10 @@ urlpatterns = [
     path('stream/', views.stream_view, name="stream-link"),
 
     # Follow-related actions for views
-    path('profile/follow/', views.follow_action, name="follow-action"),
-    path('profile/accept_follow/', views.accept_follow_action, name="accept-follow-action"),  # Accept follow
-    path('profile/reject_follow/', views.reject_follow_action, name="reject-follow-action"),  # Reject follow
-    path('profile/unfollow/', views.unfollow_action, name="unfollow-action"),  # Unfollow action
+    path('profile/follow/', views.api_follow_action, name="follow-action"),
+    path('profile/accept_follow/', views.api_accept_follow_action, name="accept-follow-action"),  # Accept follow
+    path('profile/reject_follow/', views.api_reject_follow_action, name="reject-follow-action"),  # Reject follow
+    path('profile/unfollow/', views.api_unfollow_action, name="unfollow-action"),  # Unfollow action
 
     # API Endpoints
     path("api/Profile/<path:id>/", ProfileAPIView.as_view(), name="get-profile"),
@@ -46,17 +46,16 @@ urlpatterns = [
     path("api/Entry/<path:id>/", EntryAPIView.as_view(), name="get-entry"),
 
     # Follow-related API Endpoints
-    path("api/Follow/<path:author_id>/request/", views.api_follow_request, name="api-follow-request"),
+    path("api/Follow/<path:author_id>/request/", views.api_follow_requests, name="api-follow-request"),
     path("api/Follow/<path:author_id>/accept/", views.api_accept_follow, name="api-accept-follow"),
     path("api/Follow/<path:author_id>/reject/", views.api_reject_follow, name="api-reject-follow"),
-    path("api/Follow/<path:author_id>/unfollow/", views.api_unfollow, name="api-unfollow"),
+    path("api/Follow/<path:author_id>/unfollow/", views.api_unfollow_action, name="api-unfollow"),
 
     # Comments
     path("api/authors/<path:author_serial>/entries/<path:entry_serial>/comments/", EntryCommentAPIView.as_view(), name="author-entry-comments"),
     path("api/authors/<path:author_serial>/entries/<path:entry_serial>/likes/", LikeAPIView.as_view(), name="author-entry-likes"),
 
     # Miscellaneous API Endpoints
-    path("api/authors/", views.remote_authors_list, name='remote-authors-list'),
     path("api/authors/<path:author_id>/inbox/", views.inbox_view, name="author-inbox"),
 
     path("friends/", views.friends, name="friends"),

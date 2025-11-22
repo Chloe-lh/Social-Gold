@@ -16,7 +16,7 @@ These URL Patterns registers all views
 '''
 urlpatterns = [
     path("", views.stream_view, name="stream"),
-    path("new_post/", views.new_post, name="new_post"),
+    path("new_edit_entry/", views.new_edit_entry_view, name="new_edit_entry_view"),
     path("login/", views.CustomLoginView.as_view(template_name = "login.html"), name="login"),
     path("signup/", views.signup, name="signup"),
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
@@ -27,7 +27,7 @@ urlpatterns = [
     path('profile/followers/', views.followers, name='followers'),
     path('profile/following/', views.following, name='following'),
     path("profile/follow_requests/", views.follow_requests, name="follow_requests"),
-    path('entry/<str:entry_uuid>/', views.entry_detail, name='entry_detail'),
+    path('entry/<str:entry_uuid>/', views.entry_detail_view, name='entry_detail'),
     path('stream/', views.stream_view, name="stream-link"),
     # TODO: change the id to be the id, whatever we decide to use later
     # TODO: entries can have comment page number queries (Or we just allow infinite scroll for comments..?)

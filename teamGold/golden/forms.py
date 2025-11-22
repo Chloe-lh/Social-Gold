@@ -32,7 +32,7 @@ class CommentForm(forms.ModelForm):
             'content': forms.Textarea(),
         }
 
-class EntryList(forms.ModelForm):
+class EntryForm(forms.ModelForm):
     class Meta:
         model = Entry
         fields = ['content', 'author', 'is_posted', 'visibility']

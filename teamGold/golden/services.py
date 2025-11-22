@@ -9,19 +9,8 @@ from django.db import transaction
 from .models import Author
 import logging
 from django.core.paginator import Paginator
-'''
-helper function for remote nodes
-sends a POST request with with HTTP Authentication
-ei  When a local author follows a remote author
-    When a local author likes or comments on a remote post
-'''
-def send_to_remote_node(node, url, data):
-    response = requests.post(
-        url,
-        json=data,
-        auth=(node.auth_user, node.auth_pass)
-    )
-    return response
+from datetime import datetime, timezone
+
 
 def notify(author, data):
     """
@@ -158,12 +147,6 @@ def paginate(request, allowed):
     return page_obj
 
 
-def get_host_node(url):
-    host_node = Node.objects.get(host=url)
-    if not host_node.is_active:
-        return Response(f"Node for host {url} is not active", status=status.HTTP_404_BAD_REQUEST)
-    return host_node
-
 '''
 checks if a node is remote by checking if its URL (id) is different from 
 local nodes URL
@@ -177,3 +160,92 @@ def is_local(author_id: str) -> bool:
     """
     local_prefix = settings.SITE_URL.rstrip("/") + "/api/authors/"
     return str(author_id).startswith(local_prefix)
+
+
+# ! edited code 
+
+def get_or_create_foreign_author(author_url):
+    from .models import Author
+    author, created = Author.objects.get_or_create(
+        id=author_url,
+        defaults={"displayName": author_url.split("/")[-2]}
+    )
+    return author
+
+def sync_remote_entries(node, local_user_author):
+    items = fetch_remote_entries(node)
+    synced_entries = []
+
+    for item in items:
+        author_data = item.get("author", {})
+        author_id = author_data.get("id")
+
+        if not author_id:
+            continue
+
+        if not Follow.objects.filter(
+            actor=local_user_author,
+            object=author_id,
+            state="ACCEPTED"
+        ).exists():
+            continue
+
+        entry = sync_remote_entry(item, node)
+        if entry:
+            synced_entries.append(entry)
+
+    return synced_entries
+
+def fetch_remote_entries(node, timeout=5):
+    url = f"{node.id.rstrip('/')}/api/entries/"
+
+    auth = None
+    if node.auth_user:
+        auth = HTTPBasicAuth(node.auth_user, node.auth_pass)
+
+    try:
+        r = requests.get(url, auth=auth, timeout=timeout)
+        if r.status_code != 200:
+            return []
+        data = r.json()
+        return data.get("items", [])
+    except requests.RequestException:
+        return []
+
+def sync_remote_entry(item, node):
+    entry_id = item.get("id")
+    if not entry_id:
+        return None
+
+    author_data = item.get("author", {})
+    author_id = author_data.get("id")
+
+    if not author_id:
+        return None
+
+    foreign_author, _ = Author.objects.get_or_create(
+        id=author_id,
+        defaults={
+            "username": author_data.get("displayName", "Unknown"),
+            "host": author_data.get("host", node.id),
+        }
+    )
+
+    defaults = {
+        "author": foreign_author,
+        "title": item.get("title", ""),
+        "content": item.get("content", ""),
+        "contentType": item.get("contentType", "text/plain"),
+        "visibility": item.get("visibility", "PUBLIC"),
+        "origin": item.get("origin") or item.get("id"),
+        "source": item.get("source") or item.get("id"),
+        "published": item.get("published") or timezone.now(),
+        "is_posted": timezone.now(),
+    }
+
+    entry, _ = Entry.objects.update_or_create(
+        id=entry_id,
+        defaults=defaults
+    )
+
+    return entry

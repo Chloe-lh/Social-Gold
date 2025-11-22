@@ -67,7 +67,7 @@ class Author(AbstractBaseUser, PermissionsMixin):
         upload_to='profile_pics/')
     username = models.CharField(max_length=50, unique=True, default="goldenuser")
     password = models.CharField(max_length=128, default="goldenpassword")
-    name = models.CharField(max_length=100, blank=True) # Kenneth: I added this because the user story says NAME not username. 
+    name = models.CharField(max_length=100, blank=True)
     email = models.CharField(blank=True)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
@@ -124,14 +124,12 @@ class Entry(models.Model):
     This decision ensures entries can be uniquely identified across multiple nodes. 
     Example: https://node1.com/api/entries/123
     """
-
     id = models.URLField(primary_key=True, unique=True) # FQID
     type = models.CharField(max_length=20, default="entry", editable=False)
     title = models.CharField(max_length=300, blank=True)
     web = models.URLField(blank=True)
     description = models.TextField(blank=True)
     contentType = models.CharField(max_length=100, default="text/plain")
-    # image = models.ImageField(upload_to='entry_images/', blank=True, null=True) # pip install pillow is required so yes, download new
     # Author is linked using their FULL URL (id field on Author).
     # to_field='id' ensures Django joins based on the author's URL and not a numeric key.
     # db_column='author_id' sets the actual column name in the database.
@@ -189,6 +187,7 @@ class EntryImage(models.Model):
     Multiple images can be associated with a single Entry.
     Access via: entry.images.all()
     """
+    id = models.URLField(primary_key=True, unique=True)
     entry = models.ForeignKey(
         Entry,
         on_delete=models.CASCADE,

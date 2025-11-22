@@ -52,6 +52,21 @@
                 <img src="{% static 'golden/icons/like-icon.png' %}"><span>{{ entry.likes.count }} Stars</span>
               </button>
             </form>
+
+            <!-- Edit and Delete buttons (only for entry owner) -->
+            {% if request.user == entry.author %}
+              <form method="post" action="{% url 'new_edit_entry_view' %}" style="display:inline">
+                {% csrf_token %}
+                <input type="hidden" name="entry_edit" value="{{ entry.id }}">
+                <button type="submit" class="btn">Edit</button>
+              </form>
+
+              <form method="post" action="{% url 'entry_detail' entry.get_uuid %}" style="display:inline" onsubmit="return confirm('Are you sure you want to delete this entry?');">
+                {% csrf_token %}
+                <input type="hidden" name="entry_delete" value="{{ entry.id }}">
+                <button type="submit" class="btn">Delete</button>
+              </form>
+            {% endif %}
         </footer>
       </article>
 
@@ -91,4 +106,3 @@
           {% endfor %}
       </section>
 {% endblock %}
-

@@ -1,3 +1,6 @@
+import uuid
+from django.utils import timezone
+
 """
 This module centralizes the creation of ActivityPub-style activity objects
 using dictionary architecture. Since views should never hand-build JSON as 
@@ -6,8 +9,6 @@ produce the activity needed, then pass them through distribute_activity().
 
 * All activities need to follow a consistent model s.t it references the model instance and/or FQIDs as input
 """
-
-
 def make_fqid(author, suffix: str):
     """
     Example:
@@ -15,11 +16,6 @@ def make_fqid(author, suffix: str):
       return =   https://yoursite/api/authors/<uuid>/<suffix>/<uuid>
     """
     return f"{author.id.rstrip('/')}/{suffix}/{uuid.uuid4()}"
-
-
-def make_image_fqid(author):
-    return f"{author.id.rstrip('/')}/images/{uuid.uuid4()}"
-
 
 def create_new_entry_activity(author, entry):
 
@@ -40,9 +36,19 @@ def create_new_entry_activity(author, entry):
             "visibility": entry.visibility,
             "published": entry.published.isoformat(),
             "author": str(author.id),
+
+            "attachments": [
+                {
+                    "type": "Image",
+                    "mediaType": "image/jpeg",
+                    "name": img.name,
+                    "url": img.image.url,
+                    "order": img.order,
+                }
+                for img in entry.images.all()
+            ]
         }
     }
-
 
 def create_update_entry_activity(author, entry):
 
@@ -63,9 +69,19 @@ def create_update_entry_activity(author, entry):
             "visibility": entry.visibility,
             "published": entry.published.isoformat(),
             "author": str(author.id),
-        },
-    }
 
+            "attachments": [
+                {
+                    "type": "Image",
+                    "mediaType": "image/jpeg",
+                    "name": img.name,
+                    "url": img.image.url,
+                    "order": img.order,
+                }
+                for img in entry.images.all()
+            ]
+        }
+    }
 
 def create_delete_entry_activity(author, entry):
 
@@ -83,70 +99,8 @@ def create_delete_entry_activity(author, entry):
         },
     }
 
-
-def create_image_add_activity(author, entry, image):
-    activity_id = make_fqid(author, "images")
-
-    return {
-        "type": "AddImage",
-        "id": activity_id,
-        "actor": str(author.id),
-        "published": timezone.now().isoformat(),
-        "summary": f"{author.username} added an image",
-        "object": {
-            "type": "image",
-            "id": str(image.id),       
-            "entry": str(entry.id),
-            "name": image.name,
-            "url": image.image.url,
-            "order": image.order,
-            "uploaded_at": image.uploaded_at.isoformat(),
-        }
-    }
-
-
-def create_image_update_activity(author, entry, image):
-    activity_id = make_fqid(author, "images")
-
-    return {
-        "type": "UpdateImage",
-        "id": activity_id,
-        "actor": str(author.id),
-        "published": timezone.now().isoformat(),
-        "summary": f"{author.username} updated an image",
-        "object": {
-            "type": "image",
-            "id": str(image.id),
-            "entry": str(entry.id),
-            "name": image.name,
-            "url": image.image.url,
-            "order": image.order,
-            "uploaded_at": image.uploaded_at.isoformat(),
-        }
-    }
-
-
-def create_image_delete_activity(author, entry, image):
-    activity_id = make_fqid(author, "images")
-
-    return {
-        "type": "DeleteImage",
-        "id": activity_id,
-        "actor": str(author.id),
-        "published": timezone.now().isoformat(),
-        "summary": f"{author.username} deleted an image",
-        "object": {
-            "type": "image",
-            "id": str(image.id),
-            "entry": str(entry.id)
-        }
-    }
-
-
 def create_comment_activity(author, entry, comment):
-    """
-    Comments must already have: id, author, entry, content, etc.
-    """
+
     activity_id = make_fqid(author, "comments")
 
     return {
@@ -166,8 +120,8 @@ def create_comment_activity(author, entry, comment):
         }
     }
 
-
 def create_like_activity(author, liked_object_fqid):
+
     activity_id = make_fqid(author, "likes")
 
     return {
@@ -181,56 +135,40 @@ def create_like_activity(author, liked_object_fqid):
 
 
 
-
-
-
-
-
-
-
-
-
-
+# ! needs work 
 
 def create_follow_activity(actor_author, target_id):
-    """
-    Creates a Follow activity where actor_author requests to follow target_id.
-    """
+
     activity_id = make_fqid(actor_author, "follow")
 
     return {
         "type": "Follow",
         "id": activity_id,
         "summary": f"{actor_author.username} wants to follow you",
-        "actor": str(actor_author.id),       # FQID
-        "object": str(target_id),            # FQID of target
+        "actor": str(actor_author.id),      
+        "object": str(target_id),           
         "published": timezone.now().isoformat(),
         "state": "REQUESTED",
         "target_is_local": target_id.startswith(actor_author.host),
     }
 
-
 def create_follow_activity(actor_author, target_id):
-    """
-    Creates a Follow activity where actor_author requests to follow target_id.
-    """
+
     activity_id = make_fqid(actor_author, "follow")
 
     return {
         "type": "Follow",
         "id": activity_id,
         "summary": f"{actor_author.username} wants to follow you",
-        "actor": str(actor_author.id),       # FQID
-        "object": str(target_id),            # FQID of target
+        "actor": str(actor_author.id),    
+        "object": str(target_id),           
         "published": timezone.now().isoformat(),
         "state": "REQUESTED",
         "target_is_local": target_id.startswith(actor_author.host),
     }
 
 def create_accept_follow_activity(acceptor_author, follower_id):
-    """
-    Creates an Accept activity to send back to the requestor.
-    """
+
     activity_id = make_fqid(acceptor_author, "accept")
 
     return {
@@ -249,9 +187,7 @@ def create_accept_follow_activity(acceptor_author, follower_id):
     }
 
 def create_reject_follow_activity(acceptor_author, follower_id):
-    """
-    Creates a Reject activity sent back to the follower.
-    """
+
     activity_id = make_fqid(acceptor_author, "reject")
 
     return {
@@ -271,9 +207,7 @@ def create_reject_follow_activity(acceptor_author, follower_id):
 
 
 def create_unfollow_activity(actor_author, target_id):
-    """
-    Creates an Undo activity that reverses a Follow.
-    """
+
     activity_id = make_fqid(actor_author, "undo-follow")
 
     return {
@@ -291,10 +225,7 @@ def create_unfollow_activity(actor_author, target_id):
     }
 
 def create_unfriend_activity(actor_author, target_id):
-    """
-    Creates a Remove-Friend activity (custom).
-    You will handle this in process_inbox() by removing mutual follows.
-    """
+
     activity_id = make_fqid(actor_author, "unfriend")
 
     return {
@@ -308,9 +239,7 @@ def create_unfriend_activity(actor_author, target_id):
     }
 
 def create_profile_update_activity(actor_author):
-    """
-    Sends a profile-update activity to sync profile changes.
-    """
+
     activity_id = make_fqid(actor_author, "profile-update")
 
     return {
@@ -327,3 +256,52 @@ def create_profile_update_activity(actor_author):
     }
 
 
+def create_unlike_activity(author, liked_object_fqid):
+
+    activity_id = make_fqid(author, "undo-like")
+
+    return {
+        "type": "Undo",
+        "id": activity_id,
+        "summary": f"{author.username} unliked an entry or comment",
+        "actor": str(author.id),
+        "object": {
+            "type": "Like",
+            "actor": str(author.id),
+            "object": str(liked_object_fqid)
+        },
+        "published": timezone.now().isoformat(),
+        "target_is_local": liked_object_fqid.startswith(author.host),
+    }
+
+def create_delete_comment_activity(author, comment):
+
+    activity_id = make_fqid(author, "comments")
+
+    return {
+        "type": "Delete",
+        "id": activity_id,
+        "actor": str(author.id),
+        "published": timezone.now().isoformat(),
+        "summary": f"{author.username} deleted a comment",
+        "object": {
+            "type": "comment",
+            "id": str(comment.id)
+        }
+    }
+def create_undo_comment_activity(author, comment):
+    
+    activity_id = make_fqid(author, "undo-comment")
+
+    return {
+        "type": "Undo",
+        "id": activity_id,
+        "summary": f"{author.username} removed their comment",
+        "actor": str(author.id),
+        "object": {
+            "type": "Comment",
+            "id": str(comment.id)
+        },
+        "published": timezone.now().isoformat(),
+        "target_is_local": True,
+    }

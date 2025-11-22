@@ -165,12 +165,26 @@ def is_local(author_id: str) -> bool:
 
 # ! edited code 
 
-def get_or_create_foreign_author(author_url):
-    from .models import Author
-    author, created = Author.objects.get_or_create(
-        id=author_url,
-        defaults={"displayName": author_url.split("/")[-2]}
+from golden.models import Author
+
+def get_or_create_foreign_author(fqid: str):
+    """
+    Ensures a remote author exists locally.
+    example: https://node3.herokuapp.com/api/authors/abc123-uuid
+    """
+    author = Author.objects.filter(id=fqid).first()
+    if author:
+        return author
+    
+    host = fqid.split("/api/authors/")[0]
+    guessed_username = fqid.rstrip("/").split("/")[-1]
+    author = Author.objects.create(
+        id=fqid,
+        username=guessed_username,
+        host=host,
+        is_approved=True,
     )
+
     return author
 
 def sync_remote_entries(node, local_user_author):

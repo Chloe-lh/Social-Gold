@@ -8,6 +8,7 @@ from django.utils.dateparse import parse_datetime
 import uuid
 import json
 from bs4 import BeautifulSoup
+import logging
 
 """
 This module connects our views and remote nodes with our local database using
@@ -158,10 +159,10 @@ def absolutize_remote_images(html, base_url):
 def distribute_activity(activity: dict, actor: Author):
     """
     Main distribution function - determines recipients and sends activities.
+    It prioritizes username for author comparisons and activities.
     """
-    import logging
     logger = logging.getLogger(__name__)
-    
+
     type_lower = activity.get("type", "").lower()
     obj = activity.get("object")
 
@@ -260,25 +261,25 @@ def distribute_activity(activity: dict, actor: Author):
     # FOLLOW
     if type_lower == "follow":
         target_id = obj
-        target = Author.objects.filter(id=target_id).first()
-        
-        # If target doesn't exist locally, create stub
+        target = Author.objects.filter(username=target_id).first()
+
+        # If target doesn't exist locally by username, create stub
         if not target:
             target = get_or_create_foreign_author(target_id)
         
         if target:
             send_activity_to_inbox(target, activity)
         return
-    
+
     # ACCEPT or REJECT
     if type_lower == "accept" or type_lower == "reject":
         follow_obj = obj or {}
-        
+
         if isinstance(follow_obj, dict):
             follower_id = follow_obj.get("actor")  # Who made the follow request
-            target = Author.objects.filter(id=follower_id).first()
-            
-            # If follower doesn't exist locally, create stub
+            target = Author.objects.filter(username=follower_id).first()
+
+            # If follower doesn't exist locally by username, create stub
             if not target and follower_id:
                 target = get_or_create_foreign_author(follower_id)
         elif isinstance(follow_obj, str):
@@ -288,7 +289,7 @@ def distribute_activity(activity: dict, actor: Author):
                 target = follow.actor
                 # If actor doesn't exist (shouldn't happen, but be safe)
                 if not target:
-                    target = get_or_create_foreign_author(follow.actor.id if hasattr(follow, 'actor') else follow.actor_id)
+                    target = get_or_create_foreign_author(follow.actor.username if hasattr(follow, 'actor') else follow.actor_id)
             else:
                 # Follow not found locally - might be a remote Follow ID
                 # Try to extract author ID from the Follow ID URL pattern
@@ -308,7 +309,7 @@ def distribute_activity(activity: dict, actor: Author):
     # UNFOLLOW
     if type_lower == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "follow":
         target_id = obj.get("object")
-        target = Author.objects.filter(id=target_id).first()
+        target = Author.objects.filter(username=target_id).first()
 
         if target:
             send_activity_to_inbox(target, activity)
@@ -317,12 +318,11 @@ def distribute_activity(activity: dict, actor: Author):
     # REMOVE FRIEND
     if type_lower == "removefriend":
         target_id = obj
-        target = Author.objects.filter(id=target_id).first()
+        target = Author.objects.filter(username=target_id).first()
 
         if target:
             send_activity_to_inbox(target, activity)
         return
-
 
 # * ============================================================
 # * Inbox Processor

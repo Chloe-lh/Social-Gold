@@ -22,11 +22,44 @@ def is_local(fqid: str) -> bool:
 
 def get_or_create_author(fqid: str) -> Author:
     """
-    Fetch or create a remote or local author.
-    If the author is not found locally, we attempt to create a stub for the remote author.
+    Fetch or create a local author using their username. If not found by username,
+    fall back to using FQID.
     """
+    # Normalize the FQID to ensure it's in the correct format
     fqid = normalize_fqid(fqid)
-    author, created = Author.objects.get_or_create(id=fqid)
+    
+    # Extract the username from FQID
+    username = fqid.split("/")[-1]  # Assuming the username is at the end of the FQID path
+    
+    # Try to get the author using the username
+    author = Author.objects.filter(username=username).first()
+    
+    # If author doesn't exist by username, fall back to FQID
+    if not author:
+        author, created = Author.objects.get_or_create(id=fqid)
+    
+    return author
+
+def get_or_create_foreign_author(remote_id: str) -> Author:
+    """
+    This function ensures that we can create or retrieve a foreign author based on username.
+    If not found by username, fallback to FQID.
+    """
+    remote_id = normalize_fqid(remote_id)
+    
+    # Extract the username from the remote_id (FQID)
+    username = remote_id.split("/")[-1]  # Assuming username is at the end of the FQID
+    
+    # Try to get the author by username
+    author = Author.objects.filter(username=username).first()
+    
+    if not author:
+        # If not found by username, create or fetch the author by FQID
+        author, created = Author.objects.get_or_create(
+            id=remote_id, 
+            defaults={'username': username}
+        )
+    
     return author
 
 def create_activity(author, activity_type, object_data, suffix="posts"):
@@ -70,6 +103,15 @@ def process_remote_activity(activity_data):
     return True
 
 def process_follow_activity(actor, target):
+    """
+    Process the 'follow' activity and create a follow relationship based on username.
+    """
+    # Ensure target is found by username
+    target = get_or_create_author(target.id)
+    
+    if actor.username == target.username:
+        return  # Don't follow yourself
+    
     follow, created = Follow.objects.get_or_create(actor=actor, object=target)
     follow.state = "REQUESTED"
     follow.save()
@@ -241,19 +283,6 @@ def fetch_remote_author_data(author_url):
     except requests.exceptions.RequestException as e:
         print(f"Error fetching remote author data: {e}")
     return None
-
-def get_or_create_foreign_author(remote_id: str) -> Author:
-    """
-    This function ensures that we can create or retrieve an author from a remote node.
-    We ensure the ID is stored consistently as an FQID.
-    """
-    remote_id = normalize_fqid(remote_id)
-    
-    author, created = Author.objects.get_or_create(
-        id=remote_id,  # Store remote author ID as FQID
-        defaults={'username': f"remote_author_{uuid.uuid4()}", 'host': urlparse(remote_id).netloc}
-    )
-    return author
     
 def notify(author, data):
     """

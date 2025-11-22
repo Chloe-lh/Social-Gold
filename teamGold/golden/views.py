@@ -494,7 +494,6 @@ def profile_view(request):
 
     def get_remote_authors(node):
         """Fetch all authors from a remote node."""
-        # Builds API URL from node.id and will be our primary reference for any future interaction with other nodes.
         api_url =  urljoin(node.id, 'api/authors/') 
         try:
             response = requests.get(
@@ -520,7 +519,6 @@ def profile_view(request):
         if not author.github:
             return
 
-        # Extract username from full URL
         username = author.github.rstrip('/').split('/')[-1]
         api_url = f"https://api.github.com/users/{username}/events/public"
 
@@ -541,10 +539,8 @@ def profile_view(request):
             repo_url = f"https://github.com/{repo_name}"
             created_at = event.get("created_at")
 
-            # Unique FQID for GitHub entry
             entry_id = f"{author.host}/authors/{author.id}/entries/github-{event_id}"
 
-            # Avoid duplicates
             if Entry.objects.filter(id=entry_id).exists():
                 continue
 
@@ -572,10 +568,8 @@ def profile_view(request):
             else:
                 content_text = f"**{event_type}** in [{repo_name}]({repo_url})"
 
-            # Convert to HTML
             html_content = markdown.markdown(content_text)
 
-            # Create Entry
             Entry.objects.create(
                 id=entry_id,
                 author=author,
@@ -639,6 +633,7 @@ def profile_view(request):
             item.processed = True
             item.save()
 
+    # Local follow requests
     local_follow_requests = Follow.objects.filter(object=str(author.id), state="REQUESTED")
     all_follow_requests = list(local_follow_requests) + remote_follow_requests
 
@@ -656,14 +651,16 @@ def profile_view(request):
             follow_request = None
             target = None
 
+            # Check if the follow request is remote
             if follow_id.startswith('api/authors'):
                 follow_request = next((fr for fr in remote_follow_requests if fr.get("id") == follow_id), None)
                 if follow_request:
-                    target = Author.objects.get(id=follow_request.get('actor'))  # Get the author who requested follow
+                    # Handle remote author follow request
+                    target = Author.objects.get(id=follow_request.get('actor'))
             else:
-                # Local request (Follow model instance)
+                # Handle local follow request
                 follow_request = Follow.objects.get(id=follow_id)
-                target = follow_request.actor  # Get the author who sent the follow request
+                target = follow_request.actor
 
             if action == "approve":
                 if follow_request:
@@ -673,7 +670,7 @@ def profile_view(request):
                     else:
                         activity = create_accept_follow_activity(author, target.id)
                         distribute_activity(activity, actor=author)
-                target.following.add(author)  
+                target.following.add(author)  # Add author to the target's following list
                 target.save()
             elif action == "reject":
                 if follow_request:
@@ -709,7 +706,7 @@ def profile_view(request):
                 messages.error(request, "Author not found")
 
             return redirect("profile")
-        
+
         if request.POST.get("action") == "follow":
             target_id = request.POST.get("author_id")
 
@@ -798,7 +795,7 @@ def profile_view(request):
         "entries": entries,
         "followers": followers,
         "following": following,
-        "follow_requests": all_follow_requests, 
+        "follow_requests": all_follow_requests,  # Use combined follow requests
         "friends": friends_qs,
         "form": ProfileForm(instance=author),  
         "authors": authors,  
@@ -807,6 +804,7 @@ def profile_view(request):
 
     # Render the profile page with the context
     return render(request, "profile.html", context)
+
 
 @login_required
 def public_profile_view(request, author_id):

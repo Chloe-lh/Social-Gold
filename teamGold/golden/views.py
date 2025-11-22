@@ -629,6 +629,15 @@ def profile_view(request):
     process_inbox(author)
     form = ProfileForm(instance=author)
 
+    local_follow_requests = Follow.objects.filter(object=str(author.id), state="REQUESTED")
+    remote_follow_requests = []
+    inbox_items = Inbox.objects.filter(author=author, processed=False)
+
+    for item in inbox_items:
+        activity = item.data
+        if activity.get("type").lower() == "follow" and activity.get("state") == "REQUESTED":
+            remote_follow_requests.append(activity)
+
     if request.method == "GET":
         sync_github_activity(author)
 
@@ -641,7 +650,7 @@ def profile_view(request):
                 return redirect("profile")
 
             # Fetch the follow_request object
-            follow_request = get_object_or_404(Follow, id=follow_id)
+            follow_request = list(local_follow_requests) + remote_follow_requests
 
             if action == "approve":
                 follow_request.state = "ACCEPTED"
@@ -651,7 +660,7 @@ def profile_view(request):
                 target.following.add(author)  
                 target.save()
 
-                activity = create_follow_activity(author, target.id) 
+                activity = create_accept_follow_activity(author, target.id)
                 distribute_activity(activity, actor=author)
 
                 # ! FOR DEBUGGING
@@ -660,6 +669,9 @@ def profile_view(request):
             elif action == "reject":
                 follow_request.state = "REJECTED"
                 follow_request.save()
+
+                activity = create_reject_follow_activity(author, follow_request.actor.id) 
+                distribute_activity(activity, actor=author)
 
                 # ! FOR DEBUGGING
                 messages.success(request, f"You have rejected {follow_request.actor.username}'s follow request.")

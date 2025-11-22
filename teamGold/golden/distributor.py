@@ -232,14 +232,12 @@ def distribute_activity(activity: dict, actor: Author):
         if target:
             send_activity_to_inbox(target, activity)
         return
-
-    if type_lower in ["accept", "reject"]:
-        follow_obj = obj or {}
-        follower_id = follow_obj.get("actor")
-        follower = Author.objects.filter(id=follower_id).first()
-
-        if follower:
-            send_activity_to_inbox(follower, activity)
+    
+    if type_lower == "accept" or type_lower == "reject":
+        target_id = obj.get("object")
+        target = Author.objects.filter(id=target_id).first()
+        if target:
+            send_activity_to_inbox(target, activity)  # Send to remote or local inbox
         return
 
     if type_lower == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "follow":

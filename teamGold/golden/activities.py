@@ -153,9 +153,8 @@ def create_follow_activity(actor_author, target_id):
     }
 
 def create_accept_follow_activity(acceptor_author, follower_id):
-
     activity_id = make_fqid(acceptor_author, "accept")
-    follower_host = str(follower_id).split("/api/authors/")[0]
+    follower_host = str(follower_id).split("/api/authors/")[0]  # Check if the follower is local
 
     return {
         "type": "Accept",
@@ -168,14 +167,13 @@ def create_accept_follow_activity(acceptor_author, follower_id):
             "object": str(acceptor_author.id),
         },
         "state": "ACCEPTED",
-        "published": timezone.now().isoformat(),
-        "target_is_local": follower_host == acceptor_author.host
+        "published": dj_timezone.now().isoformat(),
+        "target_is_local": follower_host == acceptor_author.host,  # Determine if the follower is local
     }
 
 def create_reject_follow_activity(acceptor_author, follower_id):
-
     activity_id = make_fqid(acceptor_author, "reject")
-    follower_host = str(follower_id).split("/api/authors/")[0]
+    follower_host = str(follower_id).split("/api/authors/")[0]  # Check if the follower is local
 
     return {
         "type": "Reject",
@@ -188,8 +186,8 @@ def create_reject_follow_activity(acceptor_author, follower_id):
             "object": str(acceptor_author.id),
         },
         "state": "REJECTED",
-        "published": timezone.now().isoformat(),
-        "target_is_local": follower_host == acceptor_author.host
+        "published": dj_timezone.now().isoformat(),
+        "target_is_local": follower_host == acceptor_author.host,  # Determine if the follower is local
     }
 
 def create_unfollow_activity(actor_author, target_id):
@@ -275,19 +273,4 @@ def create_delete_comment_activity(author, comment):
             "id": str(comment.id)
         }
     }
-def create_undo_comment_activity(author, comment):
 
-    activity_id = make_fqid(author, "undo-comment")
-
-    return {
-        "type": "Undo",
-        "id": activity_id,
-        "summary": f"{author.username} removed their comment",
-        "actor": str(author.id),
-        "object": {
-            "type": "Comment",
-            "id": str(comment.id)
-        },
-        "published": timezone.now().isoformat(),
-        "target_is_local": True,
-    }

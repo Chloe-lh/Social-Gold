@@ -231,10 +231,19 @@ def distribute_activity(activity: dict, actor: Author):
         return
     
     if type_lower == "accept" or type_lower == "reject":
-        target_id = obj.get("object")
-        target = Author.objects.filter(id=target_id).first()
+        if isinstance(obj, str):
+            # obj is a Follow ID, extract the target from the Follow
+            follow = Follow.objects.filter(id=obj).first()
+            if follow:
+                target_id = follow.actor.id  # Send back to the original requester
+                target = Author.objects.filter(id=target_id).first()
+        else:
+            # obj is a dict with the Follow object
+            target_id = obj.get("actor")  # Changed from "object" to "actor"
+            target = Author.objects.filter(id=target_id).first()
+        
         if target:
-            send_activity_to_inbox(target, activity)  # Send to remote or local inbox
+            send_activity_to_inbox(target, activity)
         return
 
     if type_lower == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "follow":

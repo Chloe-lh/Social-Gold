@@ -36,6 +36,7 @@ from golden.distributor import distribute_activity, process_inbox
 from golden.models import (Author, Comment, Entry, EntryImage, Follow, Like, Node, Inbox)
 from golden.serializers import *
 from golden.services import *
+from golden.services import get_or_create_foreign_author
 from golden.activities import ( # Kenneth: If you're adding new activities, please make sure they are uploaded here 
     create_accept_follow_activity,
     create_comment_activity,
@@ -619,6 +620,7 @@ def profile_view(request):
         return results
     
     print(f"Logged in user: {request.user}")
+    print(f"Request URL: {request.path}")
     author = Author.from_user(request.user)
     print(f"Author: {author}")
     remote_follow_requests = []
@@ -654,37 +656,51 @@ def profile_view(request):
             follow_request = None
             target = None
 
-            if follow_id.startswith('api/authors'):
-                follow_request = next((fr for fr in remote_follow_requests if fr.get("id") == follow_id), None)
-                if follow_request:
-                    target = Author.objects.get(id=follow_request.get('actor')) # Assign target for remote request
-            else:
-                # Handle local follow request
+            try:
                 follow_request = Follow.objects.get(id=follow_id)
-                target = follow_request.actor # Assign target for local request
+                target = follow_request.actor
+            except Follow.DoesNotExist:
+                follow_request = next((fr for fr in remote_follow_requests if fr.get("id") == follow_id),  None)
+                if follow_request:
+                    actor_id = follow_request.get('actor')
+                    target = Author.objects.filter(id=actor_id).first()
+                    if not target:
+                        target = get_or_create_foreign_author(actor_id)
 
-            if target is None:
+            if not target:
                 return HttpResponseForbidden("Invalid follow target.")
 
             if action == "approve":
-                if follow_request:
-                    if isinstance(follow_request, Follow):
-                        follow_request.state = "ACCEPTED"
-                        follow_request.save()
-                    else:
-                        activity = create_accept_follow_activity(author, target.id)
-                        distribute_activity(activity, actor=author)
-                target.following.add(author)  # Add author to the target's following list
+                if isinstance(follow_request, Follow):
+                    follow_request.state = "ACCEPTED"
+                    follow_request.save()
+                
+                # Update relationships
+                target.following.add(author)
                 target.save()
 
+                inbox_item = Inbox.objects.filter(author=author,  data__id=follow_id, processed=False).first()
+                if inbox_item:
+                    inbox_item.processed = True
+                    inbox_item.save()
+                
+                # Send Accept activity - pass the Follow ID, not target.id
+                activity = create_accept_follow_activity(author, follow_id) 
+                distribute_activity(activity, actor=author)
+
             elif action == "reject":
-                if follow_request:
-                    if isinstance(follow_request, Follow):
-                        follow_request.state = "REJECTED"
-                        follow_request.save()
-                    else:
-                        activity = create_reject_follow_activity(author, target.id)
-                        distribute_activity(activity, actor=author)
+                if isinstance(follow_request, Follow):
+                    follow_request.state = "REJECTED"
+                    follow_request.save()
+                
+                inbox_item = Inbox.objects.filter(author=author,  data__id=follow_id, processed=False).first()
+                if inbox_item:
+                    inbox_item.processed = True
+                    inbox_item.save()
+
+                # Send Reject activity - pass the Follow ID, not target.id
+                activity = create_reject_follow_activity(author, follow_id)
+                distribute_activity(activity, actor=author)
 
             return redirect("profile")
 

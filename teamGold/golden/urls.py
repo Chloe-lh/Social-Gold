@@ -57,11 +57,12 @@ urlpatterns = [
 
     # Miscellaneous API Endpoints
     path("api/authors/", views.remote_authors_list, name='remote-authors-list'),
-    path("api/authors/<uuid:author_id>/inbox/", views.inbox_view, name="author-inbox"),
+    path("api/authors/<path:author_id>/inbox/", views.inbox_view, name="author-inbox"),
 
     path("friends/", views.friends, name="friends"),
     path('add_comment/', views.add_comment, name = "add_comment"),
     path('add_like/', views.toggle_like, name='add_like'),
     path("node_admin/", views.profile_view, name="node_admin"), 
+    path("api/entries/", EntryAPIView.as_view(), name="api-entries-list"),
 ]
     

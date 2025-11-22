@@ -246,6 +246,12 @@ def stream_view(request):
 
     entries = list(local_entries) + visible_remote
     entries.sort(key=lambda x: x.is_posted, reverse=True)
+    
+    # Process inbox for all entry authors to get latest likes/comments from remote nodes
+    # This ensures we see up-to-date likes/comments for all entries in the stream
+    entry_authors = {entry.author for entry in entries if entry.author}
+    for entry_author in entry_authors:
+        process_inbox(entry_author)
 
     context = {
         'entries': entries,
@@ -474,6 +480,10 @@ def entry_detail_view(request, entry_uuid):
         return redirect('new_edit_entry_view') 
 
     # FEATURE: DISPLAY ENTRY AND COMMENTS
+    # Process inbox for the entry author to get latest likes/comments from remote nodes
+    # This ensures we see the most up-to-date likes/comments even if the author hasn't visited their page
+    process_inbox(entry.author)
+    
     comments_qs = entry.comment.select_related('author').order_by('-published')
     serialized_comments = CommentSerializer(comments_qs, many=True).data
     entry_comments = {entry.id: serialized_comments}
@@ -745,7 +755,7 @@ def profile_view(request):
     author_id_str = str(author.id).rstrip('/')
     author_id_normalized = normalize_fqid(author_id_str)
     
-    # Query for incoming requests - need to match the object field (which is the target being followed)
+    # Query for incoming requests, you need to match the object field (which is the target being followed)
     # Try multiple variations to handle normalization differences (for both local and remote)
     # We check both normalized and raw versions to handle existing data
     query_conditions = (
@@ -1641,11 +1651,18 @@ def inbox_view(request, author_id):
             return JsonResponse({"error": "Invalid JSON"}, status=400)
 
         try:
-            Inbox.objects.create(author=author, data=body)
+            # Create inbox item
+            inbox_item = Inbox.objects.create(author=author, data=body)
             logger.info(f"Successfully created inbox item for {author.username}")
+            
+            # Immediately process the inbox to update likes/comments/entries
+            # This ensures remote activities are processed right away, not just when the author visits their page
+            from golden.distributor import process_inbox
+            process_inbox(author)
+            logger.info(f"Processed inbox for {author.username} after receiving activity")
         except Exception as e:
-            logger.exception(f"Failed to create inbox item: {e}")
-            return JsonResponse({"error": f"Failed to create inbox item: {e}"}, status=500)
+            logger.exception(f"Failed to create/process inbox item: {e}")
+            return JsonResponse({"error": f"Failed to create/process inbox item: {e}"}, status=500)
 
         return JsonResponse({"status": "created"}, status=201)
 

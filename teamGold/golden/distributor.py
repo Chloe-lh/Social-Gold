@@ -186,12 +186,17 @@ def distribute_activity(activity: dict, actor: Author):
 
     # COMMENT
     if type_lower == "comment" and isinstance(obj, dict):
-        entry_author_id = obj.get("entry")
-        entry_author = Author.objects.filter(id=normalize_fqid(entry_author_id)).first()
-        if not entry_author:
+        entry_id = obj.get("entry")
+        # Get the entry to find its author
+        entry = Entry.objects.filter(id=normalize_fqid(entry_id)).first()
+        if not entry:
+            # Try without normalization
+            entry = Entry.objects.filter(id=entry_id).first()
+        if not entry:
+            logger.warning(f"Entry not found for comment: entry_id={entry_id}")
             return
 
-        recipients = {entry_author}
+        recipients = {entry.author}
         for r in recipients:
             send_activity_to_inbox(r, activity)
         return

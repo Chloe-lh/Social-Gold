@@ -623,24 +623,15 @@ def profile_view(request):
     print(f"Request URL: {request.path}")
     author = Author.from_user(request.user)
     print(f"Author: {author}")
-    remote_follow_requests = []
-    inbox_items = Inbox.objects.filter(author=author, processed=False)
-    print(f"Fetched {len(inbox_items)} inbox items for {author.username}")
-
+    
+    # Process inbox FIRST to create Follow objects from remote follow requests
+    process_inbox(author)
+    
     form = ProfileForm(instance=author)
 
-    # Fetch remote follow requests from the inbox
-    for item in inbox_items:
-        activity = item.data
-        if activity.get("type").lower() == "follow" and activity.get("state") == "REQUESTED":
-            remote_follow_requests.append(activity)
-            item.processed = True
-            item.save()
-
-    # Local follow requests
-    local_follow_requests = Follow.objects.filter(object=str(author.id), state="REQUESTED")
-    all_follow_requests = list(local_follow_requests) + remote_follow_requests
-    print(f"Total follow requests: {len(all_follow_requests)} (Local: {len(local_follow_requests)}, Remote: {len(remote_follow_requests)})")
+    # Fetch all follow requests (both local and remote) - they're all in Follow table after processing
+    all_follow_requests = Follow.objects.filter(object=str(author.id), state="REQUESTED")
+    print(f"Total follow requests: {len(all_follow_requests)}")
 
     if request.method == "GET":
         sync_github_activity(author)
@@ -661,38 +652,20 @@ def profile_view(request):
             target_author = follow_request.actor
             
             if action == "approve":
-                follow_request.state = "ACCEPTED"
-                follow_request.save()
-                
-                # Update following relationship
-                target_author.following.add(author)
-
-                # Send decision back
-                decision_activity = {
-                    "type": "Accept",
-                    "summary": f"{author.username} accepted your follow request",
-                    "actor": str(author.id),
-                    "object": follow_id,  # The Follow ID
-                    "published": timezone.now().isoformat(),
-                }
-
-
-
-            if action == "approve":
                 if isinstance(follow_request, Follow):
                     follow_request.state = "ACCEPTED"
                     follow_request.save()
                 
-                # Update relationships
-                target.following.add(author)
-                target.save()
+                # Update following relationship
+                target_author.following.add(author)
 
-                inbox_item = Inbox.objects.filter(author=author,  data__id=follow_id, processed=False).first()
+                # Mark inbox item as processed if it exists
+                inbox_item = Inbox.objects.filter(author=author, data__id=follow_id, processed=False).first()
                 if inbox_item:
                     inbox_item.processed = True
                     inbox_item.save()
                 
-                # Send Accept activity - pass the Follow ID, not target.id
+                # Send Accept activity - pass the Follow ID to reference the original Follow activity
                 activity = create_accept_follow_activity(author, follow_id) 
                 distribute_activity(activity, actor=author)
 
@@ -701,12 +674,13 @@ def profile_view(request):
                     follow_request.state = "REJECTED"
                     follow_request.save()
                 
-                inbox_item = Inbox.objects.filter(author=author,  data__id=follow_id, processed=False).first()
+                # Mark inbox item as processed if it exists
+                inbox_item = Inbox.objects.filter(author=author, data__id=follow_id, processed=False).first()
                 if inbox_item:
                     inbox_item.processed = True
                     inbox_item.save()
 
-                # Send Reject activity - pass the Follow ID, not target.id
+                # Send Reject activity - pass the Follow ID to reference the original Follow activity
                 activity = create_reject_follow_activity(author, follow_id)
                 distribute_activity(activity, actor=author)
 
@@ -1322,7 +1296,7 @@ def api_reject_follow(request, author_id):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def api_unfollow(request, author_id):
-    """ API endpoint for unfollowing a user. """
+    """ API endpoint for unfollowing an author. """
     target = get_object_or_404(Author, id=author_id)
     actor = Author.from_user(request.user)
 

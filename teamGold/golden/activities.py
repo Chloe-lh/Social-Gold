@@ -166,46 +166,108 @@ def create_follow_activity(author, target):
     return activity
 
 
-def create_accept_follow_activity(acceptor_author, follower_id):
+def create_accept_follow_activity(acceptor_author, follower_id_or_follow_id):
     """
     Create an Accept activity for a follow request.
+    Accepts either a follower Author ID string or a Follow ID string.
+    If a Follow ID is provided, it will look up the Follow object to get the follower.
     """
+    from golden.models import Follow
+    
+    # Check if follower_id_or_follow_id is a Follow ID (contains '/follow/')
+    # or try to look it up as a Follow ID first
+    follower_id = follower_id_or_follow_id
+    follow_obj = None
+    
+    # Try to find it as a Follow ID
+    follow_obj = Follow.objects.filter(id=follower_id_or_follow_id).first()
+    if follow_obj:
+        follower_id = str(follow_obj.actor.id)
+        follow_id = follow_obj.id
+    else:
+        # It's likely an Author ID, use it directly
+        follow_id = None
+    
     activity_id = make_fqid(acceptor_author, "accept")
 
-    activity = {
-        "type": "Accept",
-        "id": activity_id,
-        "summary": f"{acceptor_author.username} accepted your follow request",
-        "actor": str(acceptor_author.id),
-        "object": {
-            "type": "Follow",
-            "actor": str(follower_id),
-            "object": str(acceptor_author.id),
-        },
-        "published": timezone.now().isoformat(),
-    }
+    # Create activity - use Follow ID if available, otherwise use object structure
+    if follow_id:
+        # Reference the original Follow activity by ID (preferred for ActivityPub)
+        activity = {
+            "type": "Accept",
+            "id": activity_id,
+            "summary": f"{acceptor_author.username} accepted your follow request",
+            "actor": str(acceptor_author.id),
+            "object": follow_id,  # Reference the Follow activity by ID
+            "published": timezone.now().isoformat(),
+        }
+    else:
+        # Fallback to object structure if Follow ID not available
+        activity = {
+            "type": "Accept",
+            "id": activity_id,
+            "summary": f"{acceptor_author.username} accepted your follow request",
+            "actor": str(acceptor_author.id),
+            "object": {
+                "type": "Follow",
+                "actor": str(follower_id),
+                "object": str(acceptor_author.id),
+            },
+            "published": timezone.now().isoformat(),
+        }
     
     return activity
 
 
-def create_reject_follow_activity(acceptor_author, follower_id):
+def create_reject_follow_activity(acceptor_author, follower_id_or_follow_id):
     """
     Create a Reject activity for a follow request.
+    Accepts either a follower Author ID string or a Follow ID string.
+    If a Follow ID is provided, it will look up the Follow object to get the follower.
     """
+    from golden.models import Follow
+    
+    # Check if follower_id_or_follow_id is a Follow ID (contains '/follow/')
+    # or try to look it up as a Follow ID first
+    follower_id = follower_id_or_follow_id
+    follow_obj = None
+    
+    # Try to find it as a Follow ID
+    follow_obj = Follow.objects.filter(id=follower_id_or_follow_id).first()
+    if follow_obj:
+        follower_id = str(follow_obj.actor.id)
+        follow_id = follow_obj.id
+    else:
+        # It's likely an Author ID, use it directly
+        follow_id = None
+    
     activity_id = make_fqid(acceptor_author, "reject")
 
-    activity = {
-        "type": "Reject",
-        "id": activity_id,
-        "summary": f"{acceptor_author.username} rejected your follow request",
-        "actor": str(acceptor_author.id),
-        "object": {
-            "type": "Follow",
-            "actor": str(follower_id),
-            "object": str(acceptor_author.id),
-        },
-        "published": timezone.now().isoformat(),
-    }
+    # Create activity - use Follow ID if available, otherwise use object structure
+    if follow_id:
+        # Reference the original Follow activity by ID (preferred for ActivityPub)
+        activity = {
+            "type": "Reject",
+            "id": activity_id,
+            "summary": f"{acceptor_author.username} rejected your follow request",
+            "actor": str(acceptor_author.id),
+            "object": follow_id,  # Reference the Follow activity by ID
+            "published": timezone.now().isoformat(),
+        }
+    else:
+        # Fallback to object structure if Follow ID not available
+        activity = {
+            "type": "Reject",
+            "id": activity_id,
+            "summary": f"{acceptor_author.username} rejected your follow request",
+            "actor": str(acceptor_author.id),
+            "object": {
+                "type": "Follow",
+                "actor": str(follower_id),
+                "object": str(acceptor_author.id),
+            },
+            "published": timezone.now().isoformat(),
+        }
     
     return activity
 

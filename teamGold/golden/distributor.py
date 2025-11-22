@@ -57,7 +57,23 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         return
 
     # REMOTE DELIVERY
-    author_uuid = str(recipient.id).rstrip("/").split("/")[-1]
+    # Extract author UUID from recipient.id
+    # Handle cases where recipient.id might be:
+    # - https://remote-author.com/api/authors/12345/ (correct format)
+    # - https://remote-author.com/api/authors/12345/inbox/ (incorrect but possible)
+    recipient_id = str(recipient.id).rstrip("/")
+    
+    # Remove /inbox/ suffix if present
+    if recipient_id.endswith("/inbox"):
+        recipient_id = recipient_id[:-6]  # Remove "/inbox"
+    
+    # Extract the author UUID (last segment after /api/authors/)
+    if "/api/authors/" in recipient_id:
+        author_uuid = recipient_id.split("/api/authors/")[-1].split("/")[0]
+    else:
+        # Fallback: just get the last segment
+        author_uuid = recipient_id.split("/")[-1]
+    
     inbox_url = urljoin(recipient.host.rstrip('/') + '/', f"api/authors/{author_uuid}/inbox/")
 
     try:
@@ -260,18 +276,30 @@ def distribute_activity(activity: dict, actor: Author):
             target = Author.objects.filter(id=follower_id).first()
             
             # If follower doesn't exist locally, create stub
-            if not target:
+            if not target and follower_id:
                 target = get_or_create_foreign_author(follower_id)
-        else:
+        elif isinstance(follow_obj, str):
             # If it's a Follow ID string, look it up
             follow = Follow.objects.filter(id=follow_obj).first()
             if follow:
                 target = follow.actor
+                # If actor doesn't exist (shouldn't happen, but be safe)
+                if not target:
+                    target = get_or_create_foreign_author(follow.actor.id if hasattr(follow, 'actor') else follow.actor_id)
             else:
+                # Follow not found locally - might be a remote Follow ID
+                # Try to extract author ID from the Follow ID URL pattern
+                # This is a fallback for remote Follow IDs we haven't synced
+                logger.warning(f"Follow object not found for ID: {follow_obj}")
                 target = None
+        else:
+            target = None
         
         if target:
             send_activity_to_inbox(target, activity)
+            logger.info(f"Sent {type_lower} activity to {target.username or target.id}")
+        else:
+            logger.warning(f"Could not determine target for {type_lower} activity: {obj}")
         return
 
     # UNFOLLOW
@@ -342,7 +370,9 @@ def process_inbox(author: Author):
         # ACCEPT FOLLOW
         elif activity_type == "accept":
             follow_obj = obj or {}
+            processed = False
             
+            # Try to handle as Follow ID string first
             if isinstance(follow_obj, str):
                 follow = Follow.objects.filter(id=follow_obj).first()
                 if follow:
@@ -355,31 +385,51 @@ def process_inbox(author: Author):
                     if follower and target:
                         follower.following.add(target)
                         logger.info(f"Accepted follow: {follower.username} now follows {target.username}")
-            else:
+                        processed = True
+            
+            # If not processed yet, handle as dict object structure (actor/object pair)
+            if not processed and isinstance(follow_obj, dict):
                 follower_id = follow_obj.get("actor")
                 target_id = follow_obj.get("object")
 
-                follower = Author.objects.filter(id=follower_id).first()
-                target = Author.objects.filter(id=target_id).first()
-
-                if follower and target:
-                    follow = Follow.objects.filter(actor=follower, object=target_id).first()
-                    if follow:
-                        follow.state = "ACCEPTED"
-                        follow.published = parse_datetime(activity.get("published")) or timezone.now()
-                        follow.save()
-                    else:
-                        Follow.objects.create(
-                            id=activity.get("id") or f"{follower.id}/follow/{uuid.uuid4()}",
-                            actor=follower,
-                            object=target_id,
-                            state="ACCEPTED",
-                            summary=activity.get("summary", ""),
-                            published=parse_datetime(activity.get("published")) or timezone.now()
-                        )
+                if follower_id and target_id:
+                    follower = Author.objects.filter(id=follower_id).first()
+                    if not follower:
+                        follower = get_or_create_foreign_author(follower_id)
                     
-                    follower.following.add(target)
-                    logger.info(f"Accepted follow: {follower.username} now follows {target.username}")
+                    target = Author.objects.filter(id=target_id).first()
+                    if not target:
+                        target = get_or_create_foreign_author(target_id)
+
+                    if follower and target:
+                        # Look up existing Follow object by actor/object pair
+                        follow = Follow.objects.filter(actor=follower, object=target_id).first()
+                        if follow:
+                            follow.state = "ACCEPTED"
+                            follow.published = parse_datetime(activity.get("published")) or timezone.now()
+                            follow.save()
+                        else:
+                            # Create new Follow object in ACCEPTED state
+                            # Try to use the Follow ID from the Accept activity's object if it was a string
+                            follow_id = activity.get("object") if isinstance(activity.get("object"), str) else None
+                            if not follow_id:
+                                follow_id = f"{follower.id}/follow/{uuid.uuid4()}"
+                            
+                            Follow.objects.create(
+                                id=follow_id,
+                                actor=follower,
+                                object=target_id,
+                                state="ACCEPTED",
+                                summary=activity.get("summary", ""),
+                                published=parse_datetime(activity.get("published")) or timezone.now()
+                            )
+                        
+                        follower.following.add(target)
+                        logger.info(f"Accepted follow: {follower.username if follower else follower_id} now follows {target.username if target else target_id}")
+                        processed = True
+            
+            if not processed:
+                logger.warning(f"Unable to process Accept activity: follow_obj={follow_obj}, activity_id={activity.get('id')}")
 
         # REJECT FOLLOW
         elif activity_type == "reject":

@@ -9,6 +9,8 @@ from .models import Author
 import logging
 from django.core.paginator import Paginator
 from datetime import datetime, timezone
+from golden.models import Author
+
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -165,7 +167,6 @@ def is_local(author_id: str) -> bool:
 
 # ! edited code 
 
-from golden.models import Author
 
 def get_or_create_foreign_author(fqid: str):
     """

@@ -1,8 +1,8 @@
 from django.urls import path
 from django.contrib.auth import views as auth_views
-from . import views
 
 # API view imports (use the modules under golden.api)
+from . import views
 from .api.profileAPIView import ProfileAPIView
 from .api.nodeAPIView import NodeAPIView
 from .api.friendsAPIView import AuthorFriendsView, FollowAPIView
@@ -10,6 +10,7 @@ from .api.entryAPIView import EntryAPIView, EntryImageAPIView
 from .api.commentAPIView import EntryCommentAPIView, SingleCommentAPIView
 from .api.likeAPIView import LikeAPIView
 from .api.inbox import InboxView
+
 
 '''
 These URL Patterns registers all views 

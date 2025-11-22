@@ -1109,21 +1109,33 @@ def list_inbox(request, author_id):
 
 @csrf_exempt
 def inbox_view(request, author_id):
-    full_id = f"{settings.SITE_URL}/api/authors/{author_id}"
-    try:
-        author = Author.objects.get(id=full_id)
-    except Author.DoesNotExist:
+
+    # Build all acceptable forms of this author ID
+    base = settings.SITE_URL.rstrip("/")
+
+    expected_ids = [
+        f"{base}/api/authors/{author_id}",
+        f"{base}/authors/{author_id}",
+        f"{base}/{author_id}",
+    ]
+
+    # FIRST: try to exact match the author (most likely local)
+    author = Author.objects.filter(id__in=expected_ids).first()
+
+    # SECOND: try to fallback and fuzzy match for remote slashes/https differences
+    if not author:
+        author = Author.objects.filter(id__icontains=author_id).first()
+
+    if not author:
         return JsonResponse({"error": "Author not found"}, status=404)
 
     if request.method == "GET":
         inbox_items = Inbox.objects.filter(author=author).order_by("-received_at")
-        return JsonResponse(
-            {
-                "type": "inbox",
-                "author": str(author.id),
-                "items": [item.data for item in inbox_items],
-            }
-        )
+        return JsonResponse({
+            "type": "inbox",
+            "author": str(author.id),
+            "items": [item.data for item in inbox_items],
+        })
 
     elif request.method == "POST":
         try:
@@ -1134,9 +1146,7 @@ def inbox_view(request, author_id):
         try:
             Inbox.objects.create(author=author, data=body)
         except Exception as e:
-            return JsonResponse(
-                {"error": f"Failed to create inbox item: {e}"}, status=500
-            )
+            return JsonResponse({"error": f"Failed to create inbox item: {e}"}, status=500)
 
         return JsonResponse({"status": "created"}, status=201)
 

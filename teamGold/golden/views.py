@@ -496,12 +496,16 @@ def profile_view(request):
 
     def get_remote_authors(node):
         """Fetch all authors from a remote node."""
-        api_url = urljoin(node.id.rstrip('/') + '/', 'api/authors/')
+        # Construct API URL properly - node.id should already be the base URL
+        node_base = node.id.rstrip('/')
+        api_url = f"{node_base}/api/authors/"
+        auth = (node.auth_user, node.auth_pass) if node.auth_user else None
+        
         try:
             response = requests.get(
                 api_url,
                 timeout=10,
-                auth=(node.auth_user, node.auth_pass) if node.auth_user else None,
+                auth=auth,
                 headers={'Content-Type': 'application/json'}
             )
             if response.status_code == 200:
@@ -512,16 +516,31 @@ def profile_view(request):
                 elif isinstance(data, list):
                     return data
                 else:
-                    print(f"Unexpected response format from {node.id}/api/authors/: {type(data)}")
+                    print(f"[REMOTE AUTHORS] Unexpected response format from {node.id}/api/authors/: {type(data)}")
                     return []
-            else:
-                print(f"Error fetching remote authors from {node.id}: HTTP {response.status_code}")
+            elif response.status_code == 401:
+                print(f"[REMOTE AUTHORS] Authentication failed for {node.id}. Check auth_user and auth_pass.")
+                print(f"[REMOTE AUTHORS] Current auth_user: {node.auth_user or 'None'}")
                 return []
+            elif response.status_code == 404:
+                print(f"[REMOTE AUTHORS] Endpoint not found: {api_url}")
+                return []
+            else:
+                print(f"[REMOTE AUTHORS] Error fetching from {node.id}: HTTP {response.status_code}")
+                print(f"[REMOTE AUTHORS] Response: {response.text[:200]}")
+                return []
+        except requests.exceptions.Timeout:
+            print(f"[REMOTE AUTHORS] Timeout connecting to {node.id}")
+            return []
+        except requests.exceptions.ConnectionError as e:
+            print(f"[REMOTE AUTHORS] Connection error to {node.id}: {e}")
+            return []
         except requests.exceptions.RequestException as e:
-            print(f"Error fetching remote authors from {node.id}: {e}")
+            print(f"[REMOTE AUTHORS] Request error for {node.id}: {e}")
+            return []
         except Exception as e:
-            print(f"Unexpected error fetching remote authors from {node.id}: {e}")
-        return []
+            print(f"[REMOTE AUTHORS] Unexpected error fetching from {node.id}: {e}")
+            return []
 
     def get_friends_context(author: Author):
         """Inner function to grab the author's friends JSON field specifically for profile.html"""
@@ -627,8 +646,15 @@ def profile_view(request):
 
         # Remote authors - fetch from active nodes
         nodes = Node.objects.filter(is_active=True)
+        print(f"[SEARCH DEBUG] Found {nodes.count()} active nodes to fetch from")
+        if nodes.count() == 0:
+            print(f"[SEARCH DEBUG] WARNING: No active nodes found in database! Remote authors won't be available.")
+            print(f"[SEARCH DEBUG] To add a node, use Django admin or run: python manage.py shell < add_remote_node.py")
+        
         for node in nodes:
+            print(f"[SEARCH DEBUG] Fetching authors from node: {node.id} (auth_user={node.auth_user or 'None'})")
             remote_authors = get_remote_authors(node)
+            print(f"[SEARCH DEBUG] Got {len(remote_authors)} authors from {node.id}")
             for ra in remote_authors:
                 if not ra or not isinstance(ra, dict):
                     continue
@@ -703,14 +729,20 @@ def profile_view(request):
 
     # Fetch INCOMING follow requests (requests TO the author)
     # Follow objects from process_inbox use normalized object IDs, so we need to normalize for matching
-    # This works for both local and remote authors - the object field stores the target author's FQID
+    #   - When a REMOTE author sends a follow request to a LOCAL author:
+    #     1. Remote node sends Follow activity to local author's inbox
+    #     2. process_inbox() creates Follow object with actor=remote_author, object=local_author.id (normalized)
+    #     3. Query matches Follow.objects.filter(object=local_author.id_normalized)
+    #   - When a LOCAL author sends a follow request to a REMOTE author:
+    #     1. Local creates Follow object with actor=local_author, object=remote_author.id (normalized)
+    #     2. Query matches Follow.objects.filter(object=remote_author.id_normalized)
+    # The key is that process_inbox() ensures object field always matches the inbox author's ID
     author_id_str = str(author.id).rstrip('/')
     author_id_normalized = normalize_fqid(author_id_str)
     
     # Query for incoming requests - need to match the object field (which is the target being followed)
     # Try multiple variations to handle normalization differences (for both local and remote)
-    # We check both normalized (lowercase) and raw versions to handle existing data
-    # Build query conditions
+    # We check both normalized and raw versions to handle existing data
     query_conditions = (
         Q(object=author_id_normalized) | 
         Q(object=author_id_str) | 
@@ -764,10 +796,13 @@ def profile_view(request):
     print(f"[FOLLOW REQUEST DEBUG] Author ID (normalized): '{author_id_normalized}'")
     print(f"[FOLLOW REQUEST DEBUG] Found {incoming_follow_requests.count()} incoming follow requests")
     
+    outgoing_count = Follow.objects.filter(actor=author, state="REQUESTED").count()
+    print(f"[FOLLOW REQUEST DEBUG] You have {outgoing_count} outgoing follow requests (requests you sent)")
+    
     # Debug: Show all Follow objects with REQUESTED state to see what we have
     all_requested_follows = Follow.objects.filter(state="REQUESTED")
     print(f"[FOLLOW REQUEST DEBUG] Total Follow objects with REQUESTED state: {all_requested_follows.count()}")
-    for follow in all_requested_follows[:10]:  # Show first 10 for debugging
+    for follow in all_requested_follows[:10]:
         follow_obj_str = str(follow.object)
         follow_obj_normalized = normalize_fqid(follow_obj_str)
         actor_name = follow.actor.username if follow.actor else 'None'
@@ -784,6 +819,9 @@ def profile_view(request):
         follow_obj_normalized_lower = follow_obj_normalized.lower()
         author_id_normalized_lower = author_id_normalized.lower()
         
+        # Check if this is an outgoing request (actor is the current user)
+        is_outgoing = follow.actor and str(follow.actor.id).rstrip('/') == author_id_str_clean
+        
         match_reasons = []
         if follow_obj_normalized == author_id_normalized:
             match_reasons.append("normalized exact match")
@@ -796,8 +834,10 @@ def profile_view(request):
             
         if match_reasons:
             print(f"[FOLLOW REQUEST DEBUG]     ^^^ MATCHES! Reasons: {', '.join(match_reasons)}")
+        elif is_outgoing:
+            print(f"[FOLLOW REQUEST DEBUG]     ^^^ This is an OUTGOING request (you sent it to {follow_obj_str_clean}), not incoming")
         else:
-            print(f"[FOLLOW REQUEST DEBUG]     ^^^ NO MATCH - Comparison:")
+            print(f"[FOLLOW REQUEST DEBUG]     ^^^ NO MATCH - This request is for a different author")
             print(f"[FOLLOW REQUEST DEBUG]       follow_obj_normalized='{follow_obj_normalized}' vs author_id_normalized='{author_id_normalized}'")
             print(f"[FOLLOW REQUEST DEBUG]       follow_obj_str_clean='{follow_obj_str_clean}' vs author_id_str_clean='{author_id_str_clean}'")
     

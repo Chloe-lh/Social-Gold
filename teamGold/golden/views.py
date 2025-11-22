@@ -652,23 +652,31 @@ def profile_view(request):
 
             if not follow_id:
                 return redirect("profile")
+            
+            follow_request = Follow.objects.filter(id=follow_id, object=author.id).first()
+            if not follow_request:
+                messages.error(request, "Follow request not found")
+                return redirect("profile")
 
-            follow_request = None
-            target = None
+            target_author = follow_request.actor
+            
+            if action == "approve":
+                follow_request.state = "ACCEPTED"
+                follow_request.save()
+                
+                # Update following relationship
+                target_author.following.add(author)
 
-            try:
-                follow_request = Follow.objects.get(id=follow_id)
-                target = follow_request.actor
-            except Follow.DoesNotExist:
-                follow_request = next((fr for fr in remote_follow_requests if fr.get("id") == follow_id),  None)
-                if follow_request:
-                    actor_id = follow_request.get('actor')
-                    target = Author.objects.filter(id=actor_id).first()
-                    if not target:
-                        target = get_or_create_foreign_author(actor_id)
+                # Send decision back
+                decision_activity = {
+                    "type": "Accept",
+                    "summary": f"{author.username} accepted your follow request",
+                    "actor": str(author.id),
+                    "object": follow_id,  # The Follow ID
+                    "published": timezone.now().isoformat(),
+                }
 
-            if not target:
-                return HttpResponseForbidden("Invalid follow target.")
+
 
             if action == "approve":
                 if isinstance(follow_request, Follow):

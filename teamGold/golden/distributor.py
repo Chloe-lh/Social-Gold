@@ -40,7 +40,7 @@ def normalize_fqid(fqid: str) -> str:
         return ""
     return str(fqid).rstrip("/")
 
-# Helper function to send activity to inbox (local or remote)
+
 def send_activity_to_inbox(recipient: Author, activity: dict):
     """
     Deliver activity to a single recipient's inbox.
@@ -53,6 +53,7 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
     # LOCAL DELIVERY
     if recipient.host.rstrip("/") == settings.SITE_URL.rstrip("/"):
         Inbox.objects.create(author=recipient, data=activity)
+        logger.info(f"Local delivery to {recipient.username}")
         return
 
     # REMOTE DELIVERY
@@ -70,11 +71,10 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
             inbox_url,
             data=json.dumps(activity),
             headers={
-                "Content-Type": "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\"",
-                "Accept": "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\""
+                "Content-Type": "application/json",
             },
             auth=auth,
-            timeout=5,
+            timeout=10,
         )
         
         logger.info(f"Response from {inbox_url}: {response.status_code}")
@@ -91,23 +91,29 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
     except Exception as e:
         logger.exception(f"Exception during remote inbox delivery to {inbox_url}: {e}")
 
+
 def get_followers(author: Author):
     """Return all authors who follow this author (FOLLOW.state=ACCEPTED)."""
-    return Author.objects.filter(outgoing_follow_requests__object=author.id, outgoing_follow_requests__state="ACCEPTED"
+    return Author.objects.filter(
+        outgoing_follow_requests__object=author.id, 
+        outgoing_follow_requests__state="ACCEPTED"
     )
+
 
 def get_friends(author):
     """Mutual followers = friends."""
-    follower_ids = set(Follow.objects.filter(object=author.id).values_list("actor_id", flat=True))
-    following_ids = set(Follow.objects.filter(actor=author).values_list("object", flat=True))
+    follower_ids = set(Follow.objects.filter(object=author.id, state="ACCEPTED").values_list("actor_id", flat=True))
+    following_ids = set(Follow.objects.filter(actor=author, state="ACCEPTED").values_list("object", flat=True))
     mutual = follower_ids.intersection(following_ids)
     return Author.objects.filter(id__in=mutual)
+
 
 def previously_delivered(post):
     """Return all authors who already received this post."""
     inbox_rows = Inbox.objects.filter(data__object__id=str(post.id))
     author_ids = inbox_rows.values_list("author_id", flat=True)
     return Author.objects.filter(id__in=author_ids)
+
 
 def absolutize_remote_images(html, base_url):
     """
@@ -121,20 +127,28 @@ def absolutize_remote_images(html, base_url):
 
     for img in soup.find_all("img"):
         src = img.get("src")
-        # Skip already absolute URLs
         if src and not src.startswith("http"):
             img["src"] = urljoin(base_url.rstrip("/") + "/", src.lstrip("/"))
 
     return str(soup)
 
+
 # * ============================================================
 # * Main Distributor
 # * ============================================================
 def distribute_activity(activity: dict, actor: Author):
-
+    """
+    Main distribution function - determines recipients and sends activities.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     type_lower = activity.get("type", "").lower()
     obj = activity.get("object")
 
+    logger.info(f"Distributing activity: type={type_lower}, actor={actor.username}")
+
+    # CREATE ENTRY
     if type_lower == "create" and isinstance(obj, dict) and obj.get("type") == "post":
         visibility = obj.get("visibility", "PUBLIC").upper()
 
@@ -151,6 +165,7 @@ def distribute_activity(activity: dict, actor: Author):
             send_activity_to_inbox(r, activity)
         return
 
+    # UPDATE ENTRY
     if type_lower == "update" and isinstance(obj, dict) and obj.get("type") == "post":
         visibility = obj.get("visibility", "PUBLIC").upper()
         recipients = set()
@@ -167,32 +182,31 @@ def distribute_activity(activity: dict, actor: Author):
             send_activity_to_inbox(r, activity)
         return
 
+    # DELETE ENTRY
     if type_lower == "delete" and isinstance(obj, dict) and obj.get("type") == "post":
         recipients = set(get_followers(actor)) | set(get_friends(actor))
         for r in recipients:
             send_activity_to_inbox(r, activity)
         return
 
+    # COMMENT
     if type_lower == "comment" and isinstance(obj, dict):
         entry_author_id = obj.get("entry")
-
         entry_author = Author.objects.filter(id=entry_author_id).first()
         if not entry_author:
             return
 
-        # Always send to entry owner
         recipients = {entry_author}
-
         for r in recipients:
             send_activity_to_inbox(r, activity)
         return
 
+    # LIKE
     if type_lower == "like":
         liked_fqid = obj if isinstance(obj, str) else None
         if not liked_fqid:
             return
 
-        # Liked object can be Entry or Comment. We look up its author.
         entry = Entry.objects.filter(id=liked_fqid).first()
         comment = Comment.objects.filter(id=liked_fqid).first()
 
@@ -207,6 +221,7 @@ def distribute_activity(activity: dict, actor: Author):
             send_activity_to_inbox(r, activity)
         return
 
+    # UNLIKE
     if type_lower == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "like":
         liked_fqid = obj.get("object")
         entry = Entry.objects.filter(id=liked_fqid).first()
@@ -223,29 +238,43 @@ def distribute_activity(activity: dict, actor: Author):
             send_activity_to_inbox(r, activity)
         return
 
+    # FOLLOW
     if type_lower == "follow":
         target_id = obj
         target = Author.objects.filter(id=target_id).first()
+        
+        # If target doesn't exist locally, create stub
+        if not target:
+            target = get_or_create_foreign_author(target_id)
+        
         if target:
             send_activity_to_inbox(target, activity)
         return
     
+    # ACCEPT or REJECT
     if type_lower == "accept" or type_lower == "reject":
-        if isinstance(obj, str):
-            # obj is a Follow ID, extract the target from the Follow
-            follow = Follow.objects.filter(id=obj).first()
-            if follow:
-                target_id = follow.actor.id  # Send back to the original requester
-                target = Author.objects.filter(id=target_id).first()
+        follow_obj = obj or {}
+        
+        if isinstance(follow_obj, dict):
+            follower_id = follow_obj.get("actor")  # Who made the follow request
+            target = Author.objects.filter(id=follower_id).first()
+            
+            # If follower doesn't exist locally, create stub
+            if not target:
+                target = get_or_create_foreign_author(follower_id)
         else:
-            # obj is a dict with the Follow object
-            target_id = obj.get("actor")  # Changed from "object" to "actor"
-            target = Author.objects.filter(id=target_id).first()
+            # If it's a Follow ID string, look it up
+            follow = Follow.objects.filter(id=follow_obj).first()
+            if follow:
+                target = follow.actor
+            else:
+                target = None
         
         if target:
             send_activity_to_inbox(target, activity)
         return
 
+    # UNFOLLOW
     if type_lower == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "follow":
         target_id = obj.get("object")
         target = Author.objects.filter(id=target_id).first()
@@ -254,33 +283,52 @@ def distribute_activity(activity: dict, actor: Author):
             send_activity_to_inbox(target, activity)
         return
 
+    # REMOVE FRIEND
+    if type_lower == "removefriend":
+        target_id = obj
+        target = Author.objects.filter(id=target_id).first()
+
+        if target:
+            send_activity_to_inbox(target, activity)
+        return
+
+
 # * ============================================================
 # * Inbox Processor
 # * ============================================================
 
 def process_inbox(author: Author):
+    """
+    Process all unprocessed inbox items for an author.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
 
     inbox_items = Inbox.objects.filter(author=author, processed=False)
+    logger.info(f"Processing {inbox_items.count()} inbox items for {author.username}")
 
     for item in inbox_items:
         activity = item.data
         activity_type = activity.get("type", "").lower()
         obj = activity.get("object")
 
+        logger.info(f"Processing activity: type={activity_type}, id={activity.get('id')}")
+
         actor_id = activity.get("actor")
         actor = Author.objects.filter(id=actor_id).first()
         if not actor and actor_id:
-            # creates a stub remote author if we don't know them yet
             actor = get_or_create_foreign_author(actor_id)
 
-        # FEATURE: SEND FOLLOW REQUEST
+        # FOLLOW REQUEST
         if activity_type == "follow":
             follower = actor
             target_id = obj
 
             if follower and target_id:
+                # Delete any existing follow request
                 Follow.objects.filter(actor=follower, object=target_id).delete()
 
+                # Create new follow request
                 Follow.objects.create(
                     id=activity.get("id"),
                     actor=follower,
@@ -289,27 +337,25 @@ def process_inbox(author: Author):
                     summary=activity.get("summary", ""),
                     published=parse_datetime(activity.get("published")) or timezone.now()
                 )
+                logger.info(f"Created follow request: {follower.username} -> {target_id}")
 
-        # FEATURE: ACCEPT FOLLOW
+        # ACCEPT FOLLOW
         elif activity_type == "accept":
             follow_obj = obj or {}
             
-            # Check if obj is a string (Follow ID) or dict (Follow object)
             if isinstance(follow_obj, str):
-                # It's a Follow ID, look it up
                 follow = Follow.objects.filter(id=follow_obj).first()
                 if follow:
                     follow.state = "ACCEPTED"
                     follow.published = parse_datetime(activity.get("published")) or timezone.now()
                     follow.save()
                     
-                    # Update following relationship
                     follower = follow.actor
                     target = Author.objects.filter(id=follow.object).first()
                     if follower and target:
                         follower.following.add(target)
+                        logger.info(f"Accepted follow: {follower.username} now follows {target.username}")
             else:
-                # It's a Follow object dict
                 follower_id = follow_obj.get("actor")
                 target_id = follow_obj.get("object")
 
@@ -317,14 +363,12 @@ def process_inbox(author: Author):
                 target = Author.objects.filter(id=target_id).first()
 
                 if follower and target:
-                    # Find and update the Follow object
                     follow = Follow.objects.filter(actor=follower, object=target_id).first()
                     if follow:
                         follow.state = "ACCEPTED"
                         follow.published = parse_datetime(activity.get("published")) or timezone.now()
                         follow.save()
                     else:
-                        # Create if it doesn't exist
                         Follow.objects.create(
                             id=activity.get("id") or f"{follower.id}/follow/{uuid.uuid4()}",
                             actor=follower,
@@ -334,23 +378,21 @@ def process_inbox(author: Author):
                             published=parse_datetime(activity.get("published")) or timezone.now()
                         )
                     
-                    # Update following relationship
                     follower.following.add(target)
+                    logger.info(f"Accepted follow: {follower.username} now follows {target.username}")
 
-        # FEATURE: REJECT FOLLOW
+        # REJECT FOLLOW
         elif activity_type == "reject":
             follow_obj = obj or {}
             
-            # Check if obj is a string (Follow ID) or dict (Follow object)
             if isinstance(follow_obj, str):
-                # It's a Follow ID, look it up
                 follow = Follow.objects.filter(id=follow_obj).first()
                 if follow:
                     follow.state = "REJECTED"
                     follow.published = parse_datetime(activity.get("published")) or timezone.now()
                     follow.save()
+                    logger.info(f"Rejected follow: {follow.actor.username} -> {follow.object}")
             else:
-                # It's a Follow object dict
                 follower_id = follow_obj.get("actor")
                 target_id = follow_obj.get("object")
 
@@ -358,14 +400,12 @@ def process_inbox(author: Author):
                 target = Author.objects.filter(id=target_id).first()
 
                 if follower and target:
-                    # Find and update the Follow object
                     follow = Follow.objects.filter(actor=follower, object=target_id).first()
                     if follow:
                         follow.state = "REJECTED"
                         follow.published = parse_datetime(activity.get("published")) or timezone.now()
                         follow.save()
                     else:
-                        # Create if it doesn't exist
                         Follow.objects.create(
                             id=activity.get("id") or f"{follower.id}/follow/{uuid.uuid4()}",
                             actor=follower,
@@ -374,8 +414,9 @@ def process_inbox(author: Author):
                             summary=activity.get("summary", ""),
                             published=parse_datetime(activity.get("published")) or timezone.now()
                         )
+                    logger.info(f"Rejected follow: {follower.username} -> {target.username}")
 
-        # FEATURE: UNFOLLOW
+        # UNFOLLOW
         elif activity_type == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "follow":
             follower_id = obj.get("actor")
             target_id = obj.get("object")
@@ -386,8 +427,9 @@ def process_inbox(author: Author):
             if follower and target:
                 Follow.objects.filter(actor=follower, object=target_id).delete()
                 follower.following.remove(target)
+                logger.info(f"Unfollowed: {follower.username} stopped following {target.username}")
 
-        # FEATURE: REMOVE FRIEND
+        # REMOVE FRIEND
         elif activity_type == "removefriend":
             target_id = obj
             target = Author.objects.filter(id=target_id).first()
@@ -398,14 +440,14 @@ def process_inbox(author: Author):
                 target.following.remove(initiator)
                 Follow.objects.filter(actor=initiator, object=target_id).delete()
                 Follow.objects.filter(actor=target, object=initiator.id).delete()
+                logger.info(f"Removed friend: {initiator.username} <-> {target.username}")
 
-        # FEATURE: CREATE ENTRY
+        # CREATE ENTRY
         elif activity_type == "create" and isinstance(obj, dict) and obj.get("type") == "post":
             entry_id = obj.get("id")
 
             raw_content = obj.get("content", "") or ""
             base_url = getattr(actor, "host", "") if actor else ""
-
             content = absolutize_remote_images(raw_content, base_url)
 
             Entry.objects.update_or_create(
@@ -419,8 +461,9 @@ def process_inbox(author: Author):
                     "published": parse_datetime(obj.get("published")) or timezone.now(),
                 }
             )
+            logger.info(f"Created entry: {entry_id}")
 
-        # FEATURE: UPDATE ENTRY
+        # UPDATE ENTRY
         elif activity_type == "update" and isinstance(obj, dict) and obj.get("type") == "post":
             entry_id = obj.get("id")
             entry = Entry.objects.filter(id=entry_id).first()
@@ -428,7 +471,6 @@ def process_inbox(author: Author):
             if entry:
                 raw_content = obj.get("content", entry.content) or entry.content
                 base_url = getattr(actor, "host", "") if actor else ""
-
                 content = absolutize_remote_images(raw_content, base_url)
 
                 entry.title = obj.get("title", entry.title)
@@ -436,16 +478,18 @@ def process_inbox(author: Author):
                 entry.contentType = obj.get("contentType", entry.contentType)
                 entry.visibility = obj.get("visibility", entry.visibility)
                 entry.save()
+                logger.info(f"Updated entry: {entry_id}")
 
-        # FEATURE: DELETE ENTRY
+        # DELETE ENTRY
         elif activity_type == "delete" and isinstance(obj, dict) and obj.get("type") == "post":
             entry_id = obj.get("id")
             entry = Entry.objects.filter(id=entry_id).first()
             if entry:
                 entry.visibility = "DELETED"
                 entry.save()
+                logger.info(f"Deleted entry: {entry_id}")
 
-        # FEATURE: COMMENT
+        # COMMENT
         elif activity_type == "comment" and isinstance(obj, dict):
             comment_id = obj.get("id")
             entry = Entry.objects.filter(id=obj.get("entry")).first()
@@ -461,12 +505,14 @@ def process_inbox(author: Author):
                         "published": parse_datetime(obj.get("published")) or timezone.now()
                     }
                 )
+                logger.info(f"Created comment: {comment_id}")
 
-        # FEATURE: DELETE COMMENT
+        # DELETE COMMENT
         elif activity_type == "delete" and isinstance(obj, dict) and obj.get("type") == "comment":
             Comment.objects.filter(id=obj.get("id")).delete()
+            logger.info(f"Deleted comment: {obj.get('id')}")
 
-        # FEATURE: LIKE
+        # LIKE
         elif activity_type == "like":
             obj_id = activity.get("object")
 
@@ -477,14 +523,13 @@ def process_inbox(author: Author):
                 object=obj_id,
                 published=parse_datetime(activity.get("published")) or timezone.now()
             )
+            logger.info(f"Created like: {actor.username} liked {obj_id}")
 
-        # FEATURE: UNLIKE
+        # UNLIKE
         elif activity_type == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "like":
             Like.objects.filter(author=obj.get("actor"), object=obj.get("object")).delete()
+            logger.info(f"Deleted like: {obj.get('actor')} unliked {obj.get('object')}")
 
-        # Safely ignores processes that are not known to the file
-        else:
-            pass
-
+        # Mark as processed
         item.processed = True
         item.save()

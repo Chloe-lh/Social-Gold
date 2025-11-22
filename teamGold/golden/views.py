@@ -36,7 +36,6 @@ from golden.distributor import distribute_activity, process_inbox
 from golden.models import (Author, Comment, Entry, EntryImage, Follow, Like, Node, Inbox)
 from golden.serializers import *
 from golden.services import *
-from golden.services import is_local
 from golden.activities import ( # Kenneth: If you're adding new activities, please make sure they are uploaded here 
     create_accept_follow_activity,
     create_comment_activity,

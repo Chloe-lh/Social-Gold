@@ -1,7 +1,7 @@
 import requests
 from django.utils import timezone
 from golden.models import Entry, EntryImage, Author, Comment, Like, Follow, Node, Inbox
-from golden.services import is_local, get_or_create_foreign_author
+from golden.services import get_or_create_foreign_author
 from urllib.parse import urljoin
 from django.conf import settings
 from django.utils.dateparse import parse_datetime

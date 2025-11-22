@@ -10,6 +10,7 @@ from .api.entryAPIView import EntryAPIView, EntryImageAPIView
 from .api.commentAPIView import EntryCommentAPIView, SingleCommentAPIView
 from .api.likeAPIView import LikeAPIView
 from .api.inbox import InboxView
+from .api.authorsAPIView import AuthorsListView
 
 '''
 These URL Patterns registers all views 
@@ -35,6 +36,7 @@ urlpatterns = [
     path('profile/unfollow/', views.api_unfollow_action, name="unfollow-action"),  # Unfollow action
 
     # API Endpoints
+    path("api/authors/", AuthorsListView.as_view(), name="api-authors-list"),  # List all authors
     path("api/Profile/<path:id>/", ProfileAPIView.as_view(), name="get-profile"),
     path("api/Node/<path:id>/", NodeAPIView.as_view(), name="get-node"),
     path("api/Follow/<path:id>/", FollowAPIView.as_view(), name="get-follow"),

@@ -543,8 +543,13 @@ def profile_view(request):
             return []
 
     def get_friends_context(author: Author):
-        """Inner function to grab the author's friends JSON field specifically for profile.html"""
-        friends_qs = author.friends  
+        """
+        Get friends (mutual follows) for both local and remote authors.
+        Uses Follow objects to work with remote authors.
+        """
+        from golden.distributor import get_friends
+        # Use get_friends which works with Follow objects for both local and remote
+        friends_qs = get_friends(author)
         friend_ids = set(f.id for f in friends_qs) 
         return friends_qs, friend_ids
 
@@ -1125,7 +1130,27 @@ def profile_view(request):
             ).first()
             a["follow_state"] = follow.state if follow else "NONE"
             a["is_following"] = follow.state == "ACCEPTED" if follow else False
-            a["is_friend"] = False  # Remote friends require bidirectional check
+            
+            # Check if remote author is a friend (mutual follow)
+            # Need to check if: 1) we follow them (ACCEPTED) AND 2) they follow us (ACCEPTED)
+            is_following_them = follow and follow.state == "ACCEPTED"
+            if is_following_them:
+                # Check if they follow us back
+                reciprocal_follow = Follow.objects.filter(
+                    actor__id=a_id_normalized,
+                    object=normalize_fqid(str(author.id)),
+                    state="ACCEPTED"
+                ).first()
+                if not reciprocal_follow:
+                    # Try with variations
+                    reciprocal_follow = Follow.objects.filter(
+                        Q(actor__id=a_id_normalized) | Q(actor__id=a_id_str),
+                        Q(object=normalize_fqid(str(author.id))) | Q(object=str(author.id).rstrip('/')),
+                        state="ACCEPTED"
+                    ).first()
+                a["is_friend"] = reciprocal_follow is not None
+            else:
+                a["is_friend"] = False
     
     print(f"[SEARCH DEBUG] Profile view - Query: '{query}', Results: {len(authors)}")
     

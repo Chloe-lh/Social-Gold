@@ -485,7 +485,7 @@ def process_inbox(author: Author):
             base_url = getattr(actor, "host", "") if actor else ""
             content = absolutize_remote_images(raw_content, base_url)
 
-            Entry.objects.update_or_create(
+            entry, created = Entry.objects.update_or_create(
                 id=entry_id,
                 defaults={
                     "title": obj.get("title", ""),
@@ -496,6 +496,15 @@ def process_inbox(author: Author):
                     "published": parse_datetime(obj.get("published")) or timezone.now(),
                 }
             )
+            
+            # Process entry images from attachments
+            # Note: EntryImage model requires an ImageField which can't be empty
+            # For remote entries, images are already embedded in the HTML content via absolutize_remote_images
+            # So we don't need to create EntryImage objects - the images will display from the HTML
+            attachments = obj.get("attachments", [])
+            if attachments:
+                logger.info(f"Entry {entry_id} has {len(attachments)} image attachments (embedded in content HTML)")
+            
             logger.info(f"Created entry: {entry_id}")
 
         # UPDATE ENTRY
@@ -527,20 +536,31 @@ def process_inbox(author: Author):
         # COMMENT
         elif activity_type == "comment" and isinstance(obj, dict):
             comment_id = obj.get("id")
-            entry = Entry.objects.filter(id=obj.get("entry")).first()
+            entry_id = obj.get("entry")
+            entry = Entry.objects.filter(id=entry_id).first()
 
             if entry:
+                # Get or create comment author (could be remote)
+                comment_author_id = obj.get("author")
+                comment_author = Author.objects.filter(id=comment_author_id).first()
+                if not comment_author and comment_author_id:
+                    comment_author = get_or_create_foreign_author(comment_author_id)
+                if not comment_author:
+                    comment_author = actor  # Fallback to inbox actor
+                
                 Comment.objects.update_or_create(
                     id=comment_id,
                     defaults={
                         "entry": entry,
-                        "author": Author.objects.filter(id=obj.get("author")).first() or actor,
+                        "author": comment_author,
                         "content": obj.get("content", ""),
                         "contentType": obj.get("contentType", "text/plain"),
                         "published": parse_datetime(obj.get("published")) or timezone.now()
                     }
                 )
-                logger.info(f"Created comment: {comment_id}")
+                logger.info(f"Created/updated comment: {comment_id} on entry {entry_id}")
+            else:
+                logger.warning(f"Entry not found for comment: entry_id={entry_id}")
 
         # DELETE COMMENT
         elif activity_type == "delete" and isinstance(obj, dict) and obj.get("type") == "comment":
@@ -551,20 +571,48 @@ def process_inbox(author: Author):
         elif activity_type == "like":
             obj_id = activity.get("object")
 
+            # Delete existing like first (idempotent)
             Like.objects.filter(author=actor, object=obj_id).delete()
-            Like.objects.create(
+            
+            # Create new like
+            like = Like.objects.create(
                 id=activity.get("id"),
                 author=actor,
                 object=obj_id,
                 published=parse_datetime(activity.get("published")) or timezone.now()
             )
-            logger.info(f"Created like: {actor.username} liked {obj_id}")
+            
+            # Update entry's likes ManyToMany if it's an entry
+            entry = Entry.objects.filter(id=obj_id).first()
+            if entry:
+                entry.likes.add(actor)
+                logger.info(f"Created like: {actor.username} liked entry {obj_id}")
+            else:
+                logger.info(f"Created like: {actor.username} liked {obj_id}")
 
         # UNLIKE
         elif activity_type == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "like":
-            Like.objects.filter(author=obj.get("actor"), object=obj.get("object")).delete()
-            logger.info(f"Deleted like: {obj.get('actor')} unliked {obj.get('object')}")
+            obj_id = obj.get("object")
+            actor_id = obj.get("actor")
+            
+            # Find the actor (could be remote)
+            like_actor = Author.objects.filter(id=actor_id).first()
+            if not like_actor and actor_id:
+                like_actor = get_or_create_foreign_author(actor_id)
+            
+            if like_actor:
+                Like.objects.filter(author=like_actor, object=obj_id).delete()
+                
+                # Update entry's likes ManyToMany if it's an entry
+                entry = Entry.objects.filter(id=obj_id).first()
+                if entry:
+                    entry.likes.remove(like_actor)
+                
+                logger.info(f"Deleted like: {like_actor.username if like_actor else actor_id} unliked {obj_id}")
 
-        # Mark as processed
-        item.processed = True
-        item.save()
+        # Mark as processed after successful processing
+        # processed variable is only set for ACCEPT, so check activity_type for others
+        if activity_type in ["follow", "accept", "reject", "undo", "removefriend", "create", "update", "delete", "comment", "like"]:
+            item.processed = True
+            item.save()
+            logger.info(f"Marked inbox item {item.id} as processed (activity_type={activity_type})")

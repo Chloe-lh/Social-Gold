@@ -9,7 +9,6 @@ import requests
 from django.conf import settings
 from requests.exceptions import RequestException
 from golden.models import Entry
-from golden.services import get_remote_node_from_fqid, is_local
 from urllib.parse import urlparse
 
 def normalize_fqid(fqid: str) -> str:

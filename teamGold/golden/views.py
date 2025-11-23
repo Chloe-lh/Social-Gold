@@ -31,12 +31,13 @@ from django.utils import timezone as dj_timezone
 # IMPORT Django Local
 from .decorators import require_author
 from .forms import CommentForm, CustomUserForm, EntryForm, ProfileForm
+
 # IMPORT Golden 
 from golden.distributor import distribute_activity, process_inbox
 from golden.models import (Author, Comment, Entry, EntryImage, Follow, Like, Node, Inbox)
 from golden.serializers import *
 from golden.services import *
-from golden.services import fetch_and_sync_remote_entry, get_or_create_foreign_author, fqid_to_uuid, is_local
+from golden.services import get_or_create_foreign_author, fqid_to_uuid, is_local
 from golden.activities import ( # Kenneth: If you're adding new activities, please make sure they are uploaded here 
     create_accept_follow_activity,
     create_comment_activity,

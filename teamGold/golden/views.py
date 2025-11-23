@@ -764,11 +764,13 @@ def profile_view(request):
         
         # Local authors logic by search ALL authors in database (includes local + remote stubs)
         local_qs = Author.objects.exclude(id=author.id)
+        print("logged_in_author_id =", author.id)
         if query:
             local_qs = local_qs.filter(Q(username__icontains=query) | Q(name__icontains=query))
         
         for a in local_qs:
             is_local_author = is_local(a.id)
+            print("comparing against IDs:", a.id) 
             results.append({
                 "id": a.id,
                 "url_id": fqid_to_uuid(a.id) if is_local_author else str(a.id).rstrip('/'),

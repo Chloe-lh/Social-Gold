@@ -1235,55 +1235,39 @@ def profile_view(request):
 @login_required
 def public_profile_view(request, author_id):
     """
-    View for displaying another author's profile.
-
-    Only shows basic author info (name, github, email, etc.) and list of their entries.
-    Tabs and editing are removed.
-    
-    Handles both UUID format (68e52a5b-b117-44ef-82b8-25800fa9fc9b) and full FQID format.
+    Display another author's profile.
+    Fetches from remote node if necessary and syncs entries.
     """
 
-    # Try to find author by full FQID first
-    author = Author.objects.filter(id=author_id).first()
-    
-    # If not found and it looks like a UUID, try constructing the full FQID
-    if not author:
-        # Check if it's a UUID (contains dashes and no slashes)
-        if '-' in author_id and '/' not in author_id:
-            # It's a UUID - try to find by constructing local FQID
-            local_fqid = f"{settings.SITE_URL.rstrip('/')}/api/authors/{author_id}"
-            author = Author.objects.filter(id=local_fqid).first()
-            
-            # Also try matching by username as fallback
-            if not author:
-                author = Author.objects.filter(username=author_id).first()
-        
-        # If still not found and it's a full URL, try extracting UUID
-        elif author_id.startswith('http'):
-            # Extract UUID from full FQID
-            uuid_part = fqid_to_uuid(author_id)
-            if uuid_part:
-                # Try with extracted UUID
-                if is_local(author_id):
-                    local_fqid = f"{settings.SITE_URL.rstrip('/')}/api/authors/{uuid_part}"
-                    author = Author.objects.filter(id=local_fqid).first()
-                else:
-                    # Remote author - find by full FQID
-                    author = Author.objects.filter(id=author_id.rstrip('/')).first()
-    
+    # Normalize and fetch author (local or remote)
+    fqid = normalize_fqid(author_id)
+    author = fetch_or_create_author(fqid)
+
     if not author:
         raise Http404("Author not found")
 
-    # Convert description to HTML
+    # Sanitize description for safe HTML display
     author.description = sanitize_markdown_to_html(author.description)
 
-    # Get entries for this author
+    # --- Sync remote entries if author is remote ---
+    node = None
+    if author.host != settings.SITE_URL:
+        from .services import get_remote_node_from_fqid
+        node = get_remote_node_from_fqid(author.id)
+        if node:
+            remote_entries = fetch_remote_entries(node)
+            for entry_data in remote_entries:
+                sync_remote_entry(entry_data, node)
+
+    # Get local entries (after syncing remote entries)
     entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("-published")
+
+    # Optionally, process inbox to update Follow/Like state
+    process_inbox(request.user)
 
     context = {
         "author": author,
         "entries": entries,
-        # We can add sidebar info like GitHub, email, website
     }
 
     return render(request, "public_profile.html", context)

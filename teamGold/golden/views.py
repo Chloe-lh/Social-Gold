@@ -370,8 +370,16 @@ def new_edit_entry_view(request):
         entry_id = f"{host}/api/entries/{uuid.uuid4()}"
 
         user_selected_visibility = request.POST.get("visibility", "PUBLIC")
+        
+        # Ensure visibility is uppercase for consistency
+        if user_selected_visibility:
+            user_selected_visibility = user_selected_visibility.upper()
+        
+        print(f"[DEBUG entry_post] Creating entry with visibility: {user_selected_visibility}")
+        
         if not validate_visibility(user_selected_visibility):
-            messages.error(request, "Invalid visibility setting")
+            messages.error(request, f"Invalid visibility setting: {user_selected_visibility}")
+            print(f"[DEBUG entry_post] ERROR: Invalid visibility: {user_selected_visibility}")
             return redirect("stream")
 
         markdown_content = request.POST.get("content", "")
@@ -412,10 +420,24 @@ def new_edit_entry_view(request):
             return HttpResponseForbidden("You don't have permission to edit this entry")
 
         raw_markdown = request.POST.get("content", "")
-        user_selected_visibility = request.POST.get("visibility", editing_entry.visibility)
+        # Get visibility from POST - don't default to current visibility, require explicit value
+        user_selected_visibility = request.POST.get("visibility", "").strip()
+        
+        # If visibility not provided in POST, use current visibility as fallback
+        if not user_selected_visibility:
+            user_selected_visibility = editing_entry.visibility
+        
+        # Ensure visibility is uppercase for consistency
+        user_selected_visibility = user_selected_visibility.upper()
+
+        print(f"[DEBUG entry_update] POST visibility value: '{request.POST.get('visibility', 'NOT PROVIDED')}'")
+        print(f"[DEBUG entry_update] Current entry visibility: {editing_entry.visibility}")
+        print(f"[DEBUG entry_update] Selected visibility: {user_selected_visibility}")
+        print(f"[DEBUG entry_update] Visibility change: {editing_entry.visibility} -> {user_selected_visibility}")
 
         if not validate_visibility(user_selected_visibility):
-            messages.error(request, "Invalid visibility setting")
+            messages.error(request, f"Invalid visibility setting: {user_selected_visibility}")
+            print(f"[DEBUG entry_update] ERROR: Invalid visibility: {user_selected_visibility}")
             return redirect("stream")
 
         html_content = sanitize_markdown_to_html(raw_markdown)
@@ -426,11 +448,15 @@ def new_edit_entry_view(request):
 
         with transaction.atomic():
             # Update entry fields
+            old_visibility = editing_entry.visibility
             editing_entry.title = title
             editing_entry.content = html_content
             editing_entry.visibility = user_selected_visibility
             editing_entry.contentType = "text/html"
             editing_entry.save()
+            
+            print(f"[DEBUG entry_update] Successfully updated entry {editing_entry.id}")
+            print(f"[DEBUG entry_update] Visibility changed from {old_visibility} to {editing_entry.visibility}")
 
             # Remove selected images
             if remove_images:
@@ -1178,9 +1204,19 @@ def profile_view(request):
     followers = get_followers(author)
     
     # Get following (people this author follows) - works for both local and remote
+    # The object field is a URLField (FQID string), so we need to handle both exact matches and normalized
+    from golden.services import normalize_fqid
     following_follows = Follow.objects.filter(actor=author, state="ACCEPTED")
-    following_ids = [f.object for f in following_follows]
-    following = Author.objects.filter(id__in=following_ids)
+    following_ids = []
+    following_ids_normalized = []
+    for f in following_follows:
+        following_ids.append(f.object)  # Raw FQID
+        following_ids_normalized.append(normalize_fqid(str(f.object)))  # Normalized
+    
+    # Try to find authors by both raw and normalized IDs
+    following = Author.objects.filter(
+        Q(id__in=following_ids) | Q(id__in=following_ids_normalized)
+    ).distinct()
     
     # Get friends (mutual follows) - works for both local and remote
     friends_qs = get_friends(author)
@@ -1515,9 +1551,19 @@ def following(request):
         return redirect(request.META.get('HTTP_REFERER', 'following'))
 
     # Use Follow objects instead of ManyToMany for remote compatibility
+    # The object field is a URLField (FQID string), so we need to handle both exact matches and normalized
+    from golden.services import normalize_fqid
     following_follows = Follow.objects.filter(actor=actor, state="ACCEPTED")
-    following_ids = [f.object for f in following_follows]
-    following_qs = Author.objects.filter(id__in=following_ids)
+    following_ids = []
+    following_ids_normalized = []
+    for f in following_follows:
+        following_ids.append(f.object)  # Raw FQID
+        following_ids_normalized.append(normalize_fqid(str(f.object)))  # Normalized
+    
+    # Try to find authors by both raw and normalized IDs
+    following_qs = Author.objects.filter(
+        Q(id__in=following_ids) | Q(id__in=following_ids_normalized)
+    ).distinct()
 
     query = request.GET.get('q', '')
     if query:

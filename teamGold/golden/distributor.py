@@ -160,38 +160,62 @@ def get_friends(author):
     # Normalize author ID for consistent matching with Follow objects
     from golden.services import normalize_fqid
     author_id_normalized = normalize_fqid(str(author.id))
+    author_id_raw = str(author.id).rstrip('/')
+    
+    print(f"[DEBUG get_friends] Finding friends for author: {author.username} (id={author.id})")
     
     # Get followers (people who follow this author) - actor_id is ForeignKey to Author
-    follower_ids = set(Follow.objects.filter(
+    # Try both normalized and raw author.id
+    follower_ids_set = set()
+    followers_normalized = Follow.objects.filter(
         object=author_id_normalized,
         state="ACCEPTED"
-    ).values_list("actor_id", flat=True))
+    ).values_list("actor_id", flat=True)
+    followers_raw = Follow.objects.filter(
+        object=author_id_raw,
+        state="ACCEPTED"
+    ).values_list("actor_id", flat=True)
+    follower_ids_set.update(followers_normalized)
+    follower_ids_set.update(followers_raw)
     
-    # Also try with raw author.id in case normalization differs
-    if not follower_ids:
-        follower_ids = set(Follow.objects.filter(
-            object=str(author.id).rstrip('/'),
-            state="ACCEPTED"
-        ).values_list("actor_id", flat=True))
+    print(f"[DEBUG get_friends] Found {len(follower_ids_set)} followers")
     
     # Get following (people this author follows) - object is URLField (FQID string)
-    following_ids = set(Follow.objects.filter(
+    following_follows = Follow.objects.filter(
         actor=author,
         state="ACCEPTED"
-    ).values_list("object", flat=True))
+    )
+    following_ids_set = set()
+    following_ids_normalized_set = set()
+    for follow in following_follows:
+        following_ids_set.add(follow.object)  # Raw FQID string
+        following_ids_normalized_set.add(normalize_fqid(str(follow.object)))  # Normalized
     
-    # Normalize following_ids for comparison
-    following_ids_normalized = {normalize_fqid(str(fid)) for fid in following_ids}
+    print(f"[DEBUG get_friends] Found {len(following_ids_set)} following")
     
-    # Find mutual: authors whose ID (normalized) appears in both sets
-    # follower_ids contains Author.id values (from ForeignKey)
-    # following_ids_normalized contains normalized FQID strings
+    # Find mutual: authors whose ID appears in both sets
+    # follower_ids_set contains Author.id values (from ForeignKey actor_id)
+    # following_ids_set contains FQID strings (from URLField object)
     mutual_author_ids = []
-    for follower_id in follower_ids:
-        # follower_id is an Author.id (URLField), normalize it for comparison
+    for follower_id in follower_ids_set:
+        # follower_id is an Author.id (URLField), try both normalized and raw
         follower_id_normalized = normalize_fqid(str(follower_id))
-        if follower_id_normalized in following_ids_normalized:
+        follower_id_raw = str(follower_id).rstrip('/')
+        
+        # Check if this follower is also in the following set
+        # We need to check if the follower's ID (in any form) matches any following ID
+        is_mutual = (
+            follower_id_normalized in following_ids_normalized_set or
+            follower_id_raw in following_ids_set or
+            str(follower_id) in following_ids_set or
+            follower_id_normalized in following_ids_set
+        )
+        
+        if is_mutual:
             mutual_author_ids.append(follower_id)
+            print(f"[DEBUG get_friends] Found mutual friend: {follower_id}")
+    
+    print(f"[DEBUG get_friends] Total mutual friends: {len(mutual_author_ids)}")
     
     # Return Author objects for mutual friends
     if mutual_author_ids:

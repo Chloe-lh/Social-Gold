@@ -898,9 +898,10 @@ def profile_view(request):
         query_conditions |= Q(object__icontains=author_uuid_or_id)
     
     # Query for incoming requests - use a more comprehensive approach
+    # IMPORTANT: Only show REQUESTED state, exclude REJECTED and ACCEPTED
     # First try the exact matches
     incoming_follow_requests = Follow.objects.filter(
-        state="REQUESTED"
+        state="REQUESTED"  # Only show pending requests, not rejected or accepted
     ).filter(query_conditions).distinct()
     
     # If no results, try a more lenient approach, otherwise check if any part of the object field matches
@@ -927,7 +928,7 @@ def profile_view(request):
             lenient_conditions |= Q(object__iexact=variation) | Q(object__icontains=variation)
         
         incoming_follow_requests = Follow.objects.filter(
-            state="REQUESTED"
+            state="REQUESTED"  # Only show pending requests, not rejected or accepted
         ).filter(lenient_conditions).distinct()
     
     outgoing_count = Follow.objects.filter(actor=author, state="REQUESTED").count()
@@ -1606,21 +1607,70 @@ def follow_requests(request):
     if request.method == "POST":
         request_id = request.POST.get("follow_id")
         action = request.POST.get("action")
-        follow_request = get_object_or_404(Follow, id=request_id)
+        
+        # Normalize actor ID for matching
+        actor_id_normalized = normalize_fqid(str(actor.id))
+        actor_id_str = str(actor.id).rstrip('/')
+        
+        # Find follow request - try both normalized and raw IDs
+        follow_request = Follow.objects.filter(
+            id=request_id
+        ).filter(
+            Q(object=actor_id_normalized) | Q(object=actor_id_str) | Q(object=actor.id)
+        ).first()
+        
+        if not follow_request:
+            messages.error(request, "Follow request not found")
+            return redirect("follow_requests")
 
         follower_id = follow_request.actor.id  # who requested the follow
 
         if action == "approve":
-            activity = create_accept_follow_activity(actor, follower_id)
+            follow_request.state = "ACCEPTED"
+            follow_request.save()
+            
+            # Update following relationship
+            if actor not in follow_request.actor.following.all():
+                follow_request.actor.following.add(actor)
+            
+            # Mark inbox item as processed
+            inbox_item = Inbox.objects.filter(author=actor, data__id=request_id, processed=False).first()
+            if inbox_item:
+                inbox_item.processed = True
+                inbox_item.save()
+            
+            activity = create_accept_follow_activity(actor, request_id)
             distribute_activity(activity, actor=actor)
+            messages.success(request, f"Accepted follow request from {follow_request.actor.username}")
             return redirect("follow_requests")
 
         elif action == "reject":
+            follow_request.state = "REJECTED"
+            follow_request.save()
+            
+            # Mark inbox item as processed
+            inbox_item = Inbox.objects.filter(author=actor, data__id=request_id, processed=False).first()
+            if inbox_item:
+                inbox_item.processed = True
+                inbox_item.save()
+            
             activity = create_reject_follow_activity(actor, follower_id)
             distribute_activity(activity, actor=actor)
+            messages.success(request, f"Rejected follow request from {follow_request.actor.username}")
             return redirect("follow_requests")
 
-    follow_requests_qs = Follow.objects.filter(object=actor.id, state="REQUESTED")
+    # Only show REQUESTED state - exclude REJECTED and ACCEPTED
+    # Normalize actor ID for consistent matching (works for remote)
+    actor_id_normalized = normalize_fqid(str(actor.id))
+    actor_id_str = str(actor.id).rstrip('/')
+    
+    follow_requests_qs = Follow.objects.filter(
+        state="REQUESTED"  # Only pending requests, not rejected or accepted
+    ).filter(
+        Q(object=actor_id_normalized) | Q(object=actor_id_str) | Q(object=actor.id)
+    ).distinct()
+    
+    print(f"[DEBUG follow_requests] Found {follow_requests_qs.count()} pending requests for {actor.username}")
 
     return render(request, "follow_requests.html", {
         "follow_requests": follow_requests_qs
@@ -1786,14 +1836,21 @@ def api_follow_requests(request, author_id):
     except Author.DoesNotExist:
         return Response({"error": "Author not found"}, status=404)
 
-    follow_requests = Follow.objects.filter(object=author.id, state="REQUESTED")
+    # Only return REQUESTED state - exclude REJECTED and ACCEPTED
+    follow_requests = Follow.objects.filter(
+        object=author.id, 
+        state="REQUESTED"  # Only pending requests
+    )
+    
+    print(f"[DEBUG api_follow_requests] Found {follow_requests.count()} pending requests for author {author.username}")
+    
     items = [{
         "id": fr.id,
         "type": "Follow",
         "summary": fr.summary,
         "actor": AuthorSerializer(fr.actor).data, 
         "object": fr.object,
-        "published": fr.published.isoformat(),
+        "published": fr.published.isoformat() if fr.published else None,
         "state": fr.state,
     } for fr in follow_requests]
 
@@ -1802,83 +1859,209 @@ def api_follow_requests(request, author_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_follow_action(request):
-    """Handle a user following another user."""
+    """Handle a user following another user. Works for both local and remote authors."""
     target_id = request.POST.get("author_id")
-    target = get_object_or_404(Author, id=normalize_fqid(target_id))
-
+    print(f"[DEBUG api_follow_action] Follow request: target_id={target_id}")
+    
     actor = Author.from_user(request.user)
+    if not actor:
+        return Response({"error": "User not found"}, status=404)
+
+    # Try to find target - handle both local and remote
+    target = Author.objects.filter(id=normalize_fqid(target_id)).first()
+    if not target:
+        target = Author.objects.filter(id=target_id).first()
+    if not target:
+        # Try to get or create remote author
+        target = get_or_create_foreign_author(target_id)
+    
+    if not target:
+        return Response({"error": "Target author not found"}, status=404)
 
     if actor == target:
-        return HttpResponseForbidden("You cannot follow yourself.")
+        return Response({"error": "You cannot follow yourself."}, status=400)
 
+    print(f"[DEBUG api_follow_action] Actor: {actor.username} (id={actor.id}), Target: {target.username} (id={target.id})")
+
+    # Normalize target ID for consistent storage
+    target_id_normalized = normalize_fqid(str(target.id))
+    
     follow, created = Follow.objects.get_or_create(
         actor=actor,
-        object=target.id,
+        object=target_id_normalized,
         defaults={"state": "REQUESTED", "published": dj_timezone.now()},
     )
+    
+    if not created:
+        # If follow already exists, update state to REQUESTED if it was REJECTED
+        if follow.state == "REJECTED":
+            follow.state = "REQUESTED"
+            follow.save()
+            print(f"[DEBUG api_follow_action] Updated existing REJECTED follow to REQUESTED")
+
+    print(f"[DEBUG api_follow_action] Follow object: id={follow.id}, state={follow.state}, created={created}")
 
     activity = create_follow_activity(actor, target)
     distribute_activity(activity, actor=actor)
 
-    return Response({"status": "Follow request sent."}, status=201)
+    return Response({"status": "Follow request sent.", "follow_id": follow.id}, status=201)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_accept_follow_action(request):
-    """Accept a follow request from another user."""
+    """Accept a follow request from another user. Works for both local and remote authors."""
     follow_id = request.POST.get("follow_id")
-    follow_request = get_object_or_404(Follow, id=follow_id, object=request.user.id)
+    print(f"[DEBUG api_accept_follow_action] Accept request: follow_id={follow_id}")
+    
+    actor = Author.from_user(request.user)
+    if not actor:
+        return Response({"error": "User not found"}, status=404)
+    
+    # Normalize actor ID for matching
+    actor_id_normalized = normalize_fqid(str(actor.id))
+    actor_id_str = str(actor.id).rstrip('/')
+    
+    # Find follow request - try both normalized and raw IDs
+    follow_request = Follow.objects.filter(
+        id=follow_id
+    ).filter(
+        Q(object=actor_id_normalized) | Q(object=actor_id_str) | Q(object=actor.id)
+    ).first()
+    
+    if not follow_request:
+        return Response({"error": "Follow request not found"}, status=404)
 
     if follow_request.state != "REQUESTED":
-        return HttpResponseForbidden("Invalid follow request.")
+        return Response({"error": f"Invalid follow request state: {follow_request.state}"}, status=400)
+
+    print(f"[DEBUG api_accept_follow_action] Found follow request: actor={follow_request.actor.username}, object={follow_request.object}, state={follow_request.state}")
 
     follow_request.state = "ACCEPTED"
+    follow_request.published = dj_timezone.now()
     follow_request.save()
 
-    actor = follow_request.actor
-    actor.following.add(request.user)
+    # Update following relationship
+    follower = follow_request.actor
+    target_id_normalized = normalize_fqid(str(actor.id))
+    
+    # Add to following ManyToMany (for local authors)
+    if actor not in follower.following.all():
+        follower.following.add(actor)
+        print(f"[DEBUG api_accept_follow_action] Added {actor.username} to {follower.username}'s following")
 
-    activity = create_accept_follow_activity(request.user, actor.id)
-    distribute_activity(activity, actor=request.user)
+    # Mark inbox item as processed if it exists
+    inbox_item = Inbox.objects.filter(author=actor, data__id=follow_id, processed=False).first()
+    if inbox_item:
+        inbox_item.processed = True
+        inbox_item.save()
+        print(f"[DEBUG api_accept_follow_action] Marked inbox item as processed")
 
-    return redirect("profile")
+    activity = create_accept_follow_activity(actor, follow_id)
+    distribute_activity(activity, actor=actor)
+    
+    print(f"[DEBUG api_accept_follow_action] Successfully accepted follow request")
+
+    return Response({"status": "Follow request accepted."}, status=200)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_reject_follow_action(request):
-    """Reject a follow request from another user."""
+    """Reject a follow request from another user. Works for both local and remote authors."""
     follow_id = request.POST.get("follow_id")
-    follow_request = get_object_or_404(Follow, id=follow_id, object=request.user.id)
+    print(f"[DEBUG api_reject_follow_action] Reject request: follow_id={follow_id}")
+    
+    actor = Author.from_user(request.user)
+    if not actor:
+        return Response({"error": "User not found"}, status=404)
+    
+    # Normalize actor ID for matching
+    actor_id_normalized = normalize_fqid(str(actor.id))
+    actor_id_str = str(actor.id).rstrip('/')
+    
+    # Find follow request - try both normalized and raw IDs
+    follow_request = Follow.objects.filter(
+        id=follow_id
+    ).filter(
+        Q(object=actor_id_normalized) | Q(object=actor_id_str) | Q(object=actor.id)
+    ).first()
+    
+    if not follow_request:
+        return Response({"error": "Follow request not found"}, status=404)
 
     if follow_request.state != "REQUESTED":
-        return HttpResponseForbidden("Invalid follow request.")
+        return Response({"error": f"Invalid follow request state: {follow_request.state}"}, status=400)
+
+    print(f"[DEBUG api_reject_follow_action] Found follow request: actor={follow_request.actor.username}, object={follow_request.object}, state={follow_request.state}")
 
     follow_request.state = "REJECTED"
+    follow_request.published = dj_timezone.now()
     follow_request.save()
+    
+    print(f"[DEBUG api_reject_follow_action] Updated follow request state to REJECTED")
 
-    activity = create_reject_follow_activity(request.user, follow_request.actor.id)
-    distribute_activity(activity, actor=request.user)
+    # Mark inbox item as processed if it exists
+    inbox_item = Inbox.objects.filter(author=actor, data__id=follow_id, processed=False).first()
+    if inbox_item:
+        inbox_item.processed = True
+        inbox_item.save()
+        print(f"[DEBUG api_reject_follow_action] Marked inbox item as processed")
 
-    return redirect("profile")
+    activity = create_reject_follow_activity(actor, follow_request.actor.id)
+    distribute_activity(activity, actor=actor)
+    
+    print(f"[DEBUG api_reject_follow_action] Successfully rejected follow request")
+
+    return Response({"status": "Follow request rejected."}, status=200)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def api_unfollow_action(request):
-    """Unfollow a user."""
+    """Unfollow a user. Works for both local and remote authors."""
     target_id = request.POST.get("author_id")
-    target = get_object_or_404(Author, id=target_id)
+    print(f"[DEBUG api_unfollow_action] Unfollow request: target_id={target_id}")
+    
     actor = Author.from_user(request.user)
+    if not actor:
+        return Response({"error": "User not found"}, status=404)
+
+    # Try to find target - handle both local and remote
+    target = Author.objects.filter(id=normalize_fqid(target_id)).first()
+    if not target:
+        target = Author.objects.filter(id=target_id).first()
+    if not target:
+        target = get_or_create_foreign_author(target_id)
+    
+    if not target:
+        return Response({"error": "Target author not found"}, status=404)
 
     if actor == target:
-        return HttpResponseForbidden("You cannot unfollow yourself.")
+        return Response({"error": "You cannot unfollow yourself."}, status=400)
 
-    actor.following.remove(target)
-    Follow.objects.filter(actor=actor, object=target.id).delete()
+    print(f"[DEBUG api_unfollow_action] Actor: {actor.username} (id={actor.id}), Target: {target.username} (id={target.id})")
+
+    # Remove from ManyToMany (for local authors)
+    if target in actor.following.all():
+        actor.following.remove(target)
+        print(f"[DEBUG api_unfollow_action] Removed {target.username} from {actor.username}'s following")
+
+    # Delete Follow objects - normalize IDs for consistent matching
+    target_id_normalized = normalize_fqid(str(target.id))
+    target_id_str = str(target.id).rstrip('/')
+    
+    deleted = Follow.objects.filter(actor=actor).filter(
+        Q(object=target_id_normalized) | 
+        Q(object=target_id_str) | 
+        Q(object=target.id)
+    ).delete()
+    
+    print(f"[DEBUG api_unfollow_action] Deleted {deleted[0]} Follow objects")
 
     activity = create_unfollow_activity(actor, target.id)
     distribute_activity(activity, actor=actor)
+    
+    print(f"[DEBUG api_unfollow_action] Successfully unfollowed {target.username}")
 
-    return redirect("profile")
+    return Response({"status": f"Unfollowed {target.username}."}, status=200)
 
 
 @api_view(['GET'])

@@ -817,9 +817,9 @@ def profile_view(request):
                 if is_local(ra_id):
                     continue
 
-                if not is_local_to_node(ra_id, node)
-                    continue
-                    
+                #if not is_local_to_node(ra_id, node)          FIX THIS LATER
+                    #continue
+
                 # Get username and displayName
                 ra_username = ra.get("username") or ra.get("displayName")
                 if not ra_username and "/api/authors/" in str(ra_id):

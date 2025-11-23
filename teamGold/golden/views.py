@@ -1382,18 +1382,14 @@ def profile_view(request):
                 a["is_friend"] = False
     
     print(f"[SEARCH DEBUG] Profile view - Query: '{query}', Results: {len(authors)}")
-
-    followers_qs = Author.objects.filter(following=author)
-    following_qs = Author.objects.filter(followers_set=author)
-    friends = followers_qs.intersection(following_qs)
-    print(f"[DEBUG profile_view] Author {author.username} has {followers_qs.count()} followers, {following_qs.count()} following, {friends.count()} friends")
+    
     
     context = {
         "author": author,
         "entries": entries,
-        "followers_with_urls": followers_qs,
-        "following_with_urls": following_qs,
-        "friends_with_urls": friends,
+        "followers_with_urls": followers_with_urls,
+        "following_with_urls": following_with_urls,
+        "friends_with_urls": friends_with_urls,
         "follow_requests_with_urls": follow_requests_with_urls, 
         "incoming_follow_requests_with_urls": incoming_follow_requests_with_urls, 
         "friends": friends_list,

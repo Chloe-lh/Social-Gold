@@ -8,6 +8,9 @@ import uuid
 import requests
 from django.conf import settings
 from requests.exceptions import RequestException
+from golden.models import Entry
+from golden.services import get_remote_node_from_fqid, is_local
+from urllib.parse import urlparse
 
 def normalize_fqid(fqid: str) -> str:
     """Normalize FQID by removing trailing slashes and ensuring consistent format."""
@@ -210,6 +213,77 @@ def fetch_remote_entries(node, timeout=5):
         logging.error(f"Error fetching entries from {url}: {e}")
     return []
 
+def fetch_and_sync_remote_entry(entry_fqid):
+    """
+    Fetch a single entry by FQID from a remote node and sync it locally.
+    
+    :param entry_fqid: The FQID of the entry to fetch
+    :return: The local Entry object, or None if the fetch/sync failed
+    """
+    
+    if is_local(entry_fqid):
+        # Entry is local, just return it
+        return Entry.objects.filter(id=entry_fqid).first()
+    
+    # Get the remote node
+    node = get_remote_node_from_fqid(entry_fqid)
+    if not node:
+        print(f"[DEBUG fetch_and_sync_remote_entry] No node found for entry_fqid={entry_fqid}")
+        return None
+    
+    # Extract entry UUID from FQID
+    # Format: https://node.com/api/authors/{author_uuid}/entries/{entry_uuid}
+    # Or: https://node.com/api/entries/{entry_uuid}
+    entry_uuid = None
+    if '/entries/' in entry_fqid:
+        entry_uuid = entry_fqid.split('/entries/')[-1].rstrip('/')
+    elif '/api/entries/' in entry_fqid:
+        entry_uuid = entry_fqid.split('/api/entries/')[-1].rstrip('/')
+    else:
+        # Try to extract UUID from end of URL
+        entry_uuid = entry_fqid.split('/')[-1].rstrip('/')
+    
+    if not entry_uuid:
+        print(f"[DEBUG fetch_and_sync_remote_entry] Could not extract UUID from entry_fqid={entry_fqid}")
+        return None
+    
+    # Try to fetch from entry endpoint
+    try:
+        # Try /api/authors/{author_uuid}/entries/{entry_uuid}/ first
+        if '/api/authors/' in entry_fqid and '/entries/' in entry_fqid:
+            entry_url = f"{node.id.rstrip('/')}/api/authors/{entry_fqid.split('/api/authors/')[-1].split('/entries/')[0]}/entries/{entry_uuid}/"
+        else:
+            # Fallback to /api/entries/{entry_uuid}/
+            entry_url = f"{node.id.rstrip('/')}/api/entries/{entry_uuid}/"
+        
+        auth = (node.auth_user, node.auth_pass) if node.auth_user else None
+        response = requests.get(
+            entry_url,
+            timeout=5,
+            auth=auth,
+            headers={'Content-Type': 'application/json'}
+        )
+        
+        if response.status_code == 200:
+            entry_data = response.json()
+            print(f"[DEBUG fetch_and_sync_remote_entry] Successfully fetched entry from {entry_url}")
+            return sync_remote_entry(entry_data, node)
+        else:
+            print(f"[DEBUG fetch_and_sync_remote_entry] Failed to fetch entry from {entry_url}: HTTP {response.status_code}")
+            # Try fetching from /api/reading/ and finding the entry
+            reading_url = f"{node.id.rstrip('/')}/api/reading/"
+            response = requests.get(reading_url, timeout=5, auth=auth, headers={'Content-Type': 'application/json'})
+            if response.status_code == 200:
+                entries = response.json().get("items", [])
+                for entry_data in entries:
+                    if entry_data.get("id") == entry_fqid or entry_data.get("id").endswith(entry_uuid):
+                        print(f"[DEBUG fetch_and_sync_remote_entry] Found entry in /api/reading/")
+                        return sync_remote_entry(entry_data, node)
+    except requests.exceptions.RequestException as e:
+        print(f"[DEBUG fetch_and_sync_remote_entry] Error fetching entry: {e}")
+    
+    return None
+
 def fetch_or_create_author(author_url):
     """
     Fetch or create a remote author by their URL.
@@ -340,6 +414,25 @@ def get_or_create_foreign_author(remote_id: str, host: str = None, username: str
     # Check if author already exists by FQID
     author = Author.objects.filter(id=remote_id).first()
     if author:
+        # Always try to refresh username if it looks like a UUID or is missing
+        # This ensures we get the real username even if the author was created with a UUID
+        username_looks_like_uuid = len(author.username) == 36 and '-' in author.username and author.username.count('-') == 4
+        should_refresh = (not author.username or 
+                         author.username == "goldenuser" or 
+                         username_looks_like_uuid or
+                         author.username.startswith("http"))
+        
+        if should_refresh and not username:
+            # Try to fetch username from remote node
+            print(f"[DEBUG get_or_create_foreign_author] Refreshing username for existing author {remote_id} (current username: {author.username})")
+            author_data = fetch_remote_author_data(remote_id)
+            if author_data:
+                fetched_username = author_data.get("username") or author_data.get("displayName")
+                if fetched_username and fetched_username != author.username:
+                    author.username = fetched_username
+                    author.save(update_fields=['username'])
+                    print(f"[DEBUG get_or_create_foreign_author] Updated username to {fetched_username}")
+        
         # If username was provided and differs, update it
         if username and author.username != username:
             author.username = username

@@ -104,27 +104,30 @@ def create_delete_entry_activity(author, entry):
 
     return activity
 
-
 def create_comment_activity(author, entry, comment):
-    activity_id = make_fqid(author, "comments")
-
-    activity = {
-        "type": "comment", 
-        "id": activity_id, 
-        "comment": comment.content, 
-        "contentType": comment.contentType,
-        "published": comment.published.isoformat() if hasattr(comment.published, 'isoformat') else timezone.now().isoformat(),  # Add published field
-        "author": {
-            "type": "author",
-            "id": str(author.id),
-            "host": author.host or str(author.id).split('/api/authors/')[0] if '/api/authors/' in str(author.id) else '',
+    return {
+        "type": "comment",
+        "id": comment.id,                      
+        "actor": {
+            "id": author.id,
+            "host": author.host,
             "displayName": author.username,
-            "username": author.username,
         },
-        "object": str(entry.id),
+        "object": {
+            "type": "comment",
+            "id": comment.id,                   
+            "entry": entry.id,
+            "content": comment.content,
+            "contentType": comment.contentType,
+            "author": {
+                "id": author.id,
+                "host": author.host,
+                "displayName": author.username,
+            },
+            "published": comment.published.isoformat(),
+        },
+        "published": comment.published.isoformat(),
     }
-
-    return activity
 
 def create_like_activity(author, liked_object_fqid):
     activity_id = make_fqid(author, "likes")
@@ -304,7 +307,7 @@ def create_unlike_activity(author, liked_object_fqid):
         "id": activity_id,
         "summary": f"{author.username} unliked an entry or comment",
         "actor": str(author.id),
-        "published": timezone.now().isoformat(),  # Add published field
+        "published": timezone.now().isoformat(),
         "object": str(liked_object_fqid) 
     }
     

@@ -161,7 +161,6 @@ def get_followers(author: Author):
     
     return Author.objects.filter(id__in=follower_ids)
 
-
 def get_friends(author):
     """Mutual followers = friends."""
     # Normalize author ID for consistent matching with Follow objects
@@ -206,13 +205,11 @@ def get_friends(author):
     
     return Author.objects.none()
 
-
 def previously_delivered(post):
     """Return all authors who already received this post."""
     inbox_rows = Inbox.objects.filter(data__object__id=str(post.id))
     author_ids = inbox_rows.values_list("author_id", flat=True)
     return Author.objects.filter(id__in=author_ids)
-
 
 def absolutize_remote_images(html, base_url):
     """
@@ -233,7 +230,6 @@ def absolutize_remote_images(html, base_url):
                 img["src"] = urljoin(base_url.rstrip("/") + "/", src)
 
     return str(soup)
-
 
 # * ============================================================
 # * Main Distributor
@@ -328,10 +324,10 @@ def distribute_activity(activity: dict, actor: Author):
         
         # If entry not found locally, try to extract author FQID from entry FQID or fetch entry
         if not entry:
+            print(f"[DEBUG distribute_activity] COMMENT: Entry not found locally, attempting to fetch and sync: entry_id={entry_id}")
             logger.info(f"Entry not found locally for comment distribution: entry_id={entry_id}, attempting to sync or extract author")
             # Try to sync the entry from remote node
-            from golden.services import sync_remote_entry
-            entry = sync_remote_entry(entry_id)
+            entry = fetch_and_sync_remote_entry(entry_id)
         
         if entry:
             recipients = {entry.author}
@@ -348,7 +344,10 @@ def distribute_activity(activity: dict, actor: Author):
     if type_lower == "like":
         liked_fqid = obj if isinstance(obj, str) else None
         if not liked_fqid:
+            print(f"[DEBUG distribute_activity] LIKE: No liked_fqid in activity object")
             return
+
+        print(f"[DEBUG distribute_activity] LIKE: Processing like for liked_fqid={liked_fqid}, actor={actor.username}")
 
         # Try to find entry locally (with normalization)
         entry = Entry.objects.filter(id=normalize_fqid(liked_fqid)).first()
@@ -363,15 +362,19 @@ def distribute_activity(activity: dict, actor: Author):
         recipients = set()
         
         if entry:
+            print(f"[DEBUG distribute_activity] LIKE: Found entry locally, author={entry.author.username} (id={entry.author.id}, host={entry.author.host})")
             recipients.add(entry.author)
         elif comment:
+            print(f"[DEBUG distribute_activity] LIKE: Found comment locally, author={comment.author.username} (id={comment.author.id}, host={comment.author.host})")
             recipients.add(comment.author)
         else:
             # Entry/comment not found locally - try to sync from remote
+            print(f"[DEBUG distribute_activity] LIKE: Entry/comment not found locally, attempting to fetch and sync: liked_fqid={liked_fqid}")
             logger.info(f"Entry/comment not found locally for like distribution: liked_fqid={liked_fqid}, attempting to sync")
-            from golden.services import sync_remote_entry
-            entry = sync_remote_entry(liked_fqid)
+            from golden.services import fetch_and_sync_remote_entry
+            entry = fetch_and_sync_remote_entry(liked_fqid)
             if entry:
+                print(f"[DEBUG distribute_activity] LIKE: Successfully synced entry, author={entry.author.username} (id={entry.author.id}, host={entry.author.host})")
                 recipients.add(entry.author)
             else:
                 # Try to extract author from FQID pattern
@@ -379,14 +382,19 @@ def distribute_activity(activity: dict, actor: Author):
                 if '/api/authors/' in liked_fqid and '/entries/' in liked_fqid:
                     # Extract author FQID from entry FQID
                     author_fqid = '/api/authors/'.join(liked_fqid.split('/api/authors/')[:2]).split('/entries/')[0]
+                    print(f"[DEBUG distribute_activity] LIKE: Extracting author from FQID: {author_fqid}")
                     author = get_or_create_foreign_author(author_fqid)
                     if author:
+                        print(f"[DEBUG distribute_activity] LIKE: Extracted author={author.username} (id={author.id}, host={author.host})")
                         recipients.add(author)
                         logger.info(f"Extracted author from entry FQID: {author_fqid}")
                 else:
+                    print(f"[DEBUG distribute_activity] LIKE: ERROR - Could not find entry/comment or extract author for like: liked_fqid={liked_fqid}")
                     logger.warning(f"Could not find entry/comment or extract author for like: liked_fqid={liked_fqid}")
 
+        print(f"[DEBUG distribute_activity] LIKE: Sending to {len(recipients)} recipients")
         for r in recipients:
+            print(f"[DEBUG distribute_activity] LIKE: Sending like activity to {r.username} (id={r.id}, host={r.host})")
             send_activity_to_inbox(r, activity)
         return
 
@@ -414,10 +422,12 @@ def distribute_activity(activity: dict, actor: Author):
             recipients.add(comment.author)
         else:
             # Entry/comment not found locally - try to sync from remote
+            print(f"[DEBUG distribute_activity] UNLIKE: Entry/comment not found locally, attempting to fetch and sync: liked_fqid={liked_fqid}")
             logger.info(f"Entry/comment not found locally for unlike distribution: liked_fqid={liked_fqid}, attempting to sync")
-            from golden.services import sync_remote_entry
-            entry = sync_remote_entry(liked_fqid)
+            from golden.services import fetch_and_sync_remote_entry
+            entry = fetch_and_sync_remote_entry(liked_fqid)
             if entry:
+                print(f"[DEBUG distribute_activity] UNLIKE: Successfully synced entry, author={entry.author.username} (id={entry.author.id})")
                 recipients.add(entry.author)
             else:
                 # Try to extract author from FQID pattern
@@ -730,22 +740,19 @@ def process_inbox(author: Author):
         elif activity_type == "create" and isinstance(obj, dict) and obj.get("type") == "post":
             entry_id = obj.get("id")
 
-            raw_content = obj.get("content", "") or ""
-            base_url = getattr(actor, "host", "") if actor else ""
-            content = absolutize_remote_images(raw_content, base_url)
-
             entry, created = Entry.objects.update_or_create(
                 id=entry_id,
                 defaults={
                     "title": obj.get("title", ""),
-                    "content": content,
+                    "description": "",
+                    "content": obj.get("content", ""),
                     "contentType": obj.get("contentType", "text/plain"),
                     "author": actor or author,
                     "visibility": obj.get("visibility", "PUBLIC"),
                     "published": safe_parse_datetime(obj.get("published")) or timezone.now(),
                 }
             )
-            
+                
             # Process entry images from attachments
             # For remote entries, images are embedded in HTML content and will display there
             # We also store image URLs in entry metadata for the /api/authors/<uuid>/entries/<uuid>/images/ endpoint

@@ -36,7 +36,7 @@ from golden.distributor import distribute_activity, process_inbox
 from golden.models import (Author, Comment, Entry, EntryImage, Follow, Like, Node, Inbox)
 from golden.serializers import *
 from golden.services import *
-from golden.services import get_or_create_foreign_author, fqid_to_uuid, is_local
+from golden.services import fetch_and_sync_remote_entry, get_or_create_foreign_author, fqid_to_uuid, is_local
 from golden.activities import ( # Kenneth: If you're adding new activities, please make sure they are uploaded here 
     create_accept_follow_activity,
     create_comment_activity,
@@ -251,6 +251,14 @@ def stream_view(request):
     # This ensures we see up-to-date likes/comments for all entries in the stream
     entry_authors = {entry.author for entry in entries if entry.author}
     for entry_author in entry_authors:
+        # Refresh remote author usernames if they look like UUIDs
+        if entry_author and not is_local(entry_author.id):
+            username_looks_like_uuid = len(entry_author.username) == 36 and '-' in entry_author.username and entry_author.username.count('-') == 4
+            if username_looks_like_uuid or entry_author.username.startswith("http") or entry_author.username == "goldenuser":
+                from golden.services import get_or_create_foreign_author
+                updated_author = get_or_create_foreign_author(entry_author.id)
+                if updated_author and updated_author.username != entry_author.username:
+                    entry_author.username = updated_author.username
         process_inbox(entry_author)
 
     context = {
@@ -480,6 +488,15 @@ def entry_detail_view(request, entry_uuid):
         return redirect('new_edit_entry_view') 
 
     # FEATURE: DISPLAY ENTRY AND COMMENTS
+    # Refresh remote author username if it looks like a UUID
+    if entry.author and not is_local(entry.author.id):
+        username_looks_like_uuid = len(entry.author.username) == 36 and '-' in entry.author.username and entry.author.username.count('-') == 4
+        if username_looks_like_uuid or entry.author.username.startswith("http") or entry.author.username == "goldenuser":
+            from golden.services import get_or_create_foreign_author
+            updated_author = get_or_create_foreign_author(entry.author.id)
+            if updated_author and updated_author.username != entry.author.username:
+                entry.author.username = updated_author.username
+    
     # Process inbox for the entry author to get latest likes/comments from remote nodes
     # This ensures we see the most up-to-date likes/comments even if the author hasn't visited their page
     process_inbox(entry.author)
@@ -1502,6 +1519,21 @@ def toggle_like(request):
 # * ============================================================
 # * Endpoint Receiver Functions
 # * ============================================================   
+
+@login_required
+def entry_images_view(request, author_uuid, entry_uuid):
+    entry = get_object_or_404(
+        Entry,
+        id__icontains=f"/authors/{author_uuid}/entries/{entry_uuid}"
+    )
+    images = entry.images.all()
+
+    data = {
+        "type": "images",
+        "count": images.count(),
+        "src": EntryImageSerializer(images, many=True).data
+    }
+    return JsonResponse(data)
 
 @api_view(['GET'])
 def api_follow_requests(request, author_id):

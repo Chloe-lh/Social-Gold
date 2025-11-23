@@ -993,7 +993,7 @@ def profile_view(request):
                     inbox_item.save()
 
                 # Send Accept activity
-                activity = create_accept_follow_activity(author, follow_id)
+                #activity = create_accept_follow_activity(author, follow_id)
                 #distribute_activity(activity, actor=author)
 
             elif action == "reject":
@@ -1007,7 +1007,7 @@ def profile_view(request):
                     inbox_item.save()
 
                 # Send Reject activity
-                activity = create_reject_follow_activity(author, follow_id)
+                #activity = create_reject_follow_activity(author, follow_id)
                 #distribute_activity(activity, actor=author)
 
             return redirect("profile")

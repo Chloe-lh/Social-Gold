@@ -804,12 +804,12 @@ def profile_view(request):
                 if not ra or not isinstance(ra, dict):
                     continue
                 
-                if is_local_author_id(ra_id):
+                if is_local(ra_id):
                     continue
 
                 if not is_local_to_node(ra_id, node)
                     continue
-                    
+
                 ra_id = ra.get("id") or ra.get("@id") or str(ra.get("url", ""))
                 if not ra_id:
                     continue

@@ -5,6 +5,40 @@ from golden.services import get_or_create_foreign_author, normalize_fqid
 from urllib.parse import urljoin
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
+from datetime import datetime as dt
+
+def safe_parse_datetime(value):
+    """
+    Safely parse a datetime value that could be:
+    - A string (ISO format)
+    - A datetime object
+    - None
+    - Some other type
+    Returns a datetime object or None.
+    """
+    if value is None:
+        return None
+    
+    # If it's already a datetime object, return it
+    if isinstance(value, dt):
+        return value
+    
+    # If it's a string, try to parse it
+    if isinstance(value, str):
+        # Try parse_datetime first (handles ISO format)
+        parsed = parse_datetime(value)
+        if parsed:
+            return parsed
+        # If that fails, try fromisoformat (Python 3.7+)
+        try:
+            # Handle 'Z' timezone indicator and various formats
+            value_clean = value.replace('Z', '+00:00')
+            return dt.fromisoformat(value_clean)
+        except (ValueError, AttributeError):
+            pass
+    
+    # If we can't parse it, return None
+    return None
 import uuid
 import json
 from bs4 import BeautifulSoup
@@ -72,9 +106,22 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         logging.info(f"Using auth for node {node.id}: user={node.auth_user}")
     
     try:
+        # Ensure all datetime values are strings before JSON serialization
+        def ensure_datetime_strings(obj):
+            """Recursively convert datetime objects to ISO format strings"""
+            if isinstance(obj, dt):
+                return obj.isoformat()
+            elif isinstance(obj, dict):
+                return {k: ensure_datetime_strings(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [ensure_datetime_strings(item) for item in obj]
+            return obj
+        
+        activity_clean = ensure_datetime_strings(activity)
+        
         response = requests.post(
             inbox_url,
-            data=json.dumps(activity),
+            data=json.dumps(activity_clean, default=str),  # default=str handles any remaining non-serializable objects
             headers={"Content-Type": "application/json"},
             auth=auth,
             timeout=10,
@@ -259,13 +306,23 @@ def distribute_activity(activity: dict, actor: Author):
         if not entry:
             # Try without normalization
             entry = Entry.objects.filter(id=entry_id).first()
+        
+        # If entry not found locally, try to extract author FQID from entry FQID or fetch entry
         if not entry:
-            logger.warning(f"Entry not found for comment: entry_id={entry_id}")
-            return
-
-        recipients = {entry.author}
-        for r in recipients:
-            send_activity_to_inbox(r, activity)
+            logger.info(f"Entry not found locally for comment distribution: entry_id={entry_id}, attempting to sync or extract author")
+            # Try to sync the entry from remote node
+            from golden.services import sync_remote_entry
+            entry = sync_remote_entry(entry_id)
+        
+        if entry:
+            recipients = {entry.author}
+            for r in recipients:
+                send_activity_to_inbox(r, activity)
+        else:
+            # Last resort: try to extract author from entry FQID pattern
+            # Entry FQID format: https://node.com/api/authors/{author_uuid}/entries/{entry_uuid}
+            # Or: https://node.com/api/entries/{entry_uuid} (need to fetch to get author)
+            logger.warning(f"Could not find entry or extract author for comment: entry_id={entry_id}")
         return
 
     # LIKE
@@ -274,15 +331,41 @@ def distribute_activity(activity: dict, actor: Author):
         if not liked_fqid:
             return
 
-        entry = Entry.objects.filter(id=liked_fqid).first()
-        comment = Comment.objects.filter(id=liked_fqid).first()
+        # Try to find entry locally (with normalization)
+        entry = Entry.objects.filter(id=normalize_fqid(liked_fqid)).first()
+        if not entry:
+            entry = Entry.objects.filter(id=liked_fqid).first()
+        
+        # Try to find comment locally
+        comment = Comment.objects.filter(id=normalize_fqid(liked_fqid)).first()
+        if not comment:
+            comment = Comment.objects.filter(id=liked_fqid).first()
 
+        recipients = set()
+        
         if entry:
-            recipients = {entry.author}
+            recipients.add(entry.author)
         elif comment:
-            recipients = {comment.author}
+            recipients.add(comment.author)
         else:
-            return
+            # Entry/comment not found locally - try to sync from remote
+            logger.info(f"Entry/comment not found locally for like distribution: liked_fqid={liked_fqid}, attempting to sync")
+            from golden.services import sync_remote_entry
+            entry = sync_remote_entry(liked_fqid)
+            if entry:
+                recipients.add(entry.author)
+            else:
+                # Try to extract author from FQID pattern
+                # Entry FQID: https://node.com/api/authors/{author_uuid}/entries/{entry_uuid}
+                if '/api/authors/' in liked_fqid and '/entries/' in liked_fqid:
+                    # Extract author FQID from entry FQID
+                    author_fqid = '/api/authors/'.join(liked_fqid.split('/api/authors/')[:2]).split('/entries/')[0]
+                    author = get_or_create_foreign_author(author_fqid)
+                    if author:
+                        recipients.add(author)
+                        logger.info(f"Extracted author from entry FQID: {author_fqid}")
+                else:
+                    logger.warning(f"Could not find entry/comment or extract author for like: liked_fqid={liked_fqid}")
 
         for r in recipients:
             send_activity_to_inbox(r, activity)
@@ -294,16 +377,40 @@ def distribute_activity(activity: dict, actor: Author):
         liked_fqid = obj if isinstance(obj, str) else None
         if not liked_fqid:
             return
-        
-        entry = Entry.objects.filter(id=liked_fqid).first()
-        comment = Comment.objects.filter(id=liked_fqid).first()
 
+        # Try to find entry locally (with normalization)
+        entry = Entry.objects.filter(id=normalize_fqid(liked_fqid)).first()
+        if not entry:
+            entry = Entry.objects.filter(id=liked_fqid).first()
+        
+        # Try to find comment locally
+        comment = Comment.objects.filter(id=normalize_fqid(liked_fqid)).first()
+        if not comment:
+            comment = Comment.objects.filter(id=liked_fqid).first()
+
+        recipients = set()
+        
         if entry:
-            recipients = {entry.author}
+            recipients.add(entry.author)
         elif comment:
-            recipients = {comment.author}
+            recipients.add(comment.author)
         else:
-            return
+            # Entry/comment not found locally - try to sync from remote
+            logger.info(f"Entry/comment not found locally for unlike distribution: liked_fqid={liked_fqid}, attempting to sync")
+            from golden.services import sync_remote_entry
+            entry = sync_remote_entry(liked_fqid)
+            if entry:
+                recipients.add(entry.author)
+            else:
+                # Try to extract author from FQID pattern
+                if '/api/authors/' in liked_fqid and '/entries/' in liked_fqid:
+                    author_fqid = '/api/authors/'.join(liked_fqid.split('/api/authors/')[:2]).split('/entries/')[0]
+                    author = get_or_create_foreign_author(author_fqid)
+                    if author:
+                        recipients.add(author)
+                        logger.info(f"Extracted author from entry FQID: {author_fqid}")
+                else:
+                    logger.warning(f"Could not find entry/comment or extract author for unlike: liked_fqid={liked_fqid}")
 
         for r in recipients:
             send_activity_to_inbox(r, activity)
@@ -457,7 +564,7 @@ def process_inbox(author: Author):
                     object=target_id,
                     state="REQUESTED",
                     summary=activity.get("summary", ""),
-                    published=parse_datetime(activity.get("published")) or timezone.now()
+                    published=safe_parse_datetime(activity.get("published")) or timezone.now()
                 )
                 # Mark inbox item as processed
                 item.processed = True
@@ -476,7 +583,7 @@ def process_inbox(author: Author):
                 follow = Follow.objects.filter(id=follow_obj).first()
                 if follow:
                     follow.state = "ACCEPTED"
-                    follow.published = parse_datetime(activity.get("published")) or timezone.now()
+                    follow.published = safe_parse_datetime(activity.get("published")) or timezone.now()
                     follow.save()
                     
                     follower = follow.actor
@@ -505,7 +612,7 @@ def process_inbox(author: Author):
                         follow = Follow.objects.filter(actor=follower, object=target_id).first()
                         if follow:
                             follow.state = "ACCEPTED"
-                            follow.published = parse_datetime(activity.get("published")) or timezone.now()
+                            follow.published = safe_parse_datetime(activity.get("published")) or timezone.now()
                             follow.save()
                         else:
                             # Create new Follow object in ACCEPTED state
@@ -520,7 +627,7 @@ def process_inbox(author: Author):
                                 object=target_id,
                                 state="ACCEPTED",
                                 summary=activity.get("summary", ""),
-                                published=parse_datetime(activity.get("published")) or timezone.now()
+                                published=safe_parse_datetime(activity.get("published")) or timezone.now()
                             )
                         
                         follower.following.add(target)
@@ -538,7 +645,7 @@ def process_inbox(author: Author):
                 follow = Follow.objects.filter(id=follow_obj).first()
                 if follow:
                     follow.state = "REJECTED"
-                    follow.published = parse_datetime(activity.get("published")) or timezone.now()
+                    follow.published = safe_parse_datetime(activity.get("published")) or timezone.now()
                     follow.save()
                     logger.info(f"Rejected follow: {follow.actor.username} -> {follow.object}")
             else:
@@ -552,7 +659,7 @@ def process_inbox(author: Author):
                     follow = Follow.objects.filter(actor=follower, object=target_id).first()
                     if follow:
                         follow.state = "REJECTED"
-                        follow.published = parse_datetime(activity.get("published")) or timezone.now()
+                        follow.published = safe_parse_datetime(activity.get("published")) or timezone.now()
                         follow.save()
                     else:
                         Follow.objects.create(
@@ -561,7 +668,7 @@ def process_inbox(author: Author):
                             object=target_id,
                             state="REJECTED",
                             summary=activity.get("summary", ""),
-                            published=parse_datetime(activity.get("published")) or timezone.now()
+                            published=safe_parse_datetime(activity.get("published")) or timezone.now()
                         )
                     logger.info(f"Rejected follow: {follower.username} -> {target.username}")
 
@@ -607,7 +714,7 @@ def process_inbox(author: Author):
                     "contentType": obj.get("contentType", "text/plain"),
                     "author": actor or author,
                     "visibility": obj.get("visibility", "PUBLIC"),
-                    "published": parse_datetime(obj.get("published")) or timezone.now(),
+                    "published": safe_parse_datetime(obj.get("published")) or timezone.now(),
                 }
             )
             
@@ -716,7 +823,7 @@ def process_inbox(author: Author):
                         "author": comment_author,
                         "content": comment_content or "",
                         "contentType": comment_content_type or "text/plain",
-                        "published": parse_datetime(activity.get("published")) or timezone.now()
+                        "published": safe_parse_datetime(activity.get("published")) or timezone.now()
                     }
                 )
                 logger.info(f"Created/updated comment: {comment_id} on entry {entry_id}")
@@ -740,7 +847,7 @@ def process_inbox(author: Author):
                 id=activity.get("id"),
                 author=actor,
                 object=obj_id,
-                published=parse_datetime(activity.get("published")) or timezone.now()
+                published=safe_parse_datetime(activity.get("published")) or timezone.now()
             )
             
             # Update entry's likes ManyToMany if it's an entry

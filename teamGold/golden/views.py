@@ -994,7 +994,7 @@ def profile_view(request):
 
                 # Send Accept activity
                 activity = create_accept_follow_activity(author, follow_id)
-                distribute_activity(activity, actor=author)
+                #distribute_activity(activity, actor=author)
 
             elif action == "reject":
                 follow_request.state = "REJECTED"
@@ -1008,7 +1008,7 @@ def profile_view(request):
 
                 # Send Reject activity
                 activity = create_reject_follow_activity(author, follow_id)
-                distribute_activity(activity, actor=author)
+                #distribute_activity(activity, actor=author)
 
             return redirect("profile")
 

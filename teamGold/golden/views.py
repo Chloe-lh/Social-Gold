@@ -1133,16 +1133,20 @@ def profile_view(request):
             # Normalize target.id to ensure consistent matching with Follow objects from process_inbox
             target_id_normalized = normalize_fqid(str(target.id))
             print(f"[DEBUG profile_view] FOLLOW ACTION: Creating Follow object: actor={author.username} (id={author.id}), object={target_id_normalized}")
-            follow, created = Follow.objects.get_or_create(
-                actor=author,
-                object=target_id_normalized,  # Use normalized ID for consistency
-                defaults={
-                    "id": f"{author.id.rstrip('/')}/follow/{uuid.uuid4()}",
-                    "summary": f"{author.username} wants to follow {target.username}",
-                    "published": dj_timezone.now(),
-                    "state": "REQUESTED",
-                },
-            )
+            if is_local(target_id_normalized):
+                follow, created = Follow.objects.get_or_create(
+                    actor=author,
+                    object=target_id_normalized,  # Use normalized ID for consistency
+                    defaults={
+                        "id": f"{author.id.rstrip('/')}/follow/{uuid.uuid4()}",
+                        "summary": f"{author.username} wants to follow {target.username}",
+                        "published": dj_timezone.now(),
+                        "state": "REQUESTED",
+                    },
+                )
+            else:
+                target_author.following.add(author)
+                
             print(f"[DEBUG profile_view] FOLLOW ACTION: Follow object {'created' if created else 'already exists'}: follow.id={follow.id}, follow.state={follow.state}")
 
             print(f"[DEBUG profile_view] FOLLOW ACTION: Creating follow activity")

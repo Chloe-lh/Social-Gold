@@ -1471,11 +1471,16 @@ def fetch_or_create_author_by_id(author_id: str, username: str = None) -> Author
     """
     Fetch an author by ID, either local or remote.
     """
+
+    print("\n[DEBUG] fetch_or_create_author_by_id()")
+    print(" → Raw author_id:", author_id)
+    print(" → is_local():", is_local(author_id))
+
     # Local author
     if is_local(author_id):
         return Author.objects.filter(id=author_id).first()
 
-    # Remote author – do NOT create a DB entry
+    # Remote author
     remote_data = fetch_remote_author_data(author_id)
 
     if not remote_data:

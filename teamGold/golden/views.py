@@ -1147,7 +1147,7 @@ def profile_view(request):
             else:
                 target.following.add(author)
 
-            print(f"[DEBUG profile_view] FOLLOW ACTION: Follow object {'created' if created else 'already exists'}: follow.id={follow.id}, follow.state={follow.state}")
+            #print(f"[DEBUG profile_view] FOLLOW ACTION: Follow object {'created' if created else 'already exists'}: follow.id={follow.id}, follow.state={follow.state}")
 
             print(f"[DEBUG profile_view] FOLLOW ACTION: Creating follow activity")
             activity = create_follow_activity(author, target)

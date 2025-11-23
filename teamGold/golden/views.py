@@ -865,8 +865,9 @@ def profile_view(request):
     followers_qs = Author.objects.filter(following=author)
     following_qs = Author.objects.filter(followers_set=author)
     friends = followers_qs.intersection(following_qs)
-    print(f"[DEBUG profile_view] Author {author.username} has {followers_qs.count()} followers, {following_qs.count()} following, {friends.count()} friends")
-    
+    print(f"[DEBUG profile_view] Author {author.username} has {followers_qs}")
+    print(f"[DEBUG profile_view] Author {author.username} has {following_qs}")
+    print(f"[DEBUG profile_view] Author {author.username} has {friends} friends")
 
     # Add 'url_id' or 'uuid' to each author where Local -> uuid and Remote -> FQID
     for a in followers_qs:

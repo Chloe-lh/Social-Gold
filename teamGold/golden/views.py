@@ -1080,6 +1080,10 @@ def profile_view(request):
             Q(id=target_id_normalized) | Q(id=target_id_str) | Q(id__iexact=target_id_str)
         ).first()
         
+        # If target not found, fetch from remote node
+        if not target:
+            target = get_or_create_foreign_author(target_id_str)
+        
         if target:
             follow_requests_with_urls.append({
                 'request': req, 
@@ -1087,11 +1091,10 @@ def profile_view(request):
                 'target_url_id': fqid_to_uuid(target.id) if is_local(target.id) else target.id.rstrip('/')
             })
         else:
-            # If target not found, still add the request with the target_id for display
-            # This handles remote authors that haven't been fetched yet
+            # If still not found, add with FQID as fallback
             follow_requests_with_urls.append({
                 'request': req,
-                'target': None,  # Target not in local DB yet
+                'target': None,
                 'target_url_id': target_id_str,
                 'target_id': target_id_str
             })
@@ -1101,9 +1104,19 @@ def profile_view(request):
     for req in incoming_follow_requests:
         # Make sure actor exists (it should be a ForeignKey, but check just in case)
         if req.actor:
+            # Ensure actor has username (fetch if remote and missing)
+            actor_to_use = req.actor
+            if not req.actor.username or req.actor.username == "goldenuser" or req.actor.username.startswith("http"):
+                # Try to fetch remote author data if username is missing or looks like an FQID
+                if not is_local(req.actor.id):
+                    updated_actor = get_or_create_foreign_author(req.actor.id)
+                    if updated_actor and updated_actor.username and updated_actor.username != "goldenuser":
+                        actor_to_use = updated_actor  # Use the updated actor with proper username
+            
             incoming_follow_requests_with_urls.append({
                 'request': req, 
-                'actor_url_id': fqid_to_uuid(req.actor.id) if is_local(req.actor.id) else req.actor.id.rstrip('/')
+                'actor': actor_to_use,  # Pass the actor with proper username
+                'actor_url_id': fqid_to_uuid(actor_to_use.id) if is_local(actor_to_use.id) else actor_to_use.id.rstrip('/')
             })
         else:
             print(f"[FOLLOW REQUEST DEBUG] WARNING: Follow request {req.id} has no actor!")

@@ -29,8 +29,8 @@
 
           <!-- only display the first two images in square form -->
           <div style="display: flex;">
-            {% for image in entry.images.all %}
-              <img src="{{ image.image.url }}" alt="Entry image" class="entry-image">
+            {% for img_url in entry.get_all_images %}
+              <img src="{{ img_url }}" alt="Entry image" class="entry-image">
             {% endfor %}
           </div>
 

@@ -804,12 +804,6 @@ def profile_view(request):
                 if not ra or not isinstance(ra, dict):
                     continue
                 
-                if is_local(ra_id):
-                    continue
-
-                #if not is_local_to_node(ra_id, node)
-                    #continue
-
                 ra_id = ra.get("id") or ra.get("@id") or str(ra.get("url", ""))
                 if not ra_id:
                     continue
@@ -820,6 +814,12 @@ def profile_view(request):
                 if any(r.get("id") == ra_id_clean for r in results):
                     continue
                 
+                if is_local(ra_id):
+                    continue
+
+                if not is_local_to_node(ra_id, node)
+                    continue
+                    
                 # Get username and displayName
                 ra_username = ra.get("username") or ra.get("displayName")
                 if not ra_username and "/api/authors/" in str(ra_id):

@@ -1467,39 +1467,47 @@ def public_profile_view(request, author_id):
 
     return render(request, "public_profile.html", context)
 
-def fetch_or_create_author_by_id(author_id: str, username: str = None) -> Author:
+def fetch_or_create_author_by_id(author_id: str):
     """
-    Fetch an author by ID, either local or remote.
+    Fetch a local or remote author.
+    Remote authors are fetched directly from <HOST>/api/authors/<UUID>.
     """
 
     print("\n[DEBUG] fetch_or_create_author_by_id()")
     print(" → Raw author_id:", author_id)
     print(" → is_local():", is_local(author_id))
 
-    # Local author
+    # LOCAL AUTHOR CASE
     if is_local(author_id):
         return Author.objects.filter(id=author_id).first()
 
-    # Remote author
-    remote_data = fetch_remote_author_data(author_id)
+    # REMOTE AUTHOR CASE
+    host, uuid = extract_host_and_uuid(author_id)
+    print("[DEBUG] host:", host)
+    print("[DEBUG] uuid:", uuid)
+    print("[DEBUG] final URL:", url)
 
-    if not remote_data:
+    if not host or not uuid:
         return None
 
-    # Create a temporary Author-like object WITHOUT SAVING
-    temp = Author(
-        id=remote_data.get("id"),
-        host=remote_data.get("host"),
-        url=remote_data.get("url") or remote_data.get("id"),
-        username=remote_data.get("username"),
-        displayName=remote_data.get("displayName"),
-        github=remote_data.get("github", ""),
-        profileImage=remote_data.get("profileImage", ""),
+    # Build the correct API URL
+    url = f"{host.rstrip('/')}/api/authors/{uuid}/"
+
+    data = fetch_remote_author_data(url)
+    if not data:
+        return None
+
+    # Return a temporary Author object (not saved)
+    return Author(
+        id=data.get("id"),
+        host=data.get("host"),
+        url=data.get("url") or data.get("id"),
+        username=data.get("username"),
+        displayName=data.get("displayName"),
+        github=data.get("github", ""),
+        profileImage=data.get("profileImage", ""),
         type="author",
     )
-
-    temp._from_remote = True  # helper flag if you need it
-    return temp
 
 # * ============================================================
 # * Helper View Functions

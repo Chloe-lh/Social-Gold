@@ -602,6 +602,7 @@ def distribute_activity(activity: dict, actor: Author):
             print(f"[DEBUG distribute_activity] FOLLOW: ERROR - Target is None, cannot send activity")
         return
 
+    """
     # ACCEPT or REJECT
     if type_lower == "accept" or type_lower == "reject":
         follow_obj = obj or {}
@@ -627,7 +628,8 @@ def distribute_activity(activity: dict, actor: Author):
             send_activity_to_inbox(target, activity)
        
         return
-
+        """
+        
     # UNFOLLOW
     if type_lower == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "follow":
         target_id = obj.get("object")

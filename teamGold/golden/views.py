@@ -205,13 +205,38 @@ def stream_view(request):
         for item in raw_items:
             author_data = item.get("author", {})
             remote_author_id = author_data.get("id")
+            entry_visibility = item.get("visibility", "PUBLIC").upper()
 
             if not remote_author_id:
                 continue
 
-            # only fetch entries from authors the user follows
-            is_following = Follow.objects.filter(actor=user_author, object=remote_author_id, state="ACCEPTED").exists()
-            if not is_following:
+            # Check if user follows this author (for UNLISTED and FRIENDS entries)
+            is_following = Follow.objects.filter(
+                actor=user_author, 
+                object=remote_author_id, 
+                state="ACCEPTED"
+            ).exists()
+            
+            # Check if user is friends with this author (for FRIENDS entries)
+            # Friends = mutual follows (both follow each other)
+            is_friend = False
+            if is_following:
+                # Check if the remote author also follows the user (mutual follow)
+                is_friend = Follow.objects.filter(
+                    actor__id=remote_author_id,
+                    object=user_author.id,
+                    state="ACCEPTED"
+                ).exists()
+            
+            should_fetch = False
+            if entry_visibility == "PUBLIC":
+                should_fetch = True
+            elif entry_visibility == "UNLISTED" and is_following:
+                should_fetch = True
+            elif entry_visibility == "FRIENDS" and is_friend:
+                should_fetch = True
+            
+            if not should_fetch:
                 continue
 
             entry = sync_remote_entry(item, node)
@@ -227,20 +252,50 @@ def stream_view(request):
     visible_remote = []
 
     for e in remote_entries:
+        # Double-check visibility (entries were pre-filtered, but verify)
         if e.visibility == "PUBLIC":
             visible_remote.append(e)
             continue
 
         if e.visibility == "UNLISTED":
-            visible_remote.append(e)
+            # UNLISTED: only visible to followers
+            is_following = Follow.objects.filter(
+                actor=user_author, 
+                object=e.author.id, 
+                state="ACCEPTED"
+            ).exists()
+            if is_following:
+                visible_remote.append(e)
             continue
 
-        is_mutual = (
-            Follow.objects.filter(actor=user_author, object=e.author.id, state="ACCEPTED").exists() and
-            Follow.objects.filter(actor=e.author, object=user_author.id, state="ACCEPTED").exists()
-        )
-        if e.visibility == "FRIENDS" and is_mutual:
-            visible_remote.append(e)
+        if e.visibility == "FRIENDS":
+            # FRIENDS: only visible to mutual follows (friends)
+            # Check both directions: user follows author AND author follows user
+            user_follows_author = Follow.objects.filter(
+                actor=user_author, 
+                object=e.author.id, 
+                state="ACCEPTED"
+            ).exists()
+            
+            author_follows_user = False
+            if user_follows_author:
+                author_follows_user = Follow.objects.filter(
+                    actor=e.author,
+                    object=user_author.id,
+                    state="ACCEPTED"
+                ).exists()
+                # Also try with author ID as string if author is a remote Author object
+                if not author_follows_user:
+                    author_follows_user = Follow.objects.filter(
+                        actor__id=e.author.id,
+                        object=user_author.id,
+                        state="ACCEPTED"
+                    ).exists()
+            
+            is_mutual = user_follows_author and author_follows_user
+            if is_mutual:
+                visible_remote.append(e)
+            continue
 
     entries = list(local_entries) + visible_remote
     entries.sort(key=lambda x: x.is_posted, reverse=True)
@@ -445,20 +500,38 @@ def entry_detail_view(request, entry_uuid):
     process_inbox(viewer)
 
     if entry.visibility == "FRIENDS":
-        # FRIENDS: You will not be able to see the view if you try to access 
-        # this post directly through the URL if you ain't friends. 
-        if viewer != entry.author and viewer not in entry.author.friends:
-            return HttpResponseForbidden("This post is visible to friends only.")
+        if viewer != entry.author:
+            is_friend = False
+            if viewer:
+                viewer_follows_author = Follow.objects.filter(
+                    actor=viewer,
+                    object=entry.author.id,
+                    state="ACCEPTED"
+                ).exists()
+                if viewer_follows_author:
+                    author_follows_viewer = Follow.objects.filter(
+                        actor=entry.author,
+                        object=viewer.id,
+                        state="ACCEPTED"
+                    ).exists()
+                    is_friend = author_follows_viewer
+            
+            if not is_friend:
+                return HttpResponseForbidden("This post is visible to friends only.")
     elif entry.visibility == "UNLISTED":
-        # UNLISTED: You will not be able to see the view if you try to access 
-        # this post directly through the URL if you don't follow this author
         if viewer != entry.author:
             is_follower = Follow.objects.filter(
                 actor=viewer,
                 object=entry.author.id,
                 state="ACCEPTED"
             ).exists()
-            is_friend = viewer in entry.author.friends
+            is_friend = False
+            if viewer and is_follower:
+                is_friend = Follow.objects.filter(
+                    actor=entry.author,
+                    object=viewer.id,
+                    state="ACCEPTED"
+                ).exists()
             
             if not (is_follower or is_friend):
                 return HttpResponseForbidden("You don't have permission to view this entry.")
@@ -1047,11 +1120,71 @@ def profile_view(request):
     # This ensures any incoming follow requests from remote nodes are processed first
     process_inbox(author)
     
-    # Retrieve entries, followers, and following
-    entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("-published")
-    followers = author.followers_set.all()
-    following = author.following.all()
-
+    # Get viewer (who is viewing this profile) - for visibility filtering
+    viewer = author  # When viewing own profile, viewer is the author
+    if request.user.is_authenticated:
+        viewer_author = Author.from_user(request.user)
+        if viewer_author and viewer_author != author:
+            viewer = viewer_author
+    
+    # Retrieve entries filtered by visibility
+    # PUBLIC: visible to everyone
+    # UNLISTED: visible to followers (works for both local and remote)
+    # FRIENDS: visible to mutual follows/friends (works for both local and remote)
+    # DELETED: never shown
+    
+    entries_qs = Entry.objects.filter(author=author).exclude(visibility="DELETED")
+    
+    if viewer == author:
+        # Viewing own profile - show all entries (except deleted)
+        entries = entries_qs.order_by("-published")
+    else:
+        # Viewing someone else's profile - filter by visibility
+        visible_entries = []
+        
+        # Check if viewer follows author (for UNLISTED visibility)
+        followed_by_viewer = False
+        if viewer:
+            followed_by_viewer = Follow.objects.filter(
+                actor=viewer,
+                object=author.id,
+                state="ACCEPTED"
+            ).exists()
+        
+        # Check if viewer is friends with author (mutual follow, for FRIENDS visibility)
+        is_friend_with_viewer = False
+        if viewer and followed_by_viewer:
+            # Check if author also follows viewer (mutual follow = friends)
+            is_friend_with_viewer = Follow.objects.filter(
+                actor=author,
+                object=viewer.id,
+                state="ACCEPTED"
+            ).exists()
+        
+        for entry in entries_qs:
+            if entry.visibility == "PUBLIC":
+                visible_entries.append(entry)
+            elif entry.visibility == "UNLISTED" and followed_by_viewer:
+                visible_entries.append(entry)
+            elif entry.visibility == "FRIENDS" and is_friend_with_viewer:
+                visible_entries.append(entry)
+        
+        entries = sorted(visible_entries, key=lambda x: x.published, reverse=True)
+    
+    # Use Follow objects instead of ManyToMany relationships for remote compatibility
+    from golden.distributor import get_followers, get_friends
+    
+    # Get followers (people who follow this author) - works for both local and remote
+    followers = get_followers(author)
+    
+    # Get following (people this author follows) - works for both local and remote
+    following_follows = Follow.objects.filter(actor=author, state="ACCEPTED")
+    following_ids = [f.object for f in following_follows]
+    following = Author.objects.filter(id__in=following_ids)
+    
+    # Get friends (mutual follows) - works for both local and remote
+    friends_qs = get_friends(author)
+    
     # Add URL-friendly IDs to followers and following for templates
     followers_with_urls = [
         {'author': f, 'url_id': fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')} for f in followers
@@ -1062,7 +1195,6 @@ def profile_view(request):
     ]
     
     # Get friends (mutual follows) and add URL-friendly IDs
-    friends_qs = author.friends
     friends_with_urls = [
         {'author': f, 'url_id': fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')} for f in friends_qs
     ]
@@ -1163,7 +1295,12 @@ def profile_view(request):
                 Q(object=a_id_normalized) | Q(object=a_id_str) | Q(object__iexact=a_id_str)
             ).first()
             a["follow_state"] = follow.state if follow else "NONE"
-            a["is_following"] = author.following.filter(id=a["id"]).exists()
+            # Use Follow objects instead of ManyToMany for remote compatibility
+            a["is_following"] = Follow.objects.filter(
+                actor=author,
+                object=a["id"],
+                state="ACCEPTED"
+            ).exists()
             a["is_friend"] = str(a["id"]) in friend_ids
         else:
             # Remote author, checking if we have a follow relationship stored using normalized ID
@@ -1253,8 +1390,54 @@ def public_profile_view(request, author_id):
     # Convert description to HTML
     author.description = sanitize_markdown_to_html(author.description)
 
-    # Get entries for this author
-    entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("-published")
+    # Get viewer (who is viewing this profile) - for visibility filtering
+    viewer = None
+    if request.user.is_authenticated:
+        viewer = Author.from_user(request.user)
+    
+    # Retrieve entries filtered by visibility
+    # PUBLIC: visible to everyone
+    # UNLISTED: visible to followers (works for both local and remote)
+    # FRIENDS: visible to mutual follows/friends (works for both local and remote)
+    # DELETED: never shown
+    
+    entries_qs = Entry.objects.filter(author=author).exclude(visibility="DELETED")
+    
+    if viewer == author:
+        # Viewing own profile - show all entries (except deleted)
+        entries = entries_qs.order_by("-published")
+    else:
+        # Viewing someone else's profile - filter by visibility
+        visible_entries = []
+        
+        # Check if viewer follows author (for UNLISTED visibility)
+        followed_by_viewer = False
+        if viewer:
+            followed_by_viewer = Follow.objects.filter(
+                actor=viewer,
+                object=author.id,
+                state="ACCEPTED"
+            ).exists()
+        
+        # Check if viewer is friends with author (mutual follow, for FRIENDS visibility)
+        is_friend_with_viewer = False
+        if viewer and followed_by_viewer:
+            # Check if author also follows viewer (mutual follow = friends)
+            is_friend_with_viewer = Follow.objects.filter(
+                actor=author,
+                object=viewer.id,
+                state="ACCEPTED"
+            ).exists()
+        
+        for entry in entries_qs:
+            if entry.visibility == "PUBLIC":
+                visible_entries.append(entry)
+            elif entry.visibility == "UNLISTED" and followed_by_viewer:
+                visible_entries.append(entry)
+            elif entry.visibility == "FRIENDS" and is_friend_with_viewer:
+                visible_entries.append(entry)
+        
+        entries = sorted(visible_entries, key=lambda x: x.published, reverse=True)
 
     context = {
         "author": author,
@@ -1290,7 +1473,9 @@ def followers(request):
 
         return redirect(request.META.get('HTTP_REFERER', 'followers'))
 
-    followers_qs = actor.followers_set.all()
+    # Use get_followers which works with Follow objects for both local and remote
+    from golden.distributor import get_followers
+    followers_qs = get_followers(actor)
 
     query = request.GET.get('q', '')
     if query:
@@ -1316,12 +1501,23 @@ def following(request):
         if existing_follow:
             existing_follow.delete()
 
-        if target_author in actor.following.all():
-            actor.following.remove(target_author)
+        # Check if following using Follow objects (works for remote)
+        is_following = Follow.objects.filter(
+            actor=actor,
+            object=target_author.id,
+            state="ACCEPTED"
+        ).exists()
+        if is_following:
+            # Remove from ManyToMany (for local authors)
+            if target_author in actor.following.all():
+                actor.following.remove(target_author)
 
         return redirect(request.META.get('HTTP_REFERER', 'following'))
 
-    following_qs = actor.following.all()
+    # Use Follow objects instead of ManyToMany for remote compatibility
+    following_follows = Follow.objects.filter(actor=actor, state="ACCEPTED")
+    following_ids = [f.object for f in following_follows]
+    following_qs = Author.objects.filter(id__in=following_ids)
 
     query = request.GET.get('q', '')
     if query:
@@ -1366,7 +1562,9 @@ def friends(request):
     actor = Author.from_user(request.user)
 
     # Friends are mutual connections: actor is following them AND they are following actor
-    friends_qs = actor.friends
+    # Use get_friends from distributor which works with Follow objects for both local and remote
+    from golden.distributor import get_friends
+    friends_qs = get_friends(actor)
 
     # Optional: filter by search query
     query = request.GET.get('q', '')

@@ -1,8 +1,8 @@
 import uuid
 from django.utils import timezone
-import requests
-from urllib.parse import urlparse
 from django.conf import settings
+from urllib.parse import urlparse
+from golden.models import Follow
 
 def make_fqid(author, suffix: str):
     """
@@ -12,7 +12,6 @@ def make_fqid(author, suffix: str):
     """
     return f"{author.id.rstrip('/')}/{suffix}/{uuid.uuid4()}"
 
-
 def is_local(author_id):
     """
     Determines if the given author_id belongs to a local author or a remote one.
@@ -21,7 +20,6 @@ def is_local(author_id):
     author_host = urlparse(author_id).netloc
     site_host = urlparse(settings.SITE_URL).netloc
     return author_host == site_host
-
 
 def create_new_entry_activity(author, entry):
     activity_id = make_fqid(author, "posts")
@@ -56,7 +54,6 @@ def create_new_entry_activity(author, entry):
     
     return activity
 
-
 def create_update_entry_activity(author, entry):
     activity_id = make_fqid(author, "posts")
 
@@ -90,7 +87,6 @@ def create_update_entry_activity(author, entry):
     
     return activity
 
-
 def create_delete_entry_activity(author, entry):
     activity_id = make_fqid(author, "posts")
 
@@ -110,17 +106,12 @@ def create_delete_entry_activity(author, entry):
 
 
 def create_comment_activity(author, entry, comment):
-    """
-    Create a comment activity matching deepskyblue spec format.
-    Format: {"type": "comment", "id": "...", "comment": "...", "contentType": "...", "author": {...}, "object": "..."}
-    """
     activity_id = make_fqid(author, "comments")
 
-    # Match deepskyblue spec format for inbox
     activity = {
-        "type": "comment",  # Lowercase to match spec
-        "id": str(comment.id),  # Use comment FQID as activity ID
-        "comment": comment.content,  # Spec uses "comment" field, not nested object
+        "type": "comment", 
+        "id": activity_id, 
+        "comment": comment.content, 
         "contentType": comment.contentType,
         "author": {
             "type": "author",
@@ -129,11 +120,10 @@ def create_comment_activity(author, entry, comment):
             "displayName": author.username,
             "username": author.username,
         },
-        "object": str(entry.id),  # Entry FQID as string
+        "object": str(entry.id),
     }
 
     return activity
-
 
 def create_like_activity(author, liked_object_fqid):
     activity_id = make_fqid(author, "likes")
@@ -148,7 +138,6 @@ def create_like_activity(author, liked_object_fqid):
     }
     
     return activity
-
 
 def create_follow_activity(author, target):
     """
@@ -170,44 +159,34 @@ def create_follow_activity(author, target):
     
     return activity
 
-
 def create_accept_follow_activity(acceptor_author, follower_id_or_follow_id):
     """
     Create an Accept activity for a follow request.
     Accepts either a follower Author ID string or a Follow ID string.
     If a Follow ID is provided, it will look up the Follow object to get the follower.
     """
-    from golden.models import Follow
-    
-    # Check if follower_id_or_follow_id is a Follow ID (contains '/follow/')
-    # or try to look it up as a Follow ID first
     follower_id = follower_id_or_follow_id
     follow_obj = None
     
-    # Try to find it as a Follow ID
     follow_obj = Follow.objects.filter(id=follower_id_or_follow_id).first()
     if follow_obj:
         follower_id = str(follow_obj.actor.id)
         follow_id = follow_obj.id
     else:
-        # It's likely an Author ID, use it directly
         follow_id = None
     
     activity_id = make_fqid(acceptor_author, "accept")
 
-    # Create activity - use Follow ID if available, otherwise use object structure
     if follow_id:
-        # Reference the original Follow activity by ID (preferred for ActivityPub)
         activity = {
             "type": "Accept",
             "id": activity_id,
             "summary": f"{acceptor_author.username} accepted your follow request",
             "actor": str(acceptor_author.id),
-            "object": follow_id,  # Reference the Follow activity by ID
+            "object": follow_id, 
             "published": timezone.now().isoformat(),
         }
     else:
-        # Fallback to object structure if Follow ID not available
         activity = {
             "type": "Accept",
             "id": activity_id,
@@ -222,7 +201,6 @@ def create_accept_follow_activity(acceptor_author, follower_id_or_follow_id):
         }
     
     return activity
-
 
 def create_reject_follow_activity(acceptor_author, follower_id_or_follow_id):
     """
@@ -230,37 +208,29 @@ def create_reject_follow_activity(acceptor_author, follower_id_or_follow_id):
     Accepts either a follower Author ID string or a Follow ID string.
     If a Follow ID is provided, it will look up the Follow object to get the follower.
     """
-    from golden.models import Follow
-    
-    # Check if follower_id_or_follow_id is a Follow ID (contains '/follow/')
-    # or try to look it up as a Follow ID first
+
     follower_id = follower_id_or_follow_id
     follow_obj = None
     
-    # Try to find it as a Follow ID
     follow_obj = Follow.objects.filter(id=follower_id_or_follow_id).first()
     if follow_obj:
         follower_id = str(follow_obj.actor.id)
         follow_id = follow_obj.id
     else:
-        # It's likely an Author ID, use it directly
         follow_id = None
     
     activity_id = make_fqid(acceptor_author, "reject")
 
-    # Create activity - use Follow ID if available, otherwise use object structure
     if follow_id:
-        # Reference the original Follow activity by ID (preferred for ActivityPub)
         activity = {
             "type": "Reject",
             "id": activity_id,
             "summary": f"{acceptor_author.username} rejected your follow request",
             "actor": str(acceptor_author.id),
-            "object": follow_id,  # Reference the Follow activity by ID
+            "object": follow_id, 
             "published": timezone.now().isoformat(),
         }
     else:
-        # Fallback to object structure if Follow ID not available
         activity = {
             "type": "Reject",
             "id": activity_id,
@@ -276,11 +246,7 @@ def create_reject_follow_activity(acceptor_author, follower_id_or_follow_id):
     
     return activity
 
-
 def create_unfollow_activity(actor_author, target_id):
-    """
-    Create an Undo Follow activity.
-    """
     activity_id = make_fqid(actor_author, "undo-follow")
 
     activity = {
@@ -298,11 +264,7 @@ def create_unfollow_activity(actor_author, target_id):
     
     return activity
 
-
 def create_unfriend_activity(actor_author, target_id):
-    """
-    Create a RemoveFriend activity.
-    """
     activity_id = make_fqid(actor_author, "unfriend")
 
     activity = {
@@ -316,11 +278,7 @@ def create_unfriend_activity(actor_author, target_id):
     
     return activity
 
-
 def create_profile_update_activity(actor_author):
-    """
-    Create a profile update activity.
-    """
     activity_id = make_fqid(actor_author, "profile-update")
 
     activity = {
@@ -337,24 +295,18 @@ def create_profile_update_activity(actor_author):
 
     return activity
 
-
 def create_unlike_activity(author, liked_object_fqid):
-    """
-    Create an Unlike activity (matching deepskyblue spec).
-    Uses "unlike" type instead of "undo" to match spec.
-    """
     activity_id = make_fqid(author, "unlike")
 
     activity = {
-        "type": "unlike",  # Changed from "Undo" to "unlike" to match deepskyblue spec
+        "type": "unlike",
         "id": activity_id,
         "summary": f"{author.username} unliked an entry or comment",
         "actor": str(author.id),
-        "object": str(liked_object_fqid)  # Simplified to match spec format
+        "object": str(liked_object_fqid) 
     }
     
     return activity
-
 
 def create_delete_comment_activity(author, comment):
     """

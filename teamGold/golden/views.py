@@ -738,7 +738,9 @@ def profile_view(request):
 
     # Process inbox FIRST to create Follow objects from remote follow requests
     # This must happen before querying for follow requests
+    print(f"[DEBUG profile_view] Processing inbox for author={author.username} (id={author.id})")
     process_inbox(author)
+    print(f"[DEBUG profile_view] Finished processing inbox")
     
     form = ProfileForm(instance=author)
 
@@ -1043,7 +1045,9 @@ def profile_view(request):
 
     # IMPORTANT: Process inbox BEFORE querying for follow requests
     # This ensures any incoming follow requests from remote nodes are processed first
+    print(f"[DEBUG profile_view] Processing inbox for author={author.username} (id={author.id})")
     process_inbox(author)
+    print(f"[DEBUG profile_view] Finished processing inbox")
     
     # Retrieve entries, followers, and following
     entries = Entry.objects.filter(author=author).exclude(visibility="DELETED").order_by("-published")
@@ -1067,8 +1071,10 @@ def profile_view(request):
     
     # Fetch and process OUTGOING follow requests (requests you sent)
     # For outgoing requests, req.actor is you, req.object is the person you requested to follow
+    print(f"[DEBUG profile_view] Processing {len(outgoing_follow_requests)} outgoing follow requests")
     follow_requests_with_urls = []
     for req in outgoing_follow_requests:
+        print(f"[DEBUG profile_view] OUTGOING REQUEST: req.id={req.id}, req.actor={req.actor}, req.object={req.object}, req.state={req.state}")
         # Get the target author (the person you're requesting to follow)
         # Use normalized ID for lookup to handle both local and remote authors
         target_id = req.object
@@ -1080,15 +1086,23 @@ def profile_view(request):
             Q(id=target_id_normalized) | Q(id=target_id_str) | Q(id__iexact=target_id_str)
         ).first()
         
+        # If target not found, fetch from remote node
+        if not target:
+            print(f"[DEBUG profile_view] OUTGOING REQUEST: Target not found locally, fetching from remote: {target_id_str}")
+            target = get_or_create_foreign_author(target_id_str)
+            if target:
+                print(f"[DEBUG profile_view] OUTGOING REQUEST: Fetched target: {target.username} (id={target.id})")
+        
         if target:
             follow_requests_with_urls.append({
                 'request': req, 
                 'target': target,
                 'target_url_id': fqid_to_uuid(target.id) if is_local(target.id) else target.id.rstrip('/')
             })
+            print(f"[DEBUG profile_view] OUTGOING REQUEST: Added to list with target.username={target.username}")
         else:
-            # If target not found, still add the request with the target_id for display
-            # This handles remote authors that haven't been fetched yet
+            # If still not found, add with target_id for display
+            print(f"[DEBUG profile_view] OUTGOING REQUEST: Could not fetch target, adding with FQID only")
             follow_requests_with_urls.append({
                 'request': req,
                 'target': None,  # Target not in local DB yet
@@ -1097,16 +1111,38 @@ def profile_view(request):
             })
     
     # Also process INCOMING follow requests for approval/rejection
+    print(f"[DEBUG profile_view] Processing {len(incoming_follow_requests)} incoming follow requests")
     incoming_follow_requests_with_urls = []
     for req in incoming_follow_requests:
+        print(f"[DEBUG profile_view] INCOMING REQUEST: req.id={req.id}, req.actor={req.actor}, req.object={req.object}, req.state={req.state}")
         # Make sure actor exists (it should be a ForeignKey, but check just in case)
         if req.actor:
+            # Ensure actor has username (fetch if remote and missing)
+            actor_to_use = req.actor
+            print(f"[DEBUG profile_view] INCOMING REQUEST: actor.id={req.actor.id}, actor.username={req.actor.username}, actor.host={req.actor.host}")
+            
+            # If actor is remote and missing username, try to fetch it
+            if (not req.actor.username or req.actor.username.startswith("http") or 
+                req.actor.username == "goldenuser" or not req.actor.username):
+                if not is_local(req.actor.id):
+                    print(f"[DEBUG profile_view] INCOMING REQUEST: Fetching remote author data for {req.actor.id}")
+                    updated_actor = get_or_create_foreign_author(req.actor.id)
+                    if updated_actor and updated_actor.username and updated_actor.username != "goldenuser":
+                        actor_to_use = updated_actor
+                        print(f"[DEBUG profile_view] INCOMING REQUEST: Updated actor username to {updated_actor.username}")
+                    else:
+                        print(f"[DEBUG profile_view] INCOMING REQUEST: Could not fetch username for actor {req.actor.id}")
+            
             incoming_follow_requests_with_urls.append({
                 'request': req, 
-                'actor_url_id': fqid_to_uuid(req.actor.id) if is_local(req.actor.id) else req.actor.id.rstrip('/')
+                'actor': actor_to_use,  # Pass the actor with proper username
+                'actor_url_id': fqid_to_uuid(actor_to_use.id) if is_local(actor_to_use.id) else actor_to_use.id.rstrip('/')
             })
+            print(f"[DEBUG profile_view] INCOMING REQUEST: Added to list with actor.username={actor_to_use.username}")
         else:
-            print(f"[FOLLOW REQUEST DEBUG] WARNING: Follow request {req.id} has no actor!")
+            print(f"[DEBUG profile_view] WARNING: Follow request {req.id} has no actor!")
+    
+    print(f"[DEBUG profile_view] Total incoming follow requests with URLs: {len(incoming_follow_requests_with_urls)}")
 
     # Sanitize the description for safe HTML display
     author.description = sanitize_markdown_to_html(author.description)

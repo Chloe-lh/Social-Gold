@@ -1,7 +1,6 @@
 # golden/services.py
 from django.db import transaction
 from .models import Author
-from .utils import is_local 
 import logging
 from datetime import timezone
 from urllib.parse import unquote, urlparse

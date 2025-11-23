@@ -19,7 +19,7 @@ class NodeAdmin(admin.ModelAdmin):
     list_display = ("id", "title", "is_active", "auth_user", "description")
     list_filter = ("is_active",)
     search_fields = ("id", "title", "description")
-    list_editable = ("is_active",)  # Allow quick toggle of is_active
+    list_editable = ("is_active",)
     
     fieldsets = (
         ("Node Information", {

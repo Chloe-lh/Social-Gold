@@ -31,9 +31,26 @@ class MinimalAuthorSerializer(serializers.ModelSerializer):
         fields = ('id',)
 
 class EntrySerializer(serializers.ModelSerializer):
+    # Add uuid and web fields to match deepskyblue spec
+    uuid = serializers.SerializerMethodField()
+    web = serializers.SerializerMethodField()
+    
     class Meta:
         model = Entry
         fields = '__all__'
+    
+    def get_uuid(self, obj):
+        """Extract UUID from entry FQID"""
+        from .services import fqid_to_uuid
+        return fqid_to_uuid(str(obj.id))
+    
+    def get_web(self, obj):
+        """Generate web URL for entry"""
+        from django.conf import settings
+        uuid = self.get_uuid(obj)
+        if uuid:
+            return f"{settings.SITE_URL.rstrip('/')}/entry/{uuid}/"
+        return obj.web if hasattr(obj, 'web') else ""
 
 class LikeSerializer(serializers.ModelSerializer):
     class Meta:

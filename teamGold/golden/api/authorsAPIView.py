@@ -72,12 +72,53 @@ class AuthorsListView(APIView):
         # Serialize
         serializer = AuthorSerializer(page_obj.object_list, many=True)
         
-        # Return in paginated format (matching ActivityPub style)
+        # Return in format matching deepskyblue spec
         return Response({
             "type": "authors",
-            "items": serializer.data,
+            "authors": serializer.data,  # Changed from "items" to "authors" to match spec
             "page": page,
             "size": size,
             "total": paginator.count
         }, status=status.HTTP_200_OK)
+
+
+class SingleAuthorAPIView(APIView):
+    """
+    API view to get a single author by UUID.
+    - GET /api/authors/<author_uuid>/ returns details of a specific author
+    """
+    authentication_classes = [BasicAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, author_uuid):
+        from golden.services import fqid_to_uuid, is_local
+        from django.conf import settings
+        
+        # Try to find author by UUID - construct FQID if needed
+        author = None
+        
+        # First try: if it's a UUID, construct full FQID
+        if '-' in author_uuid and '/' not in author_uuid:
+            local_fqid = f"{settings.SITE_URL.rstrip('/')}/api/authors/{author_uuid}"
+            author = Author.objects.filter(id=local_fqid).first()
+        
+        # Second try: if it's a full FQID
+        if not author:
+            author = Author.objects.filter(id=author_uuid).first()
+        
+        # Third try: try with trailing slash
+        if not author:
+            author = Author.objects.filter(id=f"{author_uuid}/").first()
+        
+        # Fourth try: extract UUID from FQID and match
+        if not author and '/api/authors/' in author_uuid:
+            uuid_part = author_uuid.split('/api/authors/')[-1].rstrip('/')
+            local_fqid = f"{settings.SITE_URL.rstrip('/')}/api/authors/{uuid_part}"
+            author = Author.objects.filter(id=local_fqid).first()
+        
+        if not author:
+            return Response({'detail': 'Author not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = AuthorSerializer(author)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 

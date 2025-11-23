@@ -89,18 +89,68 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
 
 def get_followers(author: Author):
     """Return all authors who follow this author (FOLLOW.state=ACCEPTED)."""
-    return Author.objects.filter(
-        outgoing_follow_requests__object=author.id, 
-        outgoing_follow_requests__state="ACCEPTED"
-    )
+    # Query Follow objects directly to work with both local and remote authors
+    # The object field is a URLField (FQID), so we need to normalize for matching
+    from golden.services import normalize_fqid
+    author_id_normalized = normalize_fqid(str(author.id))
+    follower_ids = Follow.objects.filter(
+        object=author_id_normalized,
+        state="ACCEPTED"
+    ).values_list("actor_id", flat=True)
+    
+    # Also try with raw author.id in case normalization differs
+    if not follower_ids:
+        follower_ids = Follow.objects.filter(
+            object=str(author.id).rstrip('/'),
+            state="ACCEPTED"
+        ).values_list("actor_id", flat=True)
+    
+    return Author.objects.filter(id__in=follower_ids)
 
 
 def get_friends(author):
     """Mutual followers = friends."""
-    follower_ids = set(Follow.objects.filter(object=author.id, state="ACCEPTED").values_list("actor_id", flat=True))
-    following_ids = set(Follow.objects.filter(actor=author, state="ACCEPTED").values_list("object", flat=True))
-    mutual = follower_ids.intersection(following_ids)
-    return Author.objects.filter(id__in=mutual)
+    # Normalize author ID for consistent matching with Follow objects
+    from golden.services import normalize_fqid
+    author_id_normalized = normalize_fqid(str(author.id))
+    
+    # Get followers (people who follow this author) - actor_id is ForeignKey to Author
+    follower_ids = set(Follow.objects.filter(
+        object=author_id_normalized,
+        state="ACCEPTED"
+    ).values_list("actor_id", flat=True))
+    
+    # Also try with raw author.id in case normalization differs
+    if not follower_ids:
+        follower_ids = set(Follow.objects.filter(
+            object=str(author.id).rstrip('/'),
+            state="ACCEPTED"
+        ).values_list("actor_id", flat=True))
+    
+    # Get following (people this author follows) - object is URLField (FQID string)
+    following_ids = set(Follow.objects.filter(
+        actor=author,
+        state="ACCEPTED"
+    ).values_list("object", flat=True))
+    
+    # Normalize following_ids for comparison
+    following_ids_normalized = {normalize_fqid(str(fid)) for fid in following_ids}
+    
+    # Find mutual: authors whose ID (normalized) appears in both sets
+    # follower_ids contains Author.id values (from ForeignKey)
+    # following_ids_normalized contains normalized FQID strings
+    mutual_author_ids = []
+    for follower_id in follower_ids:
+        # follower_id is an Author.id (URLField), normalize it for comparison
+        follower_id_normalized = normalize_fqid(str(follower_id))
+        if follower_id_normalized in following_ids_normalized:
+            mutual_author_ids.append(follower_id)
+    
+    # Return Author objects for mutual friends
+    if mutual_author_ids:
+        return Author.objects.filter(id__in=mutual_author_ids)
+    
+    return Author.objects.none()
 
 
 def previously_delivered(post):
@@ -189,9 +239,21 @@ def distribute_activity(activity: dict, actor: Author):
             send_activity_to_inbox(r, activity)
         return
 
-    # COMMENT
-    if type_lower == "comment" and isinstance(obj, dict):
-        entry_id = obj.get("entry")
+    # COMMENT - handle both deepskyblue spec format and ActivityPub format
+    if type_lower == "comment":
+        # deepskyblue spec: object is entry FQID string, comment content is in "comment" field
+        entry_id = None
+        if isinstance(obj, str):
+            # deepskyblue format: object is entry FQID
+            entry_id = obj
+        elif isinstance(obj, dict):
+            # ActivityPub format: object is dict with entry field
+            entry_id = obj.get("entry")
+        
+        if not entry_id:
+            logger.warning(f"Comment activity missing entry ID: {activity}")
+            return
+        
         # Get the entry to find its author
         entry = Entry.objects.filter(id=normalize_fqid(entry_id)).first()
         if not entry:
@@ -226,7 +288,28 @@ def distribute_activity(activity: dict, actor: Author):
             send_activity_to_inbox(r, activity)
         return
 
-    # UNLIKE
+    # UNLIKE - handle both "unlike" (deepskyblue spec) and "undo" (ActivityPub) formats
+    if type_lower == "unlike":
+        # deepskyblue spec format: object is directly the FQID string
+        liked_fqid = obj if isinstance(obj, str) else None
+        if not liked_fqid:
+            return
+        
+        entry = Entry.objects.filter(id=liked_fqid).first()
+        comment = Comment.objects.filter(id=liked_fqid).first()
+
+        if entry:
+            recipients = {entry.author}
+        elif comment:
+            recipients = {comment.author}
+        else:
+            return
+
+        for r in recipients:
+            send_activity_to_inbox(r, activity)
+        return
+    
+    # UNLIKE (ActivityPub format - keep for backward compatibility)
     if type_lower == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "like":
         liked_fqid = obj.get("object")
         entry = Entry.objects.filter(id=liked_fqid).first()
@@ -320,10 +403,31 @@ def process_inbox(author: Author):
         activity_type = activity.get("type", "").lower()
         obj = activity.get("object")
 
-        actor_id = activity.get("actor")
-        actor = Author.objects.filter(id=actor_id).first()
-        if not actor and actor_id:
-            actor = get_or_create_foreign_author(actor_id)
+        # Handle actor - can be either a string (FQID) or a dict (author object)
+        actor_data = activity.get("actor")
+        actor_id = None
+        actor_username = None
+        actor_host = None
+        
+        if isinstance(actor_data, dict):
+            # Actor is a full object with username, host, etc.
+            actor_id = actor_data.get("id") or actor_data.get("@id")
+            actor_username = actor_data.get("username") or actor_data.get("displayName")
+            actor_host = actor_data.get("host")
+        elif isinstance(actor_data, str):
+            # Actor is just an FQID string
+            actor_id = actor_data
+        
+        actor = None
+        if actor_id:
+            actor = Author.objects.filter(id=normalize_fqid(actor_id)).first()
+            if not actor:
+                # Create foreign author with username if available
+                actor = get_or_create_foreign_author(
+                    actor_id,
+                    host=actor_host,
+                    username=actor_username
+                )
 
         # FOLLOW REQUEST
         if activity_type == "follow":
@@ -508,12 +612,13 @@ def process_inbox(author: Author):
             )
             
             # Process entry images from attachments
-            # Note: EntryImage model requires an ImageField which can't be empty
-            # For remote entries, images are already embedded in the HTML content via absolutize_remote_images
-            # So we don't need to create EntryImage objects - the images will display from the HTML
+            # For remote entries, images are embedded in HTML content and will display there
+            # We also store image URLs in entry metadata for the /api/authors/<uuid>/entries/<uuid>/images/ endpoint
             attachments = obj.get("attachments", [])
             if attachments:
-                logger.info(f"Entry {entry_id} has {len(attachments)} image attachments (embedded in content HTML)")
+                logger.info(f"Entry {entry_id} has {len(attachments)} image attachments")
+                # Images are already in HTML content via absolutize_remote_images
+                # The images endpoint will extract URLs from attachments or HTML content
             
             logger.info(f"Created entry: {entry_id}")
 
@@ -543,29 +648,75 @@ def process_inbox(author: Author):
                 entry.save()
                 logger.info(f"Deleted entry: {entry_id}")
 
-        # COMMENT
-        elif activity_type == "comment" and isinstance(obj, dict):
-            comment_id = obj.get("id")
-            entry_id = obj.get("entry")
-            entry = Entry.objects.filter(id=entry_id).first()
-
+        # COMMENT - handle both deepskyblue spec format and ActivityPub format
+        elif activity_type == "comment":
+            # deepskyblue spec format: {"type": "comment", "id": "...", "comment": "...", "author": {...}, "object": "entry_fqid"}
+            # ActivityPub format: {"type": "comment", "object": {"type": "comment", "id": "...", "entry": "...", ...}}
+            
+            comment_id = activity.get("id")  # Comment FQID
+            entry_id = None
+            comment_content = None
+            comment_content_type = None
+            comment_author_id = None
+            
+            if isinstance(obj, str):
+                # deepskyblue format: object is entry FQID string
+                entry_id = obj
+                comment_content = activity.get("comment", "")  # Spec uses "comment" field
+                comment_content_type = activity.get("contentType", "text/plain")
+                # Author is in activity["author"] as object
+                author_data = activity.get("author")
+                if isinstance(author_data, dict):
+                    comment_author_id = author_data.get("id")
+                elif isinstance(author_data, str):
+                    comment_author_id = author_data
+            elif isinstance(obj, dict):
+                # ActivityPub format: object is comment dict
+                entry_id = obj.get("entry")
+                comment_content = obj.get("content", "")
+                comment_content_type = obj.get("contentType", "text/plain")
+                comment_author_id = obj.get("author")
+                if not comment_id:
+                    comment_id = obj.get("id")
+            
+            if not entry_id:
+                logger.warning(f"Comment activity missing entry ID: {activity}")
+                return
+            
+            entry = Entry.objects.filter(id=normalize_fqid(entry_id)).first()
+            if not entry:
+                entry = Entry.objects.filter(id=entry_id).first()
+            
             if entry:
                 # Get or create comment author (could be remote)
-                comment_author_id = obj.get("author")
-                comment_author = Author.objects.filter(id=comment_author_id).first()
-                if not comment_author and comment_author_id:
-                    comment_author = get_or_create_foreign_author(comment_author_id)
+                comment_author = None
+                if comment_author_id:
+                    if isinstance(comment_author_id, dict):
+                        comment_author_id = comment_author_id.get("id")
+                    comment_author = Author.objects.filter(id=normalize_fqid(comment_author_id)).first()
+                    if not comment_author:
+                        # Extract username from author object if available
+                        author_obj = activity.get("author") if isinstance(activity.get("author"), dict) else None
+                        username = author_obj.get("username") or author_obj.get("displayName") if author_obj else None
+                        host = author_obj.get("host") if author_obj else None
+                        comment_author = get_or_create_foreign_author(comment_author_id, host=host, username=username)
+                
                 if not comment_author:
                     comment_author = actor  # Fallback to inbox actor
+                
+                if not comment_id:
+                    # Generate comment ID if not provided
+                    from golden.services import generate_comment_fqid
+                    comment_id = generate_comment_fqid(comment_author, entry)
                 
                 Comment.objects.update_or_create(
                     id=comment_id,
                     defaults={
                         "entry": entry,
                         "author": comment_author,
-                        "content": obj.get("content", ""),
-                        "contentType": obj.get("contentType", "text/plain"),
-                        "published": parse_datetime(obj.get("published")) or timezone.now()
+                        "content": comment_content or "",
+                        "contentType": comment_content_type or "text/plain",
+                        "published": parse_datetime(activity.get("published")) or timezone.now()
                     }
                 )
                 logger.info(f"Created/updated comment: {comment_id} on entry {entry_id}")
@@ -600,7 +751,32 @@ def process_inbox(author: Author):
             else:
                 logger.info(f"Created like: {actor.username} liked {obj_id}")
 
-        # UNLIKE
+        # UNLIKE - handle both "unlike" (deepskyblue spec) and "undo" (ActivityPub) formats
+        elif activity_type == "unlike":
+            # deepskyblue spec format: object is directly the FQID string
+            obj_id = obj if isinstance(obj, str) else None
+            actor_id = activity.get("actor")
+            
+            if not obj_id:
+                logger.warning(f"Unlike activity missing object: {activity}")
+                return
+            
+            # Find the actor (could be remote)
+            like_actor = Author.objects.filter(id=actor_id).first()
+            if not like_actor and actor_id:
+                like_actor = get_or_create_foreign_author(actor_id)
+            
+            if like_actor:
+                Like.objects.filter(author=like_actor, object=obj_id).delete()
+                
+                # Update entry's likes ManyToMany if it's an entry
+                entry = Entry.objects.filter(id=obj_id).first()
+                if entry:
+                    entry.likes.remove(like_actor)
+                
+                logger.info(f"Deleted like: {like_actor.username if like_actor else actor_id} unliked {obj_id}")
+        
+        # UNLIKE (ActivityPub format - keep for backward compatibility)
         elif activity_type == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "like":
             obj_id = obj.get("object")
             actor_id = obj.get("actor")
@@ -622,7 +798,7 @@ def process_inbox(author: Author):
 
         # Mark as processed after successful processing
         # processed variable is only set for ACCEPT, so check activity_type for others
-        if activity_type in ["follow", "accept", "reject", "undo", "removefriend", "create", "update", "delete", "comment", "like"]:
+        if activity_type in ["follow", "accept", "reject", "unlike", "undo", "removefriend", "create", "update", "delete", "comment", "like"]:
             item.processed = True
             item.save()
             logger.info(f"Marked inbox item {item.id} as processed (activity_type={activity_type})")

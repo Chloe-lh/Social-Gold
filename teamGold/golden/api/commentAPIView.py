@@ -94,11 +94,13 @@ class EntryCommentAPIView(APIView):
             page_obj = paginate(request, qs)
             items = CommentSerializer(page_obj.object_list, many=True).data
 
+            # Match deepskyblue spec format
             collection = {
                 "type": "comments",
-                "id": request.build_absolute_uri(),
-                "size": qs.count(),
-                "items": items,
+                "page": page_obj.number,
+                "size": page_obj.paginator.per_page,
+                "count": qs.count(),
+                "src": items,  # Changed from "items" to "src" to match spec
             }
 
             # add simple pagination links if applicable

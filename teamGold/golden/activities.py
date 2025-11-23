@@ -110,23 +110,26 @@ def create_delete_entry_activity(author, entry):
 
 
 def create_comment_activity(author, entry, comment):
+    """
+    Create a comment activity matching deepskyblue spec format.
+    Format: {"type": "comment", "id": "...", "comment": "...", "contentType": "...", "author": {...}, "object": "..."}
+    """
     activity_id = make_fqid(author, "comments")
 
+    # Match deepskyblue spec format for inbox
     activity = {
-        "type": "Comment",
-        "id": activity_id,
-        "actor": str(author.id),
-        "published": timezone.now().isoformat(),
-        "summary": f"{author.username} commented on an entry",
-        "object": {
-            "type": "comment",
-            "id": str(comment.id),
-            "entry": str(entry.id),  
-            "author": str(author.id),
-            "content": comment.content,
-            "contentType": comment.contentType,
-            "published": comment.published.isoformat(),
-        }
+        "type": "comment",  # Lowercase to match spec
+        "id": str(comment.id),  # Use comment FQID as activity ID
+        "comment": comment.content,  # Spec uses "comment" field, not nested object
+        "contentType": comment.contentType,
+        "author": {
+            "type": "author",
+            "id": str(author.id),
+            "host": author.host or str(author.id).split('/api/authors/')[0] if '/api/authors/' in str(author.id) else '',
+            "displayName": author.username,
+            "username": author.username,
+        },
+        "object": str(entry.id),  # Entry FQID as string
     }
 
     return activity
@@ -337,21 +340,17 @@ def create_profile_update_activity(actor_author):
 
 def create_unlike_activity(author, liked_object_fqid):
     """
-    Create an Undo Like activity.
+    Create an Unlike activity (matching deepskyblue spec).
+    Uses "unlike" type instead of "undo" to match spec.
     """
-    activity_id = make_fqid(author, "undo-like")
+    activity_id = make_fqid(author, "unlike")
 
     activity = {
-        "type": "Undo",
+        "type": "unlike",  # Changed from "Undo" to "unlike" to match deepskyblue spec
         "id": activity_id,
         "summary": f"{author.username} unliked an entry or comment",
         "actor": str(author.id),
-        "object": {
-            "type": "Like",
-            "actor": str(author.id),
-            "object": str(liked_object_fqid)
-        },
-        "published": timezone.now().isoformat(),
+        "object": str(liked_object_fqid)  # Simplified to match spec format
     }
     
     return activity

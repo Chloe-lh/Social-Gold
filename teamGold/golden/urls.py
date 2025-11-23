@@ -6,11 +6,11 @@ from . import views
 from .api.profileAPIView import ProfileAPIView
 from .api.nodeAPIView import NodeAPIView
 from .api.friendsAPIView import AuthorFriendsView, FollowAPIView
-from .api.entryAPIView import EntryAPIView, EntryImageAPIView
+from .api.entryAPIView import EntryAPIView, EntryImageAPIView, ReadingAPIView
 from .api.commentAPIView import EntryCommentAPIView, SingleCommentAPIView
 from .api.likeAPIView import LikeAPIView
 from .api.inbox import InboxView
-from .api.authorsAPIView import AuthorsListView
+from .api.authorsAPIView import AuthorsListView, SingleAuthorAPIView
 
 '''
 These URL Patterns registers all views 
@@ -37,6 +37,8 @@ urlpatterns = [
 
     # API Endpoints
     path("api/authors/", AuthorsListView.as_view(), name="api-authors-list"),  # List all authors
+    path("api/authors/<str:author_uuid>/", SingleAuthorAPIView.as_view(), name="api-author-detail"),  # Single author
+    path("api/reading/", ReadingAPIView.as_view(), name="api-reading"),  # Public entries
     path("api/Profile/<path:id>/", ProfileAPIView.as_view(), name="get-profile"),
     path("api/Node/<path:id>/", NodeAPIView.as_view(), name="get-node"),
     path("api/Follow/<path:id>/", FollowAPIView.as_view(), name="get-follow"),
@@ -56,6 +58,7 @@ urlpatterns = [
     # Comments
     path("api/authors/<path:author_serial>/entries/<path:entry_serial>/comments/", EntryCommentAPIView.as_view(), name="author-entry-comments"),
     path("api/authors/<path:author_serial>/entries/<path:entry_serial>/likes/", LikeAPIView.as_view(), name="author-entry-likes"),
+    path("api/authors/<path:author_serial>/entries/<path:entry_serial>/images/", EntryImageAPIView.as_view(), name="author-entry-images"),
 
     # Miscellaneous API Endpoints
     path("api/authors/<path:author_id>/inbox/", views.inbox_view, name="author-inbox"),

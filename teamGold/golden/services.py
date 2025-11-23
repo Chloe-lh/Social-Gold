@@ -150,10 +150,20 @@ def sync_remote_entry(remote_entry, node):
         author_data = remote_entry.get('author', {})
         author_id = author_data.get('id')
         
-        # Get or create the author
+        # Get or create the author - extract username from author_data if available
+        author_username = None
+        author_host = None
+        if isinstance(author_data, dict):
+            author_username = author_data.get("username") or author_data.get("displayName")
+            author_host = author_data.get("host")
+        
         author = Author.objects.filter(id=author_id).first()
         if not author:
-            author = get_or_create_foreign_author(author_id)
+            author = get_or_create_foreign_author(author_id, host=author_host, username=author_username)
+        elif author_username and author.username != author_username:
+            # Update username if we have new data
+            author.username = author_username
+            author.save(update_fields=['username'])
         
         if not author:
             print(f"Error syncing remote entry: Could not get or create author {author_id}")
@@ -223,16 +233,99 @@ def fetch_or_create_author(author_url):
             )
     return author
 
-def fetch_remote_author_data(author_url):
+def fetch_remote_author_data(author_fqid):
     """
-    Fetch remote author data from the given URL (using ActivityPub or other protocols).
+    Fetch remote author data from the given FQID.
+    Tries to fetch from the specific author endpoint first, then falls back to listing all authors.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Try to fetch the specific author by their FQID endpoint
+    # Format: https://node.com/api/authors/{uuid}
     try:
-        response = requests.get(f"{author_url}/api/authors/")
+        # Extract UUID from FQID if it's a full URL
+        if '/api/authors/' in author_fqid:
+            author_id_part = author_fqid.split('/api/authors/')[-1].rstrip('/')
+            parsed = urlparse(author_fqid)
+            host_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
+            author_endpoint = f"{host_base}/api/authors/{author_id_part}/"
+        else:
+            author_endpoint = author_fqid.rstrip('/') + '/'
+        
+        # Get node authentication if available
+        from golden.models import Node
+        node = Node.objects.filter(id__startswith=urlparse(author_fqid).netloc).first()
+        auth = None
+        if node and node.auth_user:
+            auth = (node.auth_user, node.auth_pass)
+        
+        response = requests.get(
+            author_endpoint,
+            timeout=5,
+            auth=auth,
+            headers={'Content-Type': 'application/json'}
+        )
+        
         if response.status_code == 200:
-            return response.json()
+            data = response.json()
+            # Handle both single author object and paginated format
+            if isinstance(data, dict):
+                if "items" in data:
+                    # Paginated format - find the matching author
+                    items = data.get("items", [])
+                    for item in items:
+                        if isinstance(item, dict) and (item.get("id") == author_fqid or item.get("@id") == author_fqid):
+                            return item
+                elif data.get("id") == author_fqid or data.get("@id") == author_fqid:
+                    # Single author object
+                    return data
+        elif response.status_code == 404:
+            # Author endpoint not found, try listing all authors
+            logger.debug(f"Author endpoint not found, trying authors list: {author_endpoint}")
+        else:
+            logger.warning(f"Failed to fetch author from {author_endpoint}: HTTP {response.status_code}")
     except requests.exceptions.RequestException as e:
-        print(f"Error fetching remote author data: {e}")
+        logger.debug(f"Error fetching author from endpoint: {e}")
+    
+    # Fallback: try fetching from the authors list endpoint
+    try:
+        parsed = urlparse(author_fqid)
+        host_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
+        authors_endpoint = f"{host_base}/api/authors/"
+        
+        # Get node authentication if available
+        from golden.models import Node
+        node = Node.objects.filter(id__startswith=parsed.netloc).first()
+        auth = None
+        if node and node.auth_user:
+            auth = (node.auth_user, node.auth_pass)
+        
+        response = requests.get(
+            authors_endpoint,
+            timeout=5,
+            auth=auth,
+            headers={'Content-Type': 'application/json'}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            # Handle both paginated format (with "items") and direct list format
+            items = []
+            if isinstance(data, dict) and "items" in data:
+                items = data.get("items", [])
+            elif isinstance(data, list):
+                items = data
+            
+            # Find the matching author
+            for item in items:
+                if isinstance(item, dict):
+                    item_id = item.get("id") or item.get("@id") or str(item.get("url", ""))
+                    if item_id == author_fqid or normalize_fqid(item_id) == normalize_fqid(author_fqid):
+                        return item
+    except requests.exceptions.RequestException as e:
+        logger.debug(f"Error fetching from authors list: {e}")
+    
     return None
 
 def get_or_create_foreign_author(remote_id: str, host: str = None, username: str = None) -> Author:
@@ -283,7 +376,27 @@ def get_or_create_foreign_author(remote_id: str, host: str = None, username: str
         uuid_part = remote_id.rstrip("/")
         remote_id = f"{host_val}/api/authors/{uuid_part}"
     
-    guessed_username = username or remote_id.split("/")[-1] if "/" in remote_id else remote_id
+    # If username is not provided, try to fetch author data from remote node
+    fetched_username = username
+    fetched_display_name = None
+    fetched_profile_image = None
+    
+    if not username:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Fetching author data for {remote_id} from remote node")
+        author_data = fetch_remote_author_data(remote_id)
+        
+        if author_data:
+            fetched_username = author_data.get("username") or author_data.get("displayName")
+            fetched_display_name = author_data.get("displayName") or author_data.get("display_name")
+            fetched_profile_image = author_data.get("profileImage") or author_data.get("profile_image")
+            # Also update host if provided in the data
+            if author_data.get("host"):
+                host_val = author_data.get("host").rstrip('/')
+    
+    # Fallback to guessing username from FQID if still not available
+    guessed_username = fetched_username or remote_id.split("/")[-1] if "/" in remote_id else remote_id
     
     author, created = Author.objects.get_or_create(
         id=remote_id,  # Store remote author ID as FQID
@@ -294,10 +407,22 @@ def get_or_create_foreign_author(remote_id: str, host: str = None, username: str
         }
     )
     
-    # Update username if provided and different
+    # Update fields if we fetched new data or if username was provided
+    updated = False
+    if fetched_username and author.username != fetched_username:
+        author.username = fetched_username
+        updated = True
+    
+    if fetched_display_name and hasattr(author, 'name') and author.name != fetched_display_name:
+        author.name = fetched_display_name
+        updated = True
+    
     if username and author.username != username:
         author.username = username
-        author.save(update_fields=['username'])
+        updated = True
+    
+    if updated:
+        author.save()
     
     return author
     

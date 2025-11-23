@@ -62,12 +62,10 @@ class LikeAPIView(APIView):
         host = request.build_absolute_uri('/').rstrip('/')
         collection_id = f"{host}/api/Entry/{entry_id}/likes/"
 
+        # Match deepskyblue spec format
         collection = {
             "type": "likes",
-            "id": collection_id,
-            "web": collection_id.replace('/api/', '/'),
-            "page_number": page_number,
-            "size": page_size,
+            "object": entry_id,  # Add object field to match spec
             "count": paginator.count,
             "src": serialized,
         }

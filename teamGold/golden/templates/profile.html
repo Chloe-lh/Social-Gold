@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% load static %}
+{% load author_filters %}
 {% block head %}
 <link rel="stylesheet" href="{% static 'golden/css/global.css' %}">
 <link rel="stylesheet" href="{% static 'golden/css/profile.css' %}">
@@ -54,6 +55,7 @@
       <button class="tab-btn active" data-tab="entries">entries</button> 
       <button class="tab-btn" data-tab="followers">followers</button>
       <button class="tab-btn" data-tab="following">following</button>
+      <button class="tab-btn" data-tab="friends">friends</button>
       <button class="tab-btn" data-tab="requests">requests</button>
       <button class="tab-btn" data-tab="search">search</button>
     </nav>
@@ -64,8 +66,8 @@
         {% for entry in entries %}
           <article class="entry">
             <p><strong>@{{ author.username }}</strong> {{ entry.published|date:"H:i T l M d, Y" }}</p>
-            {% for img in entry.images.all %} 
-              <img src="{{ img.image.url }}" alt="entry image" class="entry-img">
+            {% for img_url in entry.get_all_images %} 
+              <img src="{{ img_url }}" alt="entry image" class="entry-img">
             {% endfor %}
             {{ entry.content|safe }}
           </article>
@@ -77,11 +79,11 @@
 
     <!-- Followers Tab Section -->
     <section class="tab-panel" data-tab-panel="followers">
-      {% if followers %}
-        {% for f in followers %}
+      {% if followers_with_urls %}
+        {% for f_data in followers_with_urls %}
           <section class="author-list-item follower-row">
-            <a href="{% url 'public-profile' f.id %}" class="follower-username">{{ f.username }}</a>
-            {% if f in friends %}
+            <a href="{% url 'public-profile' f_data.url_id %}" class="follower-username">{{ f_data.author.username }}</a>
+            {% if f_data.author in friends %}
               <img class="friend-icon" src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
             {% endif %}
           </section>
@@ -94,17 +96,17 @@
 
     <!-- Following Tab Section -->
     <section class="tab-panel" data-tab-panel="following">
-      {% if following %}
-        {% for f in following %}
+      {% if following_with_urls %}
+        {% for f_data in following_with_urls %}
           <section class="author-list-item follower-row">
-            <a href="{% url 'public-profile' f.id %}" class="follower-username">{{ f.username }}</a>
-            {% if f in friends %}
+            <a href="{% url 'public-profile' f_data.url_id %}" class="follower-username">{{ f_data.author.username }}</a>
+            {% if f_data.author in friends %}
               <img class="friend-icon" src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
             {% endif %}
 
             <form method="POST" class="unfollow-form">
               {% csrf_token %}
-              <button type="submit" name="unfollow" value="{{ f.id }}" class="unfollow-btn">
+              <button type="submit" name="unfollow" value="{{ f_data.author.id }}" class="unfollow-btn">
                 <img src="{% static 'golden/icons/user-remove-icon.png' %}" alt="unfollow this person">
               </button>
             </form>
@@ -116,16 +118,55 @@
       {% endif %}
     </section>
 
+    <!-- Friends Tab Section -->
+    <section class="tab-panel" data-tab-panel="friends">
+      {% if friends_with_urls %}
+        {% for f_data in friends_with_urls %}
+          <section class="author-list-item follower-row">
+            <a href="{% url 'public-profile' f_data.url_id %}" class="follower-username">
+              {{ f_data.author.displayName|default:f_data.author.name|default:f_data.author.username }}
+            </a>
+            <img class="friend-icon" src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
+          </section>
+          <hr class="follower-divider">
+        {% endfor %}
+      {% else %}
+        <p>You have no friends yet. Friends are people who follow each other mutually.</p>
+      {% endif %}
+    </section>
+
     <!-- Request Tab Section -->
     <section class="tab-panel" data-tab-panel="requests">
-    {% if follow_requests %}
-      <ul style="list-style: none; padding: 0;">
-        {% for req in follow_requests %}
-        <li class="request-row">
-          <a href="{% url 'public-profile' req.actor.id %}">{{ req.actor.username }} wants to follow you</span>
+      <!-- Requests You Sent -->
+      <h3>Requests You Sent</h3>
+      {% if follow_requests_with_urls %}
+        <ul style="list-style: none; padding: 0;">
+          {% for req_data in follow_requests_with_urls %}
+          <li class="request-row">
+            <a href="{% url 'public-profile' req_data.target_url_id %}">
+              Waiting for {% if req_data.target %}{{ req_data.target.displayName|default:req_data.target.name|default:req_data.target.username|default:req_data.target.id }}{% else %}{{ req_data.target_id|default:req_data.target_url_id }}{% endif %} to accept your follow request
+            </a>
+            <span style="color: #888; font-size: 0.9em;">(Pending)</span>
+          </li>
+          <hr class="follower-divider">
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>You have no pending follow requests.</p>
+      {% endif %}
+      
+      <!-- Requests You Received -->
+      <h3 style="margin-top: 20px;">Requests You Received</h3>
+      {% if incoming_follow_requests_with_urls %}
+        <ul style="list-style: none; padding: 0;">
+          {% for req_data in incoming_follow_requests_with_urls %}
+          <li class="request-row">
+            <a href="{% url 'public-profile' req_data.actor_url_id %}">
+              {% if req_data.actor %}{{ req_data.actor.displayName|default:req_data.actor.name|default:req_data.actor.username }}{% else %}{{ req_data.request.actor.displayName|default:req_data.request.actor.name|default:req_data.request.actor.username|default:req_data.request.actor.id }}{% endif %} wants to follow you
+            </a>
             <form method="POST" style="display:inline;">
               {% csrf_token %}
-              <input type="hidden" name="follow_id" value="{{ req.id }}">
+              <input type="hidden" name="follow_id" value="{{ req_data.request.id }}">
               <input type="hidden" name="action" value="approve">
               <button class="action-btn approve-request-button" type="submit">
                   <img src="{% static 'golden/icons/user-add-icon.png' %}" alt="approve">
@@ -134,37 +175,46 @@
         
             <form method="POST" style="display:inline;">
             {% csrf_token %}
-              <input type="hidden" name="follow_id" value="{{ req.id }}">
+              <input type="hidden" name="follow_id" value="{{ req_data.request.id }}">
               <input type="hidden" name="action" value="reject">
               <button class="action-btn reject-request-button" type="submit">
                   <img src="{% static 'golden/icons/user-remove-icon.png' %}" alt="reject">
               </button>
             </form>
-        </li>
-        {% endfor %}
-        <hr class="follower-divider">
-      </ul>
-    {% else %}
-      <p>You have no outgoing following requests.</p>
-    {% endif %}
+          </li>
+          <hr class="follower-divider">
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>You have no pending follow requests.</p>
+      {% endif %}
     </section>
 
     <!-- Search Tab Section -->
     <section class="tab-panel" data-tab-panel="search">
 
       <!-- Search Bar Feature -->
-      <form method="GET" action="">
-        <input type="text" name="q" placeholder="Search users..." ="{{ query }}" class="search-bar">
+      <form method="GET" action="{% url 'profile' %}" id="search-form">
+        <input type="text" name="q" placeholder="Search users..." value="{{ query }}" class="search-bar" id="search-query">
         <button type="submit"> Search for User </button>
       </form>
 
       <!-- Author List Feature -->
+      {% if query %}
+        <p style="margin-bottom: 10px; color: #666;">Searching for: "{{ query }}"</p>
+      {% else %}
+        <p style="margin-bottom: 10px; color: #666;">Showing all authors. Enter a search query above to filter results.</p>
+      {% endif %}
+      
       {% if authors %}
-      <ul>
-      {% for a in authors %}
+        <ul>
+        {% for a in authors %}
         <li style="padding: 10px; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center;">
-          <a href="{% url 'public-profile' a.id %}">{{ a.username }}</a>
-
+          {% if a.url_id %}
+            <a href="{% url 'public-profile' a.url_id %}">{{ a.displayName|default:a.username|default:a.id }}</a>
+          {% else %}
+            <a href="{% url 'public-profile' a.id|author_url_id %}">{{ a.displayName|default:a.username|default:a.id }}</a>
+          {% endif %}
           {% if a.is_friend %}
             <button class="follow-btn" disabled>
               <img src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
@@ -186,7 +236,8 @@
               <input type="hidden" name="action" value="follow">
               <input type="hidden" name="author_id" value="{{ a.id }}">
               <input type="hidden" name="author_is_local" value="{{ a.is_local }}">
-              <input type="hidden" name="displayName" value="{{ a.displayName }}">
+              <input type="hidden" name="username" value="{{ a.username }}">
+              <input type="hidden" name="displayName" value="{{ a.displayName|default:a.username }}">
               <input type="hidden" name="profileImage" value="{{ a.profileImage }}">
               <input type="hidden" name="github" value="{{ a.github }}">
               <input type="hidden" name="web" value="{{ a.web }}">
@@ -197,11 +248,15 @@
             </form>
           {% endif %}
         </li>
-      {% endfor %}
-      </ul>
-    {% else %}
-      <p>No authors found.</p>
-    {% endif %} 
+        {% endfor %}
+        </ul>
+      {% else %}
+        {% if query %}
+          <p>No authors found matching "{{ query }}".</p>
+        {% else %}
+          <p>No authors found.</p>
+        {% endif %}
+      {% endif %} 
   </section>
 </body>
 
@@ -255,6 +310,28 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   });
+  
+  // If there's a search query in the URL, activate the search tab
+  const urlParams = new URLSearchParams(window.location.search);
+  const searchQuery = urlParams.get('q');
+  if (searchQuery) {
+    const searchBtn = document.querySelector('[data-tab="search"]');
+    const searchPanel = document.querySelector('[data-tab-panel="search"]');
+    if (searchBtn && searchPanel) {
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+      searchBtn.classList.add("active");
+      searchPanel.classList.add("active");
+    }
+  }
+  
+  // Preserve search tab when submitting search form
+  const searchForm = document.getElementById("search-form");
+  if (searchForm) {
+    searchForm.addEventListener("submit", () => {
+      sessionStorage.setItem("activeTab", "search");
+    });
+  }
 });
 </script>
 {% endblock %}

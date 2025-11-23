@@ -67,7 +67,7 @@ class Author(AbstractBaseUser, PermissionsMixin):
         upload_to='profile_pics/')
     username = models.CharField(max_length=50, unique=True, default="goldenuser")
     password = models.CharField(max_length=128, default="goldenpassword")
-    name = models.CharField(max_length=100, blank=True) # Kenneth: I added this because the user story says NAME not username. 
+    name = models.CharField(max_length=100, blank=True) # is this going to stay as name or will be displayName? 
     email = models.CharField(blank=True)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
@@ -124,14 +124,12 @@ class Entry(models.Model):
     This decision ensures entries can be uniquely identified across multiple nodes. 
     Example: https://node1.com/api/entries/123
     """
-
     id = models.URLField(primary_key=True, unique=True) # FQID
     type = models.CharField(max_length=20, default="entry", editable=False)
     title = models.CharField(max_length=300, blank=True)
     web = models.URLField(blank=True)
     description = models.TextField(blank=True)
     contentType = models.CharField(max_length=100, default="text/plain")
-    # image = models.ImageField(upload_to='entry_images/', blank=True, null=True) # pip install pillow is required so yes, download new
     # Author is linked using their FULL URL (id field on Author).
     # to_field='id' ensures Django joins based on the author's URL and not a numeric key.
     # db_column='author_id' sets the actual column name in the database.
@@ -183,12 +181,54 @@ class Entry(models.Model):
             return str(self.id).rstrip('/').split('/')[-1]
         except Exception:
             return ""
+    
+    def get_all_images(self):
+        """
+        Get all images for this entry, including:
+        1. Local EntryImage objects (for local entries)
+        2. Images extracted from HTML content (for remote entries)
+        Returns a list of image URLs.
+        """
+        image_urls = []
+        
+        # First, add images from EntryImage objects (local entries)
+        for img in self.images.all():
+            image_url = img.image.url
+            # Make absolute URL if relative
+            if image_url.startswith('/'):
+                from django.conf import settings
+                image_url = f"{settings.SITE_URL.rstrip('/')}{image_url}"
+            image_urls.append(image_url)
+        
+        # If no EntryImage objects, extract images from HTML content (remote entries)
+        if not image_urls and self.content:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(self.content, 'html.parser')
+            img_tags = soup.find_all('img')
+            for img_tag in img_tags:
+                img_src = img_tag.get('src')
+                if img_src:
+                    # Skip data URLs
+                    if img_src.startswith('data:'):
+                        continue
+                    # Make absolute if relative
+                    if img_src.startswith('/'):
+                        from django.conf import settings
+                        img_src = f"{settings.SITE_URL.rstrip('/')}{img_src}"
+                    elif not img_src.startswith('http'):
+                        # Relative URL without leading slash
+                        from django.conf import settings
+                        img_src = f"{settings.SITE_URL.rstrip('/')}/{img_src}"
+                    image_urls.append(img_src)
+        
+        return image_urls
 
 class EntryImage(models.Model):
     """
     Multiple images can be associated with a single Entry.
     Access via: entry.images.all()
     """
+    id = models.URLField(primary_key=True, unique=True)
     entry = models.ForeignKey(
         Entry,
         on_delete=models.CASCADE,
@@ -209,6 +249,10 @@ class EntryImage(models.Model):
         if self.entry:
             return f"Image for entry {self.entry.id}"
         return f"Standalone Image {self.id}"  # or just "Standalone Image"
+    
+    @property
+    def url(self):
+        return self.image.url
     
 class Comment(models.Model):
     """

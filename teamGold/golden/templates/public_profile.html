@@ -35,8 +35,8 @@
       {% for entry in entries %}
         <article class="entry">
           <p><strong>@{{ author.username }}</strong> {{ entry.published|date:"H:i T l M d, Y" }}</p>
-          {% for img in entry.images.all %} 
-            <img src="{{ img.image.url }}" alt="entry image" class="entry-img">
+          {% for img_url in entry.get_all_images %} 
+            <img src="{{ img_url }}" alt="entry image" class="entry-img">
           {% endfor %}
           {{ entry.content|safe }}
         </article>

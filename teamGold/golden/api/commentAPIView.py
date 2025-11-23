@@ -26,6 +26,8 @@ import logging
 # LOCAL IMPORTS
 from golden.models import Author, Entry, Comment, Like, Follow, Node
 from golden.services import generate_comment_fqid, paginate, fqid_to_uuid, get_remote_node_from_fqid, notify
+from golden.distributor import distribute_activity
+from golden.activities import create_comment_activity
 
 # SWAGGER
 from drf_yasg.utils import swagger_auto_schema
@@ -92,11 +94,13 @@ class EntryCommentAPIView(APIView):
             page_obj = paginate(request, qs)
             items = CommentSerializer(page_obj.object_list, many=True).data
 
+            # Match deepskyblue spec format
             collection = {
                 "type": "comments",
-                "id": request.build_absolute_uri(),
-                "size": qs.count(),
-                "items": items,
+                "page": page_obj.number,
+                "size": page_obj.paginator.per_page,
+                "count": qs.count(),
+                "src": items,  # Changed from "items" to "src" to match spec
             }
 
             # add simple pagination links if applicable
@@ -192,52 +196,12 @@ class EntryCommentAPIView(APIView):
         comment = serializer.save(entry=entry, author=author)
         print("DEBUG comment saved id=", getattr(comment, 'id', None), flush=True)
 
-        # Build a JSON-friendly comment payload for forwarding/notification.
-        comment_data = {
-            "type": "comment",
-            "author": MinimalAuthorSerializer(author).data, # just stores the id, can be changed later
-            "content": getattr(comment, 'content', ''),
-            "contentType": getattr(comment, 'contentType', ''),
-            "published": comment.published.isoformat() if getattr(comment, 'published', None) else None,
-            "id": getattr(comment, 'id', None),
-            "entry": entry.id,
-        }
+        # Use distribute_activity to handle both local and remote delivery
+        # This automatically routes to the correct inbox (local DB or remote API)
+        activity = create_comment_activity(author, entry, comment)
+        distribute_activity(activity, actor=author)
         
-        print("DEBUG: Comment object: ", comment_data)
-
-        # if the entry author is remote, attempt to POST the comment
-        # to that node's inbox. Determine the parent node by matching the author's host.
-        try:
-            # parse host from the entry's author's id (FQID)
-            actor_id = getattr(entry.author, 'id', None)
-            if actor_id:
-                parsed = urlparse(actor_id)
-                actor_host = f"{parsed.scheme}://{parsed.netloc}"
-                parent_node = Node.objects.filter(id__startswith=actor_host).first()
-            else:
-                parent_node = None
-
-            if parent_node and parent_node.id.rstrip('/') != settings.LOCAL_NODE_URL.rstrip('/'): # REMOTE NODE
-                inbox_url = parent_node.id.rstrip('/') + '/inbox'
-                auth = None
-                if getattr(parent_node, 'auth_user', None):
-                    auth = (parent_node.auth_user, parent_node.auth_pass)
-
-                resp = requests.post(
-                    inbox_url,
-                    json=comment_data,
-                    auth=auth,
-                    headers={'Content-Type': 'application/json'},
-                    timeout=5,
-                )
-                if not (200 <= resp.status_code < 300):
-                    print("Failed to send comment to parent node %s: %s", inbox_url, resp.status_code)
-            else: #LOCAL NODE
-                notify(author, comment_data)
-
-        except Exception as e:
-            # never fail the API call because of network issues; comment was saved locally
-            return Response(data, status.HTTP_404_NOT_FOUND)
+        print("DEBUG: Comment activity distributed", flush=True)
 
         # Return the newly created comment as nested JSON (includes nested author)
         serialized = CommentSerializer(comment)

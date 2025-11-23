@@ -20,9 +20,29 @@ class NodeSerializer(serializers.ModelSerializer):
         fields = '__all__' 
 
 class AuthorSerializer(serializers.ModelSerializer):
+    type = serializers.SerializerMethodField()
+    host = serializers.SerializerMethodField()
+    url = serializers.SerializerMethodField()
+    uuid = serializers.SerializerMethodField()
+
     class Meta:
         model = Author
-        fields = '__all__'
+        fields = [
+            "type", "id", "host", "username",
+            "github", "profileImage", "uuid", "url"
+        ]
+
+    def get_type(self, obj):
+        return "author"
+
+    def get_host(self, obj):
+        return obj.host or settings.SITE_URL.rstrip("/") + "/api/"
+
+    def get_url(self, obj):
+        return obj.id
+
+    def get_uuid(self, obj):
+        return obj.id.split("/")[-1]
 
 
 class MinimalAuthorSerializer(serializers.ModelSerializer):
@@ -31,9 +51,31 @@ class MinimalAuthorSerializer(serializers.ModelSerializer):
         fields = ('id',)
 
 class EntrySerializer(serializers.ModelSerializer):
+    # Add uuid and web fields to match deepskyblue spec
+    uuid = serializers.SerializerMethodField()
+    type = serializers.SerializerMethodField()
+    web = serializers.SerializerMethodField()
+    author = AuthorSerializer()
+    
     class Meta:
         model = Entry
         fields = '__all__'
+    
+    def get_uuid(self, obj):
+        """Extract UUID from entry FQID"""
+        from .services import fqid_to_uuid
+        return fqid_to_uuid(str(obj.id))
+    
+    def get_web(self, obj):
+        """Generate web URL for entry"""
+        from django.conf import settings
+        uuid = self.get_uuid(obj)
+        if uuid:
+            return f"{settings.SITE_URL.rstrip('/')}/entry/{uuid}/"
+        return obj.web if hasattr(obj, 'web') else ""
+
+    def get_type(self, obj):
+        return "entry"
 
 class LikeSerializer(serializers.ModelSerializer):
     class Meta:
@@ -65,16 +107,27 @@ class LikeSerializer(serializers.ModelSerializer):
         return like
 
 class CommentSerializer(serializers.ModelSerializer):
-    # Return the full nested author on reads; the view should supply an Author
-    # instance when creating via `serializer.save(author=author, entry=entry)`.
-    author = AuthorSerializer(read_only=True)
-
-    id = serializers.CharField(required=False)
-    published = serializers.DateTimeField(required=False)
+    type = serializers.SerializerMethodField()
+    author = AuthorSerializer()
+    uuid = serializers.SerializerMethodField()
+    comment = serializers.SerializerMethodField()
 
     class Meta:
         model = Comment
-        fields = '__all__'
+        fields = [
+            "type", "author", "comment", "contentType",
+            "id", "published", "uuid"
+        ]
+
+    def get_type(self, obj):
+        return "comment"
+
+    def get_comment(self, obj):
+        return obj.content
+
+    def get_uuid(self, obj):
+        return obj.id.split("/")[-1]
+
 
     ''' this helps with shape validation and nesting'''
     def create(self, validated_data):
@@ -110,13 +163,19 @@ class FollowSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class EntryImageSerializer(serializers.ModelSerializer):
+    url = serializers.SerializerMethodField()
+    uuid = serializers.SerializerMethodField()
+
     class Meta:
         model = EntryImage
-        fields = '__all__'
-        
-        extra_kwargs = {
-            'entry': {'read_only': True}, # By having 'entry' as an argument, we can prevent the DRF from requiring it in POST data
-        }
+        fields = ["url", "uuid"]
+
+    def get_url(self, obj):
+        return obj.image.url
+
+    def get_uuid(self, obj):
+        return None
+
 class AuthorInboxSerializer(serializers.Serializer):
     class Meta:
         model = Author

@@ -1406,37 +1406,19 @@ def public_profile_view(request, author_id):
     Fetches from remote node if necessary and syncs entries.
     """
 
-    author = Author.objects.filter(id=author_id).first()
-    
-    if not author:
-        if '-' in author_id and '/' not in author_id:
-            local_fqid = f"{settings.SITE_URL.rstrip('/')}/api/authors/{author_id}"
-            author = Author.objects.filter(id=local_fqid).first()
-            
-            if not author:
-                author = Author.objects.filter(username=author_id).first()
-        
-        # If still not found and it's a full URL, try extracting UUID
-        elif author_id.startswith('http'):
-            uuid_part = fqid_to_uuid(author_id)
-            if uuid_part:
-                if is_local(author_id):
-                    local_fqid = f"{settings.SITE_URL.rstrip('/')}/api/authors/{uuid_part}"
-                    author = Author.objects.filter(id=local_fqid).first()
-                else:
-                    author = Author.objects.filter(id=author_id.rstrip('/')).first()
+    # Fetch the author (local or remote) using unified helper
+    author = fetch_or_create_author_by_id(author_id)
     
     if not author:
         raise Http404("Author not found")
 
+    # Sanitize description for display
     author.description = sanitize_markdown_to_html(author.description)
 
-    # Get viewer (who is viewing this profile) - for visibility filtering
-    viewer = None
-    if request.user.is_authenticated:
-        viewer = Author.from_user(request.user)
+    # Viewer (current logged-in author) for visibility checks
+    viewer = Author.from_user(request.user) if request.user.is_authenticated else None
 
-    
+    # Query all entries by this author (exclude deleted)
     entries_qs = Entry.objects.filter(author=author).exclude(visibility="DELETED")
     
     if viewer == author:
@@ -1485,6 +1467,32 @@ def public_profile_view(request, author_id):
 
     return render(request, "public_profile.html", context)
 
+def fetch_or_create_author_by_id(author_id: str, username: str = None) -> Author:
+    """
+    Fetch an author by ID, either local or remote.
+    Uses is_local() to determine if the author is local.
+    Uses get_or_create_foreign_author() for remote authors.
+    """
+    author_id = author_id.rstrip('/')
+    
+    # 1. Check if local author
+    if is_local(author_id):
+        author = Author.objects.filter(id=author_id).first()
+        if not author:
+            print(f"[ERROR] Local author not found: {author_id}")
+        return author
+    
+    # 2. If not local, try to fetch existing remote author
+    author = Author.objects.filter(id=author_id).first()
+    if author:
+        return author
+    
+    # 3. Try to fetch or create remote author using get_or_create_foreign_author
+    author = get_or_create_foreign_author(remote_id=author_id, username=username)
+    if not author:
+        print(f"[WARNING] Remote author could not be fetched or created: {author_id}")
+    return author
+    
 # * ============================================================
 # * Helper View Functions
 # * ============================================================

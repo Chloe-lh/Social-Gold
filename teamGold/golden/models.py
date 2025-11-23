@@ -6,19 +6,48 @@ from django.contrib.postgres.fields import JSONField
 from django.conf import settings
 import uuid
 
-'''
-Relationship Summary
-Author 1 ────> * Entry
-Author 1 ────> * Comment
-Entry  1  ────> * Comment
-Entry  *  ────< * Author (Likes)
-Comment *  ────< * Author (Likes)
-Author *  ────< * Author (Followers/Following)
-Node   1  ────> * Author
+"""
+Relationship Summary 
 
-Note: When building a federated social platform, each object must
-have a fully qualified URL (FQID) that includes the nodes domain
-'''
+AUTHOR
+Author 1 ────> * Entries (Entry.author FK -> Author)
+Author 1 ────> * Comments (Comment.author FK -> Author)
+Author 1 ────> * LikesCreated (Like.author FK -> Author)
+Author 1 ────> * FollowsSent (Follow.actor FK -> Author)
+Author 1 ────> * InboxItems (Inbox.author FK -> Author)
+Author <────> Author (Asymmetrical M2M -> following; mutual = friends)
+Authors * <────> * Nodes (Node.admins M2M -> Author)
+
+ENTRY
+Entry * <──── 1 Author (Entry.author FK -> Author)
+Entry 1 ────> * Comments (Comment.entry FK -> Entry)
+Entry 1 ────> * Images (EntryImage.entry FK -> Entry)
+Entry * <────> * Authors (Entry.likes M2M -> Author)
+
+COMMENT
+Comment * <──── 1 Author(Comment.author FK -> Author)
+Comment * <──── 1 Entry (Comment.entry FK -> Entry)
+Comment 1 ────> * Replies (Comment.reply_to self-FK)
+Comment * <────> * Authors (Comment.likes M2M -> Author)
+
+LIKE
+Like * <──── 1 Author (Like.author FK -> Author)
+Like → Object (Stored as URL, not FK) (For entries and comments)
+
+FOLLOW
+Follow * <──── 1 Author (Follow.actor FK -> Author)
+Follow -> TargetAuthor (Stored as URL, not FK)
+
+INBOX
+Inbox * <──── 1 Author (Inbox.author FK -> Author)
+
+NODE
+Node * <────> * Authors (Node.admins M2M -> Author)
+Node 1 ────> * KnownNodes (KnownNode.parent FK -> Node)
+
+KNOWNNODE
+KnownNode * <──── 1 Node (KnownNode.parent FK -> Node)
+""" 
 
 VISIBILITY_CHOICES = [
     ("PUBLIC", "Public"),
@@ -84,7 +113,7 @@ class Author(AbstractBaseUser, PermissionsMixin):
     #is_shadow = models.BooleanField(default=False)
     #is_local = models.BooleanField(default=True)
 
-    # Authentication
+    # Authentication Requirements 
     USERNAME_FIELD = "username"
     REQUIRED_FIELDS = ["email"]
 

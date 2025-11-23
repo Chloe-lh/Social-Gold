@@ -25,7 +25,7 @@ import logging
 
 # LOCAL IMPORTS
 from golden.models import Author, Entry, Comment, Like, Follow, Node
-from golden.services import generate_comment_fqid, paginate, fqid_to_uuid, get_remote_node_from_fqid, notify
+from golden.services import generate_comment_fqid, paginate, fqid_to_uuid, get_remote_node_from_fqid
 from golden.distributor import distribute_activity
 from golden.activities import create_comment_activity
 

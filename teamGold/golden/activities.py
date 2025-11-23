@@ -111,7 +111,7 @@ def create_comment_activity(author, entry, comment):
         "actor": {
             "id": author.id,
             "host": author.host,
-            "displayName": author.username,
+            "username": author.username,
         },
         "object": {
             "type": "comment",
@@ -122,7 +122,7 @@ def create_comment_activity(author, entry, comment):
             "author": {
                 "id": author.id,
                 "host": author.host,
-                "displayName": author.username,
+                "username": author.username,
             },
             "published": comment.published.isoformat(),
         },
@@ -150,6 +150,8 @@ def create_follow_activity(author, target):
     """
     activity_id = make_fqid(author, "follow")
     
+    print(f"[DEBUG create_follow_activity] Creating follow activity: actor={author.username} (id={author.id}), target={target.username} (id={target.id})")
+    
     activity = {
         "@context": "https://www.w3.org/ns/activitystreams",
         "type": "Follow",
@@ -160,6 +162,8 @@ def create_follow_activity(author, target):
         "published": timezone.now().isoformat(),
         "state": "REQUESTED",
     }
+    
+    print(f"[DEBUG create_follow_activity] Activity created: id={activity_id}, type={activity['type']}, object={activity['object']}")
     
     return activity
 

@@ -1614,9 +1614,9 @@ def follow_requests(request):
                 inbox_item.processed = True
                 inbox_item.save()
             
-            #activity = create_accept_follow_activity(actor, request_id)
-            #distribute_activity(activity, actor=actor)
-            #messages.success(request, f"Accepted follow request from {follow_request.actor.username}")
+            activity = create_accept_follow_activity(actor, request_id)
+            distribute_activity(activity, actor=actor)
+            messages.success(request, f"Accepted follow request from {follow_request.actor.username}")
             return redirect("follow_requests")
 
         elif action == "reject":
@@ -1629,9 +1629,9 @@ def follow_requests(request):
                 inbox_item.processed = True
                 inbox_item.save()
             
-            #activity = create_reject_follow_activity(actor, follower_id)
-            #distribute_activity(activity, actor=actor)
-            #messages.success(request, f"Rejected follow request from {follow_request.actor.username}")
+            activity = create_reject_follow_activity(actor, follower_id)
+            distribute_activity(activity, actor=actor)
+            messages.success(request, f"Rejected follow request from {follow_request.actor.username}")
             return redirect("follow_requests")
 
     # Only show REQUESTED state - exclude REJECTED and ACCEPTED

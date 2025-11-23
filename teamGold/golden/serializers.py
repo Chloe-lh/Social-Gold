@@ -28,7 +28,7 @@ class AuthorSerializer(serializers.ModelSerializer):
     class Meta:
         model = Author
         fields = [
-            "type", "id", "host", "displayName",
+            "type", "id", "host", "username",
             "github", "profileImage", "uuid", "url"
         ]
 

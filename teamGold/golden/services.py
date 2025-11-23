@@ -16,6 +16,18 @@ def is_local(author_id):
     author = Author.objects.filter(id=author_id).first()
     return author is not None and author.host == settings.SITE_URL
 
+def is_local_to_node(author_id, node):
+    """
+    Returns True if the given author (object or id) belongs to the given node.
+    It checks by comparing the base URL of the author's ID to the node's base URL.
+    """
+
+    a = str(author_id).rstrip('/')
+    n = str(node.id).rstrip('/')
+
+    # If author's ID starts with the node base URL → it is local to that node
+    return a.startswith(n)
+
 def get_or_create_author(fqid: str) -> Author:
     """
     Fetch or create a remote or local author.

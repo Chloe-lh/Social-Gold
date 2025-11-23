@@ -378,7 +378,6 @@ def new_edit_entry_view(request):
         
         if not validate_visibility(user_selected_visibility):
             messages.error(request, f"Invalid visibility setting: {user_selected_visibility}")
-            print(f"[DEBUG entry_post] ERROR: Invalid visibility: {user_selected_visibility}")
             return redirect("stream")
 
         markdown_content = request.POST.get("content", "")
@@ -446,7 +445,6 @@ def new_edit_entry_view(request):
         remove_images = request.POST.getlist("remove_images")
 
         with transaction.atomic():
-            # Update entry fields
             old_visibility = editing_entry.visibility
             editing_entry.title = title
             editing_entry.content = html_content
@@ -457,11 +455,9 @@ def new_edit_entry_view(request):
             print(f"[DEBUG entry_update] Successfully updated entry {editing_entry.id}")
             print(f"[DEBUG entry_update] Visibility changed from {old_visibility} to {editing_entry.visibility}")
 
-            # Remove selected images
             if remove_images:
                 EntryImage.objects.filter(entry=editing_entry, id__in=remove_images).delete()
 
-            # Add new images
             if new_images:
                 current_max = editing_entry.images.count()
                 for idx, f in enumerate(new_images):
@@ -473,12 +469,10 @@ def new_edit_entry_view(request):
                         order=current_max + idx,
                     )
 
-            # Send update activity for the entry (with attachments if you added that)
             activity = create_update_entry_activity(request.current_author, editing_entry)
             distribute_activity(activity, actor=request.current_author)
 
         messages.success(request, "Entry updated successfully!")
-        # After saving, reset to "new entry" mode
         context.update({
             "form": EntryForm(),
             "editing_entry": None,
@@ -1177,28 +1171,19 @@ def profile_view(request):
     process_inbox(author)
     
     # Get viewer (who is viewing this profile) - for visibility filtering
-    viewer = author  # When viewing own profile, viewer is the author
+    viewer = author # When viewing own profile, viewer is the author
     if request.user.is_authenticated:
         viewer_author = Author.from_user(request.user)
         if viewer_author and viewer_author != author:
             viewer = viewer_author
     
-    # Retrieve entries filtered by visibility
-    # PUBLIC: visible to everyone
-    # UNLISTED: visible to followers (works for both local and remote)
-    # FRIENDS: visible to mutual follows/friends (works for both local and remote)
-    # DELETED: never shown
-    
     entries_qs = Entry.objects.filter(author=author).exclude(visibility="DELETED")
     
     if viewer == author:
-        # Viewing own profile - show all entries (except deleted)
         entries = entries_qs.order_by("-published")
     else:
-        # Viewing someone else's profile - filter by visibility
         visible_entries = []
         
-        # Check if viewer follows author (for UNLISTED visibility)
         followed_by_viewer = False
         if viewer:
             followed_by_viewer = Follow.objects.filter(
@@ -1207,7 +1192,6 @@ def profile_view(request):
                 state="ACCEPTED"
             ).exists()
         
-        # Check if viewer is friends with author (mutual follow, for FRIENDS visibility)
         is_friend_with_viewer = False
         if viewer and followed_by_viewer:
             # Check if author also follows viewer (mutual follow = friends)
@@ -1227,7 +1211,6 @@ def profile_view(request):
         
         entries = sorted(visible_entries, key=lambda x: x.published, reverse=True)
         
-    # Get followers (people who follow this author) - works for both local and remote
     followers = get_followers(author)
     
     # Get following (people this author follows) - works for both local and remote
@@ -1236,44 +1219,26 @@ def profile_view(request):
     following_ids = []
     following_ids_normalized = []
     for f in following_follows:
-        following_ids.append(f.object)  # Raw FQID
-        following_ids_normalized.append(normalize_fqid(str(f.object)))  # Normalized
+        following_ids.append(f.object)
+        following_ids_normalized.append(normalize_fqid(str(f.object))) 
     
     # Try to find authors by both raw and normalized IDs
     following = Author.objects.filter(
         Q(id__in=following_ids) | Q(id__in=following_ids_normalized)
     ).distinct()
     
-    # Get friends (mutual follows) - works for both local and remote
     friends_qs = get_friends(author)
     
-    # Add URL-friendly IDs to followers and following for templates
-    followers_with_urls = [
-        {'author': f, 'url_id': fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')} for f in followers
-    ]
-    
-    following_with_urls = [
-        {'author': f, 'url_id': fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')} for f in following
-    ]
-    
-    # Get friends (mutual follows) and add URL-friendly IDs
-    friends_with_urls = [
-        {'author': f, 'url_id': fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')} for f in friends_qs
-    ]
-    
-    # Fetch and process OUTGOING follow requests (requests you sent)
-    # For outgoing requests, req.actor is you, req.object is the person you requested to follow
-    print(f"[DEBUG profile_view] Processing {len(outgoing_follow_requests)} outgoing follow requests")
+    followers_with_urls = [{'author': f, 'url_id': fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')} for f in followers]
+    following_with_urls = [{'author': f, 'url_id': fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')} for f in following]
+    friends_with_urls = [{'author': f, 'url_id': fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')} for f in friends_qs]
+
     follow_requests_with_urls = []
     for req in outgoing_follow_requests:
-        print(f"[DEBUG profile_view] OUTGOING REQUEST: req.id={req.id}, req.actor={req.actor}, req.object={req.object}, req.state={req.state}")
-        # Get the target author (the person you're requesting to follow)
-        # Use normalized ID for lookup to handle both local and remote authors
         target_id = req.object
         target_id_normalized = normalize_fqid(str(target_id))
         target_id_str = str(target_id).rstrip('/')
         
-        # Try to find target by normalized or raw ID (handles both local and remote)
         target = Author.objects.filter(
             Q(id=target_id_normalized) | Q(id=target_id_str) | Q(id__iexact=target_id_str)
         ).first()
@@ -1418,50 +1383,36 @@ def public_profile_view(request, author_id):
     Handles both UUID format (68e52a5b-b117-44ef-82b8-25800fa9fc9b) and full FQID format.
     """
 
-    # Try to find author by full FQID first
     author = Author.objects.filter(id=author_id).first()
     
-    # If not found and it looks like a UUID, try constructing the full FQID
     if not author:
-        # Check if it's a UUID (contains dashes and no slashes)
         if '-' in author_id and '/' not in author_id:
-            # It's a UUID - try to find by constructing local FQID
             local_fqid = f"{settings.SITE_URL.rstrip('/')}/api/authors/{author_id}"
             author = Author.objects.filter(id=local_fqid).first()
             
-            # Also try matching by username as fallback
             if not author:
                 author = Author.objects.filter(username=author_id).first()
         
         # If still not found and it's a full URL, try extracting UUID
         elif author_id.startswith('http'):
-            # Extract UUID from full FQID
             uuid_part = fqid_to_uuid(author_id)
             if uuid_part:
-                # Try with extracted UUID
                 if is_local(author_id):
                     local_fqid = f"{settings.SITE_URL.rstrip('/')}/api/authors/{uuid_part}"
                     author = Author.objects.filter(id=local_fqid).first()
                 else:
-                    # Remote author - find by full FQID
                     author = Author.objects.filter(id=author_id.rstrip('/')).first()
     
     if not author:
         raise Http404("Author not found")
 
-    # Convert description to HTML
     author.description = sanitize_markdown_to_html(author.description)
 
     # Get viewer (who is viewing this profile) - for visibility filtering
     viewer = None
     if request.user.is_authenticated:
         viewer = Author.from_user(request.user)
-    
-    # Retrieve entries filtered by visibility
-    # PUBLIC: visible to everyone
-    # UNLISTED: visible to followers (works for both local and remote)
-    # FRIENDS: visible to mutual follows/friends (works for both local and remote)
-    # DELETED: never shown
+
     
     entries_qs = Entry.objects.filter(author=author).exclude(visibility="DELETED")
     

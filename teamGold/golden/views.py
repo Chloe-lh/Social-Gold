@@ -807,8 +807,8 @@ def profile_view(request):
                 if is_local(ra_id):
                     continue
 
-                if not is_local_to_node(ra_id, node)
-                    continue
+                #if not is_local_to_node(ra_id, node)
+                    #continue
 
                 ra_id = ra.get("id") or ra.get("@id") or str(ra.get("url", ""))
                 if not ra_id:

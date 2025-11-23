@@ -325,12 +325,26 @@ def fetch_remote_author_data(author_fqid):
         else:
             author_endpoint = author_fqid.rstrip('/') + '/'
         
-        # Get node authentication if available
+        # Get node authentication if available - try multiple matching strategies
         from golden.models import Node
-        node = Node.objects.filter(id__startswith=urlparse(author_fqid).netloc).first()
+        parsed = urlparse(author_fqid)
+        host_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
+        
+        # Try exact match first
+        node = Node.objects.filter(id=host_base).first()
+        # If not found, try startswith match
+        if not node:
+            node = Node.objects.filter(id__startswith=host_base).first()
+        # If still not found, try matching by netloc
+        if not node:
+            node = Node.objects.filter(id__contains=parsed.netloc).first()
+        
         auth = None
         if node and node.auth_user:
             auth = (node.auth_user, node.auth_pass)
+            print(f"[DEBUG fetch_remote_author_data] Using auth for author endpoint {author_endpoint}: user={node.auth_user}")
+        else:
+            print(f"[DEBUG fetch_remote_author_data] No auth available for {author_endpoint} (node={node.id if node else 'None'})")
         
         response = requests.get(
             author_endpoint,
@@ -338,6 +352,8 @@ def fetch_remote_author_data(author_fqid):
             auth=auth,
             headers={'Content-Type': 'application/json'}
         )
+        
+        print(f"[DEBUG fetch_remote_author_data] Author endpoint response: HTTP {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
@@ -354,8 +370,13 @@ def fetch_remote_author_data(author_fqid):
                     return data
         elif response.status_code == 404:
             # Author endpoint not found, try listing all authors
+            print(f"[DEBUG fetch_remote_author_data] Author endpoint not found (404), trying authors list: {author_endpoint}")
             logger.debug(f"Author endpoint not found, trying authors list: {author_endpoint}")
+        elif response.status_code == 401:
+            print(f"[DEBUG fetch_remote_author_data] HTTP 401 - Authentication failed for {author_endpoint}. Node auth_user={node.auth_user if node else 'None'}")
+            logger.warning(f"Authentication failed when fetching author from {author_endpoint}. Check node auth credentials.")
         else:
+            print(f"[DEBUG fetch_remote_author_data] Failed to fetch author from {author_endpoint}: HTTP {response.status_code}")
             logger.warning(f"Failed to fetch author from {author_endpoint}: HTTP {response.status_code}")
     except requests.exceptions.RequestException as e:
         logger.debug(f"Error fetching author from endpoint: {e}")
@@ -366,12 +387,23 @@ def fetch_remote_author_data(author_fqid):
         host_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
         authors_endpoint = f"{host_base}/api/authors/"
         
-        # Get node authentication if available
+        # Get node authentication if available - try multiple matching strategies
         from golden.models import Node
-        node = Node.objects.filter(id__startswith=parsed.netloc).first()
+        # Try exact match first
+        node = Node.objects.filter(id=host_base).first()
+        # If not found, try startswith match
+        if not node:
+            node = Node.objects.filter(id__startswith=host_base).first()
+        # If still not found, try matching by netloc
+        if not node:
+            node = Node.objects.filter(id__contains=parsed.netloc).first()
+        
         auth = None
         if node and node.auth_user:
             auth = (node.auth_user, node.auth_pass)
+            print(f"[DEBUG fetch_remote_author_data] Using auth for authors list {authors_endpoint}: user={node.auth_user}")
+        else:
+            print(f"[DEBUG fetch_remote_author_data] No auth available for {authors_endpoint} (node={node.id if node else 'None'})")
         
         response = requests.get(
             authors_endpoint,
@@ -379,6 +411,8 @@ def fetch_remote_author_data(author_fqid):
             auth=auth,
             headers={'Content-Type': 'application/json'}
         )
+        
+        print(f"[DEBUG fetch_remote_author_data] Authors list endpoint response: HTTP {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
@@ -389,13 +423,20 @@ def fetch_remote_author_data(author_fqid):
             elif isinstance(data, list):
                 items = data
             
+            print(f"[DEBUG fetch_remote_author_data] Found {len(items)} authors in list")
+            
             # Find the matching author
             for item in items:
                 if isinstance(item, dict):
                     item_id = item.get("id") or item.get("@id") or str(item.get("url", ""))
                     if item_id == author_fqid or normalize_fqid(item_id) == normalize_fqid(author_fqid):
+                        print(f"[DEBUG fetch_remote_author_data] Found matching author in list: username={item.get('username')}, displayName={item.get('displayName')}")
                         return item
+        elif response.status_code == 401:
+            print(f"[DEBUG fetch_remote_author_data] HTTP 401 - Authentication failed for authors list. Node auth_user={node.auth_user if node else 'None'}")
+            logger.warning(f"Authentication failed when fetching author from {authors_endpoint}. Check node auth credentials.")
     except requests.exceptions.RequestException as e:
+        print(f"[DEBUG fetch_remote_author_data] Request exception in authors list: {e}")
         logger.debug(f"Error fetching from authors list: {e}")
     
     return None

@@ -330,13 +330,38 @@ def distribute_activity(activity: dict, actor: Author):
             entry = fetch_and_sync_remote_entry(entry_id)
         
         if entry:
+            # Distribute comment to entry author AND their followers/friends (like entry updates)
+            # This ensures all nodes viewing the entry see the new comment
+            print(f"[DEBUG distribute_activity] COMMENT: Found entry, author={entry.author.username} (id={entry.author.id})")
             recipients = {entry.author}
+            
+            # Also send to followers/friends of the entry author (like entry updates do)
+            # This ensures all nodes that can see the entry also see the comment
+            visibility = entry.visibility.upper() if hasattr(entry, 'visibility') else "PUBLIC"
+            if visibility == "PUBLIC":
+                followers = get_followers(entry.author)
+                friends = get_friends(entry.author)
+                recipients |= set(followers)
+                recipients |= set(friends)
+                print(f"[DEBUG distribute_activity] COMMENT: Adding {len(followers)} followers and {len(friends)} friends")
+            elif visibility == "UNLISTED":
+                followers = get_followers(entry.author)
+                recipients |= set(followers)
+                print(f"[DEBUG distribute_activity] COMMENT: Adding {len(followers)} followers (UNLISTED)")
+            elif visibility == "FRIENDS":
+                friends = get_friends(entry.author)
+                recipients |= set(friends)
+                print(f"[DEBUG distribute_activity] COMMENT: Adding {len(friends)} friends (FRIENDS)")
+            
+            print(f"[DEBUG distribute_activity] COMMENT: Sending to {len(recipients)} recipients")
             for r in recipients:
+                print(f"[DEBUG distribute_activity] COMMENT: Sending to {r.username} (id={r.id}, host={r.host})")
                 send_activity_to_inbox(r, activity)
         else:
             # Last resort: try to extract author from entry FQID pattern
             # Entry FQID format: https://node.com/api/authors/{author_uuid}/entries/{entry_uuid}
             # Or: https://node.com/api/entries/{entry_uuid} (need to fetch to get author)
+            print(f"[DEBUG distribute_activity] COMMENT: ERROR - Could not find entry or extract author: entry_id={entry_id}")
             logger.warning(f"Could not find entry or extract author for comment: entry_id={entry_id}")
         return
 
@@ -364,9 +389,34 @@ def distribute_activity(activity: dict, actor: Author):
         if entry:
             print(f"[DEBUG distribute_activity] LIKE: Found entry locally, author={entry.author.username} (id={entry.author.id}, host={entry.author.host})")
             recipients.add(entry.author)
+            
+            # Also send to followers/friends of the entry author (like entry updates do)
+            # This ensures all nodes that can see the entry also see the like update
+            visibility = entry.visibility.upper() if hasattr(entry, 'visibility') else "PUBLIC"
+            if visibility == "PUBLIC":
+                followers = get_followers(entry.author)
+                friends = get_friends(entry.author)
+                recipients |= set(followers)
+                recipients |= set(friends)
+                print(f"[DEBUG distribute_activity] LIKE: Adding {len(followers)} followers and {len(friends)} friends")
+            elif visibility == "UNLISTED":
+                followers = get_followers(entry.author)
+                recipients |= set(followers)
+                print(f"[DEBUG distribute_activity] LIKE: Adding {len(followers)} followers (UNLISTED)")
+            elif visibility == "FRIENDS":
+                friends = get_friends(entry.author)
+                recipients |= set(friends)
+                print(f"[DEBUG distribute_activity] LIKE: Adding {len(friends)} friends (FRIENDS)")
         elif comment:
             print(f"[DEBUG distribute_activity] LIKE: Found comment locally, author={comment.author.username} (id={comment.author.id}, host={comment.author.host})")
             recipients.add(comment.author)
+            
+            # Also send to followers/friends of the comment author
+            followers = get_followers(comment.author)
+            friends = get_friends(comment.author)
+            recipients |= set(followers)
+            recipients |= set(friends)
+            print(f"[DEBUG distribute_activity] LIKE: Adding {len(followers)} followers and {len(friends)} friends for comment")
         else:
             # Entry/comment not found locally - try to sync from remote
             print(f"[DEBUG distribute_activity] LIKE: Entry/comment not found locally, attempting to fetch and sync: liked_fqid={liked_fqid}")
@@ -376,6 +426,23 @@ def distribute_activity(activity: dict, actor: Author):
             if entry:
                 print(f"[DEBUG distribute_activity] LIKE: Successfully synced entry, author={entry.author.username} (id={entry.author.id}, host={entry.author.host})")
                 recipients.add(entry.author)
+                
+                # Also send to followers/friends of the entry author
+                visibility = entry.visibility.upper() if hasattr(entry, 'visibility') else "PUBLIC"
+                if visibility == "PUBLIC":
+                    followers = get_followers(entry.author)
+                    friends = get_friends(entry.author)
+                    recipients |= set(followers)
+                    recipients |= set(friends)
+                    print(f"[DEBUG distribute_activity] LIKE: Adding {len(followers)} followers and {len(friends)} friends")
+                elif visibility == "UNLISTED":
+                    followers = get_followers(entry.author)
+                    recipients |= set(followers)
+                    print(f"[DEBUG distribute_activity] LIKE: Adding {len(followers)} followers (UNLISTED)")
+                elif visibility == "FRIENDS":
+                    friends = get_friends(entry.author)
+                    recipients |= set(friends)
+                    print(f"[DEBUG distribute_activity] LIKE: Adding {len(friends)} friends (FRIENDS)")
             else:
                 # Try to extract author from FQID pattern
                 # Entry FQID: https://node.com/api/authors/{author_uuid}/entries/{entry_uuid}
@@ -417,9 +484,33 @@ def distribute_activity(activity: dict, actor: Author):
         recipients = set()
         
         if entry:
+            print(f"[DEBUG distribute_activity] UNLIKE: Found entry locally, author={entry.author.username} (id={entry.author.id}, host={entry.author.host})")
             recipients.add(entry.author)
+            # Also send to followers/friends of the entry author
+            visibility = entry.visibility.upper() if hasattr(entry, 'visibility') else "PUBLIC"
+            if visibility == "PUBLIC":
+                followers = get_followers(entry.author)
+                friends = get_friends(entry.author)
+                recipients |= set(followers)
+                recipients |= set(friends)
+                print(f"[DEBUG distribute_activity] UNLIKE: Adding {len(followers)} followers and {len(friends)} friends")
+            elif visibility == "UNLISTED":
+                followers = get_followers(entry.author)
+                recipients |= set(followers)
+                print(f"[DEBUG distribute_activity] UNLIKE: Adding {len(followers)} followers (UNLISTED)")
+            elif visibility == "FRIENDS":
+                friends = get_friends(entry.author)
+                recipients |= set(friends)
+                print(f"[DEBUG distribute_activity] UNLIKE: Adding {len(friends)} friends (FRIENDS)")
         elif comment:
+            print(f"[DEBUG distribute_activity] UNLIKE: Found comment locally, author={comment.author.username} (id={comment.author.id}, host={comment.author.host})")
             recipients.add(comment.author)
+            # Also send to followers/friends of the comment author
+            followers = get_followers(comment.author)
+            friends = get_friends(comment.author)
+            recipients |= set(followers)
+            recipients |= set(friends)
+            print(f"[DEBUG distribute_activity] UNLIKE: Adding {len(followers)} followers and {len(friends)} friends for comment")
         else:
             # Entry/comment not found locally - try to sync from remote
             print(f"[DEBUG distribute_activity] UNLIKE: Entry/comment not found locally, attempting to fetch and sync: liked_fqid={liked_fqid}")
@@ -427,20 +518,41 @@ def distribute_activity(activity: dict, actor: Author):
             from golden.services import fetch_and_sync_remote_entry
             entry = fetch_and_sync_remote_entry(liked_fqid)
             if entry:
-                print(f"[DEBUG distribute_activity] UNLIKE: Successfully synced entry, author={entry.author.username} (id={entry.author.id})")
+                print(f"[DEBUG distribute_activity] UNLIKE: Successfully synced entry, author={entry.author.username} (id={entry.author.id}, host={entry.author.host})")
                 recipients.add(entry.author)
+                # Also send to followers/friends
+                visibility = entry.visibility.upper() if hasattr(entry, 'visibility') else "PUBLIC"
+                if visibility == "PUBLIC":
+                    followers = get_followers(entry.author)
+                    friends = get_friends(entry.author)
+                    recipients |= set(followers)
+                    recipients |= set(friends)
+                    print(f"[DEBUG distribute_activity] UNLIKE: Adding {len(followers)} followers and {len(friends)} friends")
+                elif visibility == "UNLISTED":
+                    followers = get_followers(entry.author)
+                    recipients |= set(followers)
+                    print(f"[DEBUG distribute_activity] UNLIKE: Adding {len(followers)} followers (UNLISTED)")
+                elif visibility == "FRIENDS":
+                    friends = get_friends(entry.author)
+                    recipients |= set(friends)
+                    print(f"[DEBUG distribute_activity] UNLIKE: Adding {len(friends)} friends (FRIENDS)")
             else:
                 # Try to extract author from FQID pattern
                 if '/api/authors/' in liked_fqid and '/entries/' in liked_fqid:
                     author_fqid = '/api/authors/'.join(liked_fqid.split('/api/authors/')[:2]).split('/entries/')[0]
+                    print(f"[DEBUG distribute_activity] UNLIKE: Extracting author from FQID: {author_fqid}")
                     author = get_or_create_foreign_author(author_fqid)
                     if author:
+                        print(f"[DEBUG distribute_activity] UNLIKE: Extracted author={author.username} (id={author.id}, host={author.host})")
                         recipients.add(author)
                         logger.info(f"Extracted author from entry FQID: {author_fqid}")
                 else:
+                    print(f"[DEBUG distribute_activity] UNLIKE: ERROR - Could not find entry/comment or extract author: liked_fqid={liked_fqid}")
                     logger.warning(f"Could not find entry/comment or extract author for unlike: liked_fqid={liked_fqid}")
 
+        print(f"[DEBUG distribute_activity] UNLIKE: Sending to {len(recipients)} recipients")
         for r in recipients:
+            print(f"[DEBUG distribute_activity] UNLIKE: Sending unlike activity to {r.username} (id={r.id}, host={r.host})")
             send_activity_to_inbox(r, activity)
         return
     

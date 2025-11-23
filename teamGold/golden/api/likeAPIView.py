@@ -19,7 +19,7 @@ from django.core.paginator import Paginator
 
 # LOCAL IMPORTS
 from golden.models import Author, Entry, Comment, Like, Node
-from golden.services import generate_like_fqid, notify, paginate
+from golden.services import generate_like_fqid, paginate
 from golden.distributor import distribute_activity
 from golden.activities import create_like_activity
 

@@ -1,15 +1,12 @@
-# golden/services.py
-from django.db import transaction
-from .models import Author
-import logging
-from datetime import timezone
-from urllib.parse import unquote, urlparse
-import uuid
 import requests
+import uuid
+
 from django.conf import settings
+from .models import Author, Entry
+from datetime import timezone
 from requests.exceptions import RequestException
-from golden.models import Entry
 from urllib.parse import urlparse
+from golden.models import Node, Follow, Author, Entry
 
 def normalize_fqid(fqid: str) -> str:
     """Normalize FQID by removing trailing slashes and ensuring consistent format."""
@@ -19,6 +16,18 @@ def is_local(author_id):
     author = Author.objects.filter(id=author_id).first()
     return author is not None and author.host == settings.SITE_URL
 
+def is_local_to_node(author_id, node):
+    """
+    Returns True if the given author (object or id) belongs to the given node.
+    It checks by comparing the base URL of the author's ID to the node's base URL.
+    """
+
+    a = str(author_id).rstrip('/')
+    n = str(node.id).rstrip('/')
+
+    # If author's ID starts with the node base URL → it is local to that node
+    return a.startswith(n)
+
 def get_or_create_author(fqid: str) -> Author:
     """
     Fetch or create a remote or local author.
@@ -27,28 +36,6 @@ def get_or_create_author(fqid: str) -> Author:
     fqid = normalize_fqid(fqid)
     author, created = Author.objects.get_or_create(id=fqid)
     return author
-
-def create_activity(author, activity_type, object_data, suffix="posts"):
-    activity_id = f"{author.id.rstrip('/')}/{suffix}/{uuid.uuid4()}"
-    activity = {
-        "type": activity_type,
-        "id": activity_id,
-        "actor": str(author.id),
-        "published": timezone.now().isoformat(),
-        "summary": f"{author.username} performed a {activity_type} activity",
-        "object": object_data
-    }
-    return activity
-
-def create_follow_activity(author, target):
-    object_data = {
-        "type": "Follow",
-        "actor": str(author.id),
-        "object": str(target.id),
-        "published": timezone.now().isoformat(),
-        "state": "REQUESTED"
-    }
-    return create_activity(author, "Follow", object_data, "follow")
 
 def process_remote_activity(activity_data):
     activity_type = activity_data.get("type", "").lower()
@@ -88,14 +75,29 @@ def get_remote_node_from_fqid(fqid):
     return None
 
 
+# ! This section of services is old but USED? They are referenced but if possible, needs to be cleaned up
 
+def create_activity(author, activity_type, object_data, suffix="posts"):
+    activity_id = f"{author.id.rstrip('/')}/{suffix}/{uuid.uuid4()}"
+    activity = {
+        "type": activity_type,
+        "id": activity_id,
+        "actor": str(author.id),
+        "published": timezone.now().isoformat(),
+        "summary": f"{author.username} performed a {activity_type} activity",
+        "object": object_data
+    }
+    return activity
 
-
-
-
-
-
-# ! OLD ASS CODE !
+def create_follow_activity(author, target):
+    object_data = {
+        "type": "Follow",
+        "actor": str(author.id),
+        "object": str(target.id),
+        "published": timezone.now().isoformat(),
+        "state": "REQUESTED"
+    }
+    return create_activity(author, "Follow", object_data, "follow")
 
 def generate_comment_fqid(author):
     """
@@ -287,7 +289,6 @@ def fetch_or_create_author(author_url):
     """
     Fetch or create a remote author by their URL.
     """
-    from golden.models import Author
 
     # Check if author already exists locally
     author = Author.objects.filter(id=author_url).first()
@@ -310,8 +311,6 @@ def fetch_remote_author_data(author_fqid):
     Fetch remote author data from the given FQID.
     Tries to fetch from the specific author endpoint first, then falls back to listing all authors.
     """
-    import logging
-    logger = logging.getLogger(__name__)
     
     # Try to fetch the specific author by their FQID endpoint
     # Format: https://node.com/api/authors/{uuid}
@@ -326,7 +325,6 @@ def fetch_remote_author_data(author_fqid):
             author_endpoint = author_fqid.rstrip('/') + '/'
         
         # Get node authentication if available - try multiple matching strategies
-        from golden.models import Node
         parsed = urlparse(author_fqid)
         host_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
         
@@ -371,15 +369,12 @@ def fetch_remote_author_data(author_fqid):
         elif response.status_code == 404:
             # Author endpoint not found, try listing all authors
             print(f"[DEBUG fetch_remote_author_data] Author endpoint not found (404), trying authors list: {author_endpoint}")
-            logger.debug(f"Author endpoint not found, trying authors list: {author_endpoint}")
         elif response.status_code == 401:
             print(f"[DEBUG fetch_remote_author_data] HTTP 401 - Authentication failed for {author_endpoint}. Node auth_user={node.auth_user if node else 'None'}")
-            logger.warning(f"Authentication failed when fetching author from {author_endpoint}. Check node auth credentials.")
         else:
             print(f"[DEBUG fetch_remote_author_data] Failed to fetch author from {author_endpoint}: HTTP {response.status_code}")
-            logger.warning(f"Failed to fetch author from {author_endpoint}: HTTP {response.status_code}")
     except requests.exceptions.RequestException as e:
-        logger.debug(f"Error fetching author from endpoint: {e}")
+        print(f"Error fetching author from endpoint: {e}")
     
     # Fallback: try fetching from the authors list endpoint
     try:
@@ -387,8 +382,6 @@ def fetch_remote_author_data(author_fqid):
         host_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
         authors_endpoint = f"{host_base}/api/authors/"
         
-        # Get node authentication if available - try multiple matching strategies
-        from golden.models import Node
         # Try exact match first
         node = Node.objects.filter(id=host_base).first()
         # If not found, try startswith match
@@ -434,10 +427,8 @@ def fetch_remote_author_data(author_fqid):
                         return item
         elif response.status_code == 401:
             print(f"[DEBUG fetch_remote_author_data] HTTP 401 - Authentication failed for authors list. Node auth_user={node.auth_user if node else 'None'}")
-            logger.warning(f"Authentication failed when fetching author from {authors_endpoint}. Check node auth credentials.")
     except requests.exceptions.RequestException as e:
         print(f"[DEBUG fetch_remote_author_data] Request exception in authors list: {e}")
-        logger.debug(f"Error fetching from authors list: {e}")
     
     return None
 
@@ -449,11 +440,14 @@ def get_or_create_foreign_author(remote_id: str, host: str = None, username: str
     know the host) to avoid parsing or unnecessary network calls.
     Accepts an optional `username` parameter to set the username when creating.
     """
+    print(f"[DEBUG get_or_create_foreign_author] Called with: remote_id={remote_id}, host={host}, username={username}")
     remote_id = normalize_fqid(remote_id)
+    print(f"[DEBUG get_or_create_foreign_author] Normalized remote_id: {remote_id}")
     
     # Check if author already exists by FQID
     author = Author.objects.filter(id=remote_id).first()
     if author:
+        print(f"[DEBUG get_or_create_foreign_author] Found existing author by FQID: username={author.username}, id={author.id}, host={author.host}")
         # Always try to refresh username if it looks like a UUID or is missing
         # This ensures we get the real username even if the author was created with a UUID
         username_looks_like_uuid = len(author.username) == 36 and '-' in author.username and author.username.count('-') == 4
@@ -479,16 +473,36 @@ def get_or_create_foreign_author(remote_id: str, host: str = None, username: str
             author.save(update_fields=['username'])
         return author
     
-    # Also check by username if username is provided (to avoid duplicates)
-    if username:
-        existing = Author.objects.filter(username=username, host=host or urlparse(remote_id).netloc).first()
-        if existing:
-            # Update the ID if it's different
-            if existing.id != remote_id:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(f"Found author '{username}' with different ID: {existing.id} vs {remote_id}")
-            return existing
+    print(f"[DEBUG get_or_create_foreign_author] Author not found by FQID, checking by username")
+    existing_by_username = None
+    if username and (host or "/api/authors/" in remote_id or remote_id.startswith("http")):
+        host_for_lookup = host
+        if not host_for_lookup:
+            if "/api/authors/" in remote_id or remote_id.startswith("http"):
+                parsed = urlparse(remote_id)
+                host_for_lookup = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
+        print(f"[DEBUG get_or_create_foreign_author] Looking up by username: username={username}, host_for_lookup={host_for_lookup}")
+        if host_for_lookup:
+            existing_by_username = Author.objects.filter(username=username, host=host_for_lookup).first()
+            if existing_by_username:
+                print(f"[DEBUG get_or_create_foreign_author] Found author by username: username={existing_by_username.username}, id={existing_by_username.id}, host={existing_by_username.host}")
+                # Update the ID if it's different
+                if existing_by_username.id != remote_id:
+                    print(f"[DEBUG get_or_create_foreign_author] Found author '{username}' with different ID: {existing_by_username.id} vs {remote_id}")
+                return existing_by_username
+    
+    # Check if this is a local author first
+    # If it's local and doesn't exist, that's an error - don't create it
+    site_url = settings.SITE_URL.rstrip('/')
+    is_local_fqid = remote_id.startswith(site_url) if remote_id.startswith("http") else False
+    print(f"[DEBUG get_or_create_foreign_author] Checking if local: site_url={site_url}, remote_id={remote_id}, is_local_fqid={is_local_fqid}")
+    
+    if is_local_fqid:
+        # This is a local author - if it doesn't exist, that's an error
+        # Local authors should already exist in the database
+        print(f"[DEBUG get_or_create_foreign_author] ERROR: Local author not found: {remote_id}. This may indicate a data issue.")
+        print(f"[DEBUG get_or_create_foreign_author] Returning None for local author that doesn't exist")
+        return None
     
     # Check if remote_id is a full URL or just a UUID
     host_val = host
@@ -497,10 +511,8 @@ def get_or_create_foreign_author(remote_id: str, host: str = None, username: str
             parsed = urlparse(remote_id)
             host_val = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
         else:
-            # If it's just a UUID and no host provided, we can't create a proper FQID
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"Cannot create foreign author from UUID without host: {remote_id}")
+            # If we don't have a host and remote_id is not a URL, we can't create a remote author
+            print(f"[DEBUG get_or_create_foreign_author] Cannot create remote author: no host and remote_id is not a URL: {remote_id}")
             return None
     
     # If remote_id is just a UUID, reconstruct the full FQID
@@ -508,24 +520,31 @@ def get_or_create_foreign_author(remote_id: str, host: str = None, username: str
         uuid_part = remote_id.rstrip("/")
         remote_id = f"{host_val}/api/authors/{uuid_part}"
     
-    # If username is not provided, try to fetch author data from remote node
+    # At this point, we know it's a remote author (not local)
+    # ALWAYS try to fetch author data from remote node
+    # This ensures we get the correct username and other data, even if username was provided
     fetched_username = username
     fetched_display_name = None
     fetched_profile_image = None
     
-    if not username:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"Fetching author data for {remote_id} from remote node")
-        author_data = fetch_remote_author_data(remote_id)
-        
-        if author_data:
-            fetched_username = author_data.get("username") or author_data.get("displayName")
-            fetched_display_name = author_data.get("displayName") or author_data.get("display_name")
-            fetched_profile_image = author_data.get("profileImage") or author_data.get("profile_image")
-            # Also update host if provided in the data
-            if author_data.get("host"):
-                host_val = author_data.get("host").rstrip('/')
+    print(f"[DEBUG get_or_create_foreign_author] Fetching author data from remote node: {remote_id}")
+    author_data = fetch_remote_author_data(remote_id)
+    
+    if author_data:
+        # Use fetched data, but prefer provided username if it was explicitly given
+        fetched_username = author_data.get("username") or author_data.get("displayName") or username
+        fetched_display_name = author_data.get("displayName") or author_data.get("display_name")
+        fetched_profile_image = author_data.get("profileImage") or author_data.get("profile_image")
+        # Also update host if provided in the data
+        if author_data.get("host"):
+            host_val = author_data.get("host").rstrip('/')
+        print(f"[DEBUG get_or_create_foreign_author] Successfully fetched author data: username={fetched_username}")
+    else:
+        print(f"[DEBUG get_or_create_foreign_author] Failed to fetch author data from remote node: {remote_id}")
+        # If fetch failed, we can still create a stub with provided username or guess
+        # But log a warning
+        if not username:
+            print(f"[DEBUG get_or_create_foreign_author] WARNING: Creating stub author without remote fetch (no username provided)")
     
     # Fallback to guessing username from FQID if still not available
     guessed_username = fetched_username or remote_id.split("/")[-1] if "/" in remote_id else remote_id
@@ -557,7 +576,8 @@ def get_or_create_foreign_author(remote_id: str, host: str = None, username: str
         author.save()
     
     return author
-    
+
+'''
 def notify(author, data):
     """
     Notify followers of `author` by POSTing `data` to each follower's node inbox.
@@ -569,14 +589,12 @@ def notify(author, data):
     - If a matching `Node` exists and is active, POST `data` to that node's `/inbox` URL
       using any HTTP auth configured on the `Node`.
     """
-    logger = logging.getLogger(__name__)
     results = []
 
     # Use the reverse relation 'followers_set' to get Authors who follow `author`.
     try:
         followers_qs = author.followers_set.all()
     except Exception:
-        logger.exception("Failed to get followers for author %s", getattr(author, 'id', None))
         return results
 
     for follower in followers_qs:
@@ -584,7 +602,6 @@ def notify(author, data):
             # follower.id is an author's FQID, e.g. 'http://nodebbbb/api/authors/222/'
             parsed = urlparse(str(follower.id))
             if not parsed.scheme or not parsed.netloc:
-                logger.debug("Skipping follower with invalid id: %s", follower.id)
                 continue
 
             follower_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
@@ -592,10 +609,8 @@ def notify(author, data):
             # Look up a Node whose id starts with the follower's host
             node = Node.objects.filter(id__startswith=follower_base).first()
             if not node:
-                logger.debug("No Node found for follower host %s (follower=%s)", follower_base, follower.id)
                 continue
             if not getattr(node, 'is_active', False):
-                logger.debug("Skipping inactive node %s for follower %s", node.id, follower.id)
                 continue
 
             inbox_url = node.id.rstrip('/') + '/inbox'
@@ -603,7 +618,6 @@ def notify(author, data):
             if getattr(node, 'auth_user', None):
                 auth = (node.auth_user, node.auth_pass)
 
-            logger.debug("Posting notification to follower %s inbox %s", follower.id, inbox_url)
             resp = requests.post(
                 inbox_url,
                 json=data,
@@ -613,10 +627,9 @@ def notify(author, data):
             )
             results.append((follower.id, resp.status_code))
             if not (200 <= resp.status_code < 300):
-                logger.warning("Failed to notify follower %s at %s: %s", follower.id, inbox_url, resp.status_code)
 
         except Exception as e:
-            logger.exception("Exception while notifying follower %s: %s", getattr(follower, 'id', None), e)
             results.append((getattr(follower, 'id', None), None))
 
     return results
+'''

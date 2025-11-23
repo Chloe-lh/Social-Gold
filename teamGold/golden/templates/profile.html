@@ -86,6 +86,12 @@
             {% if f_data.author in friends %}
               <img class="friend-icon" src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
             {% endif %}
+            <form method="POST" class="remove-follower-form">
+              {% csrf_token %}
+              <button type="submit" name="remove-follower" value="{{ f_data.author.id }}" class="remove-follower-btn">
+                <img src="{% static 'golden/icons/user-remove-icon.png' %}" alt="remove this person">
+              </button>
+            </form>
           </section>
           <hr class="follower-divider">
         {% endfor %}
@@ -137,26 +143,6 @@
 
     <!-- Request Tab Section -->
     <section class="tab-panel" data-tab-panel="requests">
-      <!-- Requests You Sent -->
-      <h3>Requests You Sent</h3>
-      {% if follow_requests_with_urls %}
-        <ul style="list-style: none; padding: 0;">
-          {% for req_data in follow_requests_with_urls %}
-          <li class="request-row">
-            <a href="{% url 'public-profile' req_data.target_url_id %}">
-              Waiting for {% if req_data.target %}{{ req_data.target.displayName|default:req_data.target.name|default:req_data.target.username|default:req_data.target.id }}{% else %}{{ req_data.target_id|default:req_data.target_url_id }}{% endif %} to accept your follow request
-            </a>
-            <span style="color: #888; font-size: 0.9em;">(Pending)</span>
-          </li>
-          <hr class="follower-divider">
-          {% endfor %}
-        </ul>
-      {% else %}
-        <p>You have no pending follow requests.</p>
-      {% endif %}
-      
-      <!-- Requests You Received -->
-      <h3 style="margin-top: 20px;">Requests You Received</h3>
       {% if incoming_follow_requests_with_urls %}
         <ul style="list-style: none; padding: 0;">
           {% for req_data in incoming_follow_requests_with_urls %}

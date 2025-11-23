@@ -210,13 +210,13 @@ def create_accept_follow_activity(acceptor_author, follower_id_or_follow_id):
     
     return activity
 
-#def create_reject_follow_activity(acceptor_author, follower_id_or_follow_id):
+def create_reject_follow_activity(acceptor_author, follower_id_or_follow_id):
     """
     Create a Reject activity for a follow request.
     Accepts either a follower Author ID string or a Follow ID string.
     If a Follow ID is provided, it will look up the Follow object to get the follower.
     """
-    """
+
     follower_id = follower_id_or_follow_id
     follow_obj = None
     
@@ -253,7 +253,7 @@ def create_accept_follow_activity(acceptor_author, follower_id_or_follow_id):
         }
     
     return activity
-    """
+    
 
 def create_unfollow_activity(actor_author, target_id):
     activity_id = make_fqid(actor_author, "undo-follow")

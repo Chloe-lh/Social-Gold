@@ -632,8 +632,20 @@ def profile_view(request):
             if response.status_code == 200:
                 data = response.json()
                 # Handle both paginated format (with "items") and direct list format
-                if isinstance(data, dict) and "items" in data:
-                    return data.get("items", [])
+                if isinstance(data, dict):
+                    if "items" in data:
+                        items = data["items"]
+                        if isinstance(items, list):
+                            return items
+                        else:
+                            print(f"[REMOTE AUTHORS] 'items' is not a list from {node.id}/api/authors/")
+                            return []
+
+                    if "authors" in data and isinstance(data["authors"], list):
+                        return data["authors"]
+
+                    print("[REMOTE AUTHORS] Unexpected dict format:", data)
+                    return []
                 elif isinstance(data, list):
                     return data
                 else:

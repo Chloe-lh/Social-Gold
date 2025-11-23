@@ -1470,29 +1470,32 @@ def public_profile_view(request, author_id):
 def fetch_or_create_author_by_id(author_id: str, username: str = None) -> Author:
     """
     Fetch an author by ID, either local or remote.
-    Uses is_local() to determine if the author is local.
-    Uses get_or_create_foreign_author() for remote authors.
     """
-    author_id = author_id.rstrip('/')
-    
-    # 1. Check if local author
+    # Local author
     if is_local(author_id):
-        author = Author.objects.filter(id=author_id).first()
-        if not author:
-            print(f"[ERROR] Local author not found: {author_id}")
-        return author
-    
-    # 2. If not local, try to fetch existing remote author
-    author = Author.objects.filter(id=author_id).first()
-    if author:
-        return author
-    
-    # 3. Try to fetch or create remote author using get_or_create_foreign_author
-    author = get_or_create_foreign_author(remote_id=author_id, username=username)
-    if not author:
-        print(f"[WARNING] Remote author could not be fetched or created: {author_id}")
-    return author
-    
+        return Author.objects.filter(id=author_id).first()
+
+    # Remote author – do NOT create a DB entry
+    remote_data = fetch_remote_author_data(author_id)
+
+    if not remote_data:
+        return None
+
+    # Create a temporary Author-like object WITHOUT SAVING
+    temp = Author(
+        id=remote_data.get("id"),
+        host=remote_data.get("host"),
+        url=remote_data.get("url") or remote_data.get("id"),
+        username=remote_data.get("username"),
+        displayName=remote_data.get("displayName"),
+        github=remote_data.get("github", ""),
+        profileImage=remote_data.get("profileImage", ""),
+        type="author",
+    )
+
+    temp._from_remote = True  # helper flag if you need it
+    return temp
+
 # * ============================================================
 # * Helper View Functions
 # * ============================================================

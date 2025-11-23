@@ -1,7 +1,7 @@
 import requests
 from django.utils import timezone
 from golden.models import Entry, EntryImage, Author, Comment, Like, Follow, Node, Inbox
-from golden.services import get_or_create_foreign_author, normalize_fqid
+from golden.services import get_or_create_foreign_author, normalize_fqid, generate_comment_fqid, fetch_and_sync_remote_entry
 from urllib.parse import urljoin
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
@@ -139,7 +139,6 @@ def get_followers(author: Author):
     """Return all authors who follow this author (FOLLOW.state=ACCEPTED)."""
     # Query Follow objects directly to work with both local and remote authors
     # The object field is a URLField (FQID), so we need to normalize for matching
-    from golden.services import normalize_fqid
     author_id_normalized = normalize_fqid(str(author.id))
     follower_ids = Follow.objects.filter(
         object=author_id_normalized,
@@ -158,7 +157,6 @@ def get_followers(author: Author):
 def get_friends(author):
     """Mutual followers = friends."""
     # Normalize author ID for consistent matching with Follow objects
-    from golden.services import normalize_fqid
     author_id_normalized = normalize_fqid(str(author.id))
     author_id_raw = str(author.id).rstrip('/')
     
@@ -432,7 +430,6 @@ def distribute_activity(activity: dict, actor: Author):
         else:
             # Entry/comment not found locally - try to sync from remote
             print(f"[DEBUG distribute_activity] LIKE: Entry/comment not found locally, attempting to fetch and sync: liked_fqid={liked_fqid}")
-            from golden.services import fetch_and_sync_remote_entry
             entry = fetch_and_sync_remote_entry(liked_fqid)
             if entry:
                 print(f"[DEBUG distribute_activity] LIKE: Successfully synced entry, author={entry.author.username} (id={entry.author.id}, host={entry.author.host})")
@@ -523,7 +520,6 @@ def distribute_activity(activity: dict, actor: Author):
         else:
             # Entry/comment not found locally - try to sync from remote
             print(f"[DEBUG distribute_activity] UNLIKE: Entry/comment not found locally, attempting to fetch and sync: liked_fqid={liked_fqid}")
-            from golden.services import fetch_and_sync_remote_entry
             entry = fetch_and_sync_remote_entry(liked_fqid)
             if entry:
                 print(f"[DEBUG distribute_activity] UNLIKE: Successfully synced entry, author={entry.author.username} (id={entry.author.id}, host={entry.author.host})")
@@ -947,7 +943,6 @@ def process_inbox(author: Author):
                     comment_author = actor 
                 
                 if not comment_id:
-                    from golden.services import generate_comment_fqid
                     comment_id = generate_comment_fqid(comment_author, entry)
                 
                 Comment.objects.update_or_create(

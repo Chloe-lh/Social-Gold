@@ -6,6 +6,7 @@ from .models import Author, Entry
 from datetime import timezone
 from requests.exceptions import RequestException
 from urllib.parse import urlparse
+from golden.models import Node, Follow, Author, Entry
 
 def normalize_fqid(fqid: str) -> str:
     """Normalize FQID by removing trailing slashes and ensuring consistent format."""
@@ -276,7 +277,6 @@ def fetch_or_create_author(author_url):
     """
     Fetch or create a remote author by their URL.
     """
-    from golden.models import Author
 
     # Check if author already exists locally
     author = Author.objects.filter(id=author_url).first()
@@ -313,7 +313,6 @@ def fetch_remote_author_data(author_fqid):
             author_endpoint = author_fqid.rstrip('/') + '/'
         
         # Get node authentication if available - try multiple matching strategies
-        from golden.models import Node
         parsed = urlparse(author_fqid)
         host_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
         
@@ -371,8 +370,6 @@ def fetch_remote_author_data(author_fqid):
         host_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
         authors_endpoint = f"{host_base}/api/authors/"
         
-        # Get node authentication if available - try multiple matching strategies
-        from golden.models import Node
         # Try exact match first
         node = Node.objects.filter(id=host_base).first()
         # If not found, try startswith match

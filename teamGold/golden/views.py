@@ -33,7 +33,7 @@ from .decorators import require_author
 from .forms import CommentForm, CustomUserForm, EntryForm, ProfileForm
 
 # IMPORT Golden 
-from golden.distributor import distribute_activity, process_inbox
+from golden.distributor import distribute_activity, process_inbox, get_followers, get_friends
 from golden.models import (Author, Comment, Entry, EntryImage, Follow, Like, Node, Inbox)
 from golden.serializers import *
 from golden.services import *
@@ -308,7 +308,6 @@ def stream_view(request):
         if entry_author and not is_local(entry_author.id):
             username_looks_like_uuid = len(entry_author.username) == 36 and '-' in entry_author.username and entry_author.username.count('-') == 4
             if username_looks_like_uuid or entry_author.username.startswith("http") or entry_author.username == "goldenuser":
-                from golden.services import get_or_create_foreign_author
                 updated_author = get_or_create_foreign_author(entry_author.id)
                 if updated_author and updated_author.username != entry_author.username:
                     entry_author.username = updated_author.username
@@ -588,7 +587,6 @@ def entry_detail_view(request, entry_uuid):
     if entry.author and not is_local(entry.author.id):
         username_looks_like_uuid = len(entry.author.username) == 36 and '-' in entry.author.username and entry.author.username.count('-') == 4
         if username_looks_like_uuid or entry.author.username.startswith("http") or entry.author.username == "goldenuser":
-            from golden.services import get_or_create_foreign_author
             updated_author = get_or_create_foreign_author(entry.author.id)
             if updated_author and updated_author.username != entry.author.username:
                 entry.author.username = updated_author.username
@@ -676,7 +674,6 @@ def profile_view(request):
         Get friends (mutual follows) for both local and remote authors.
         Uses Follow objects to work with remote authors.
         """
-        from golden.distributor import get_friends
         # Use get_friends which works with Follow objects for both local and remote
         friends_qs = get_friends(author)
         friend_ids = set(f.id for f in friends_qs) 
@@ -1000,21 +997,53 @@ def profile_view(request):
 
             return redirect("profile")
 
-        if "remove_follower" in request.POST:
-            target_id = request.POST.get("remove_follower")
-            target = Author.objects.get(id=target_id)
-            author.followers_set.remove(target)
-            # Normalize author ID for consistent matching
-            author_id_normalized = normalize_fqid(str(author.id))
-            author_id_str = str(author.id).rstrip('/')
-            Follow.objects.filter(
-                actor=target
-            ).filter(
-                Q(object=author_id_normalized) | 
-                Q(object=author_id_str) | 
-                Q(object__iexact=author_id_str) |
-                Q(object__iexact=author_id_normalized)
-            ).delete()
+        # Handle remove-follower (from followers tab) - supports both hyphen and underscore
+        if "remove-follower" in request.POST or "remove_follower" in request.POST:
+            target_id = request.POST.get("remove-follower") or request.POST.get("remove_follower")
+            print(f"[DEBUG profile_view] REMOVE FOLLOWER: Removing follower: author={author.username}, target_id={target_id}")
+            
+            try:
+                # Try to find target with normalized ID first
+                target = Author.objects.filter(id=normalize_fqid(target_id)).first()
+                if not target:
+                    target = Author.objects.filter(id=target_id).first()
+                if not target:
+                    target = get_or_create_foreign_author(target_id)
+                
+                if target:
+                    print(f"[DEBUG profile_view] REMOVE FOLLOWER: Found target: {target.username} (id={target.id})")
+                    
+                    # Remove from ManyToMany relationship (for local authors)
+                    if target in author.followers_set.all():
+                        author.followers_set.remove(target)
+                        print(f"[DEBUG profile_view] REMOVE FOLLOWER: Removed {target.username} from {author.username}'s followers_set")
+                    
+                    # Delete Follow objects - normalize IDs for consistent matching
+                    author_id_normalized = normalize_fqid(str(author.id))
+                    author_id_str = str(author.id).rstrip('/')
+                    target_id_normalized = normalize_fqid(str(target.id))
+                    target_id_str = str(target.id).rstrip('/')
+                    
+                    deleted = Follow.objects.filter(
+                        actor=target
+                    ).filter(
+                        Q(object=author_id_normalized) | 
+                        Q(object=author_id_str) | 
+                        Q(object__iexact=author_id_str) |
+                        Q(object__iexact=author_id_normalized) |
+                        Q(object=target_id_normalized) |
+                        Q(object=target_id_str)
+                    ).delete()
+                    
+                    print(f"[DEBUG profile_view] REMOVE FOLLOWER: Deleted {deleted[0]} Follow objects")
+                    
+                    messages.success(request, f"Removed {target.username} as a follower")
+                else:
+                    print(f"[DEBUG profile_view] REMOVE FOLLOWER: ERROR - Target not found: {target_id}")
+                    messages.error(request, "Follower not found")
+            except Exception as e:
+                print(f"[DEBUG profile_view] REMOVE FOLLOWER: Exception: {type(e).__name__}: {e}")
+                messages.error(request, "Error removing follower")
 
             return redirect("profile")
         
@@ -1196,16 +1225,12 @@ def profile_view(request):
                 visible_entries.append(entry)
         
         entries = sorted(visible_entries, key=lambda x: x.published, reverse=True)
-    
-    # Use Follow objects instead of ManyToMany relationships for remote compatibility
-    from golden.distributor import get_followers, get_friends
-    
+        
     # Get followers (people who follow this author) - works for both local and remote
     followers = get_followers(author)
     
     # Get following (people this author follows) - works for both local and remote
     # The object field is a URLField (FQID string), so we need to handle both exact matches and normalized
-    from golden.services import normalize_fqid
     following_follows = Follow.objects.filter(actor=author, state="ACCEPTED")
     following_ids = []
     following_ids_normalized = []
@@ -1510,7 +1535,6 @@ def followers(request):
         return redirect(request.META.get('HTTP_REFERER', 'followers'))
 
     # Use get_followers which works with Follow objects for both local and remote
-    from golden.distributor import get_followers
     followers_qs = get_followers(actor)
 
     query = request.GET.get('q', '')
@@ -1552,7 +1576,6 @@ def following(request):
 
     # Use Follow objects instead of ManyToMany for remote compatibility
     # The object field is a URLField (FQID string), so we need to handle both exact matches and normalized
-    from golden.services import normalize_fqid
     following_follows = Follow.objects.filter(actor=actor, state="ACCEPTED")
     following_ids = []
     following_ids_normalized = []
@@ -1609,7 +1632,6 @@ def friends(request):
 
     # Friends are mutual connections: actor is following them AND they are following actor
     # Use get_friends from distributor which works with Follow objects for both local and remote
-    from golden.distributor import get_friends
     friends_qs = get_friends(actor)
 
     # Optional: filter by search query
@@ -1925,7 +1947,6 @@ def inbox_view(request, author_id):
             
             # Immediately process the inbox to update likes/comments/entries
             # This ensures remote activities are processed right away, not just when the author visits their page
-            from golden.distributor import process_inbox
             process_inbox(author)
         except Exception as e:
             return JsonResponse({"error": f"Failed to create/process inbox item: {e}"}, status=500)

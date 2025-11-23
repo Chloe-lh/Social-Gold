@@ -181,6 +181,47 @@ class Entry(models.Model):
             return str(self.id).rstrip('/').split('/')[-1]
         except Exception:
             return ""
+    
+    def get_all_images(self):
+        """
+        Get all images for this entry, including:
+        1. Local EntryImage objects (for local entries)
+        2. Images extracted from HTML content (for remote entries)
+        Returns a list of image URLs.
+        """
+        image_urls = []
+        
+        # First, add images from EntryImage objects (local entries)
+        for img in self.images.all():
+            image_url = img.image.url
+            # Make absolute URL if relative
+            if image_url.startswith('/'):
+                from django.conf import settings
+                image_url = f"{settings.SITE_URL.rstrip('/')}{image_url}"
+            image_urls.append(image_url)
+        
+        # If no EntryImage objects, extract images from HTML content (remote entries)
+        if not image_urls and self.content:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(self.content, 'html.parser')
+            img_tags = soup.find_all('img')
+            for img_tag in img_tags:
+                img_src = img_tag.get('src')
+                if img_src:
+                    # Skip data URLs
+                    if img_src.startswith('data:'):
+                        continue
+                    # Make absolute if relative
+                    if img_src.startswith('/'):
+                        from django.conf import settings
+                        img_src = f"{settings.SITE_URL.rstrip('/')}{img_src}"
+                    elif not img_src.startswith('http'):
+                        # Relative URL without leading slash
+                        from django.conf import settings
+                        img_src = f"{settings.SITE_URL.rstrip('/')}/{img_src}"
+                    image_urls.append(img_src)
+        
+        return image_urls
 
 class EntryImage(models.Model):
     """

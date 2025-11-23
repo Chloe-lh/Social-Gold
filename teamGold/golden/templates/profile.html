@@ -66,8 +66,8 @@
         {% for entry in entries %}
           <article class="entry">
             <p><strong>@{{ author.username }}</strong> {{ entry.published|date:"H:i T l M d, Y" }}</p>
-            {% for img in entry.images.all %} 
-              <img src="{{ img.image.url }}" alt="entry image" class="entry-img">
+            {% for img_url in entry.get_all_images %} 
+              <img src="{{ img_url }}" alt="entry image" class="entry-img">
             {% endfor %}
             {{ entry.content|safe }}
           </article>
@@ -162,7 +162,7 @@
           {% for req_data in incoming_follow_requests_with_urls %}
           <li class="request-row">
             <a href="{% url 'public-profile' req_data.actor_url_id %}">
-              {{ req_data.request.actor.displayName|default:req_data.request.actor.name|default:req_data.request.actor.username|default:req_data.request.actor.id }} wants to follow you
+              {% if req_data.actor %}{{ req_data.actor.displayName|default:req_data.actor.name|default:req_data.actor.username }}{% else %}{{ req_data.request.actor.displayName|default:req_data.request.actor.name|default:req_data.request.actor.username|default:req_data.request.actor.id }}{% endif %} wants to follow you
             </a>
             <form method="POST" style="display:inline;">
               {% csrf_token %}

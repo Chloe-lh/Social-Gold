@@ -1093,6 +1093,10 @@ def profile_view(request):
             if target:
                 print(f"[DEBUG profile_view] OUTGOING REQUEST: Fetched target: {target.username} (id={target.id})")
         
+        # If target not found, fetch from remote node
+        if not target:
+            target = get_or_create_foreign_author(target_id_str)
+        
         if target:
             follow_requests_with_urls.append({
                 'request': req, 
@@ -1101,11 +1105,12 @@ def profile_view(request):
             })
             print(f"[DEBUG profile_view] OUTGOING REQUEST: Added to list with target.username={target.username}")
         else:
+            # If still not found, add with FQID as fallback
             # If still not found, add with target_id for display
             print(f"[DEBUG profile_view] OUTGOING REQUEST: Could not fetch target, adding with FQID only")
             follow_requests_with_urls.append({
                 'request': req,
-                'target': None,  # Target not in local DB yet
+                'target': None,
                 'target_url_id': target_id_str,
                 'target_id': target_id_str
             })
@@ -1119,19 +1124,12 @@ def profile_view(request):
         if req.actor:
             # Ensure actor has username (fetch if remote and missing)
             actor_to_use = req.actor
-            print(f"[DEBUG profile_view] INCOMING REQUEST: actor.id={req.actor.id}, actor.username={req.actor.username}, actor.host={req.actor.host}")
-            
-            # If actor is remote and missing username, try to fetch it
-            if (not req.actor.username or req.actor.username.startswith("http") or 
-                req.actor.username == "goldenuser" or not req.actor.username):
+            if not req.actor.username or req.actor.username == "goldenuser" or req.actor.username.startswith("http"):
+                # Try to fetch remote author data if username is missing or looks like an FQID
                 if not is_local(req.actor.id):
-                    print(f"[DEBUG profile_view] INCOMING REQUEST: Fetching remote author data for {req.actor.id}")
                     updated_actor = get_or_create_foreign_author(req.actor.id)
                     if updated_actor and updated_actor.username and updated_actor.username != "goldenuser":
-                        actor_to_use = updated_actor
-                        print(f"[DEBUG profile_view] INCOMING REQUEST: Updated actor username to {updated_actor.username}")
-                    else:
-                        print(f"[DEBUG profile_view] INCOMING REQUEST: Could not fetch username for actor {req.actor.id}")
+                        actor_to_use = updated_actor  # Use the updated actor with proper username
             
             incoming_follow_requests_with_urls.append({
                 'request': req, 

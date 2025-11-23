@@ -113,6 +113,7 @@ def create_comment_activity(author, entry, comment):
         "id": activity_id, 
         "comment": comment.content, 
         "contentType": comment.contentType,
+        "published": comment.published.isoformat() if hasattr(comment.published, 'isoformat') else timezone.now().isoformat(),  # Add published field
         "author": {
             "type": "author",
             "id": str(author.id),
@@ -303,6 +304,7 @@ def create_unlike_activity(author, liked_object_fqid):
         "id": activity_id,
         "summary": f"{author.username} unliked an entry or comment",
         "actor": str(author.id),
+        "published": timezone.now().isoformat(),  # Add published field
         "object": str(liked_object_fqid) 
     }
     

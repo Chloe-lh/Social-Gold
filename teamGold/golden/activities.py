@@ -3,7 +3,6 @@ from django.utils import timezone
 from django.conf import settings
 from urllib.parse import urlparse
 from golden.models import Follow
-from api.commentAPIView import EntryCommentAPIView
 import requests
 from django.conf import settings
 

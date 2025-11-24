@@ -211,8 +211,7 @@ def fetch_remote_entries(node, timeout=5):
         if response.status_code == 200:
             return response.json().get("items", [])
     except requests.exceptions.RequestException as e:
-        logging.error(f"Error fetching entries from {url}: {e}")
-    return []
+        return []
 
 def fetch_and_sync_remote_entry(entry_fqid):
     """

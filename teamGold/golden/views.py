@@ -1802,7 +1802,7 @@ def toggle_like(request):
     with transaction.atomic():
         existing = Like.objects.filter(author=author, object=target.id).first()
         if existing:
-            activity = create_unlike_activity(author, target)
+            activity = create_like_activity(author, target)
             existing.delete()
             if entry_obj:
                 entry_obj.likes.remove(author)

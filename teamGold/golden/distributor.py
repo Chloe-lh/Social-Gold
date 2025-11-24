@@ -985,22 +985,37 @@ def process_inbox(author: Author):
 
         # LIKE
         elif activity_type == "like":
-            obj_id = activity.get("object")
+            remote_id = activity.get("author").get("id")
+            remote_host=activity.get("author").get("host")
+            remote_username =activity.get("author").get("displayName")
+            author_obj = get_or_create_foreign_author(remote_id,remote_host, remote_username)
+            object_id = activity.get("object")
+            existing_like = Like.objects.filter(author=activity.get("author").get("id"), object=object_id).first()
 
-            Like.objects.filter(author=actor, object=obj_id).delete()
-            author_id = activity.get("author", {}).get("id")
+            if existing_like:
+                # A like exists → remove it
+                existing_like.delete()
+                if Entry.objects.filter(id=object_id).exists():
+                    entry = Entry.objects.get(id=object_id)
+                    entry.likes.remove(activity.get("author").get("id"))
+                print(f"[DEBUG] Existing like removed for object={obj_id} by author={author_obj.username}")
+            else:
+                # No like exists → create a new like
+                like = Like.objects.create(
+                    id=activity.get("id"),
+                    author=author_obj,
+                    object=activity.get("object"),
+                    published=safe_parse_datetime(activity.get("published")) or timezone.now()
+                )
+                if Entry.objects.filter(id=obj_id).exists():
+                    entry = Entry.objects.get(id=obj_id)
+                    entry.likes.add(author_obj)
+                print(f"[DEBUG] New like created for object={obj_id} by author={author_obj.username}")
 
-            author_obj = Author.objects.get(id=author_id)
-            like = Like.objects.create(
-                id=activity.get("id"),
-                author=author_obj,
-                object=obj_id,
-                published=safe_parse_datetime(activity.get("published")) or timezone.now()
-            )
-            
-            entry = Entry.objects.filter(id=obj_id).first()
-            if entry:
-                entry.likes.add(author_obj)
+
+
+
+
 
         # UNLIKE
         elif activity_type == "unlike":

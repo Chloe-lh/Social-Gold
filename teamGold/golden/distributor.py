@@ -894,40 +894,33 @@ def process_inbox(author: Author):
                     "title": activity.get("title", ""),
                     "description": activity.get("description", ""),
                     "content": activity.get("content", ""),
-                    "contentType": activity.get("contentType", "text/plain"),
+                    "contentType": activity.get("contentType") or activity.get("content_type", "text/plain"),
                     "author": actor,
                     "visibility": activity.get("visibility", "PUBLIC"),
                     "published": safe_parse_datetime(activity.get("published")) or timezone.now(),
                 }
             )
             
-        # UPDATE ENTRY
+        #  UPDATE ENTRY
         elif activity_type == "update" and isinstance(obj, dict) and obj.get("type") == "post":
             entry_id = obj.get("id")
-            print(f"[DEBUG process_inbox] UPDATE ENTRY: Processing update for entry_id={entry_id}")
-            print(f"[DEBUG process_inbox] UPDATE ENTRY: actor={actor.username if actor else 'None'} (id={actor.id if actor else 'None'})")
-            print(f"[DEBUG process_inbox] UPDATE ENTRY: inbox author={author.username} (id={author.id})")
-            
             entry = Entry.objects.filter(id=entry_id).first()
-            print(f"[DEBUG process_inbox] UPDATE ENTRY: Entry lookup result: {'Found' if entry else 'NOT FOUND'}")
 
             if entry:
-                old_title = entry.title
-                old_content = entry.content[:50] if entry.content else ""
                 raw_content = obj.get("content", entry.content) or entry.content
                 base_url = getattr(actor, "host", "") if actor else ""
                 content = absolutize_remote_images(raw_content, base_url)
+                new_content_type = (
+                    obj.get("contentType") or      
+                    obj.get("content_type") or     
+                    entry.contentType           
+                )
 
                 entry.title = obj.get("title", entry.title)
                 entry.content = content
-                entry.contentType = obj.get("contentType", entry.contentType)
+                entry.contentType = new_content_type
                 entry.visibility = obj.get("visibility", entry.visibility)
                 entry.save()
-                print(f"[DEBUG process_inbox] UPDATE ENTRY: Updated entry {entry_id}")
-                print(f"[DEBUG process_inbox] UPDATE ENTRY: Title changed from '{old_title}' to '{entry.title}'")
-                print(f"[DEBUG process_inbox] UPDATE ENTRY: Content length: {len(old_content)} -> {len(entry.content)}")
-            else:
-                print(f"[DEBUG process_inbox] UPDATE ENTRY: ERROR - Entry {entry_id} not found in database!")
 
         # DELETE ENTRY
         elif activity_type == "delete":
@@ -937,7 +930,7 @@ def process_inbox(author: Author):
                 entry.visibility = "DELETED"
                 entry.save()
 
-        
+        '''
         # COMMENT
         elif activity_type == "comment":
             comment_id = activity.get("id")  
@@ -1005,10 +998,7 @@ def process_inbox(author: Author):
 
                 print(f"[DEBUG process_inbox] COMMENT: Processed comment {comment} for entry {entry.id} by author {comment_author}")
 
-        # DELETE COMMENT
-        elif activity_type == "delete" and isinstance(obj, dict) and obj.get("type") == "comment":
-            Comment.objects.filter(id=obj.get("id")).delete()
-
+        '''
         # LIKE
         elif activity_type == "like":
             # Get author information

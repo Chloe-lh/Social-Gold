@@ -1033,8 +1033,11 @@ def process_inbox(author: Author):
                 elif isinstance(author_data, str):
                     comment_author_id = author_data
             elif isinstance(activity, dict):
+                
                 print(f"[DEBUG process_inbox] COMMENT: Processing comment activity with activity object = {activity}")
-                entry_id = activity.get("object")
+                
+                entry_id = activity.get("entry").get("entry") or activity.get("object")
+                
                 print(f"[DEBUG process_inbox] COMMENT: Processing comment activity with activity object = {entry_id}")
                 comment_content = activity.get("entry").get("content", "")
                 comment_content_type = activity.get("entry").get("contentType", "text/plain")

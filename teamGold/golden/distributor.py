@@ -264,8 +264,9 @@ def distribute_activity(activity: dict, actor: Author):
     if type_lower == "entry" and isinstance(obj, dict) and obj.get("type") == "post":
         
         visibility = obj.get("visibility", "PUBLIC").upper()
-
-        if visibility == "PUBLIC":
+        
+        
+        if visibility == "PUBLIC" or visibility == "DELETED":
             recipients = set(get_followers(actor)) | set(get_friends(actor))
         elif visibility == "UNLISTED":
             recipients = set(get_followers(actor))
@@ -277,7 +278,7 @@ def distribute_activity(activity: dict, actor: Author):
         for r in recipients:
             send_activity_to_inbox(r, activity)
         return
-
+    '''
     # UPDATE ENTRY
     if type_lower == "update" and isinstance(obj, dict) and obj.get("type") == "post":
         print(f"[DEBUG distribute_activity] UPDATE ENTRY: actor={actor.username} (id={actor.id})")
@@ -312,14 +313,14 @@ def distribute_activity(activity: dict, actor: Author):
             print(f"[DEBUG distribute_activity] UPDATE ENTRY: Sending to recipient {r.username} (id={r.id}, host={r.host})")
             send_activity_to_inbox(r, activity)
         return
-
+    
     # DELETE ENTRY
     if type_lower == "entry" and isinstance(obj, dict) and obj.get("type") == "post":
         recipients = set(get_followers(actor)) | set(get_friends(actor))
         for r in recipients:
             send_activity_to_inbox(r, activity)
         return
-
+    '''
     # COMMENT 
     if type_lower == "comment":
         entry_id = None
@@ -843,7 +844,7 @@ def process_inbox(author: Author):
                 Follow.objects.filter(actor=target, object=initiator.id).delete()
 
         # CREATE ENTRY
-        elif activity_type == "create" and isinstance(obj, dict) and obj.get("type") == "post":
+        elif activity_type == "entry" and isinstance(obj, dict) and obj.get("type") == "post":
             entry_id = obj.get("id")
 
             entry, created = Entry.objects.update_or_create(
@@ -858,9 +859,7 @@ def process_inbox(author: Author):
                     "published": safe_parse_datetime(obj.get("published")) or timezone.now(),
                 }
             )
-          
-            attachments = obj.get("attachments", []) 
-
+            '''   
         # UPDATE ENTRY
         elif activity_type == "update" and isinstance(obj, dict) and obj.get("type") == "post":
             entry_id = obj.get("id")
@@ -896,7 +895,8 @@ def process_inbox(author: Author):
             if entry:
                 entry.visibility = "DELETED"
                 entry.save()
-
+        '''
+        
         # COMMENT
         elif activity_type == "comment":
             comment_id = activity.get("id")  

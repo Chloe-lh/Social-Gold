@@ -937,8 +937,8 @@ def process_inbox(author: Author):
             comment_author_id = None
             
             if isinstance(activity.get("entry"), str):
-                print(f"[DEBUG process_inbox] COMMENT: Processing comment activity with entry={entry}")
                 entry_id = activity.get("entry")
+                print(f"[DEBUG process_inbox] COMMENT: Processing comment activity with entry={entry}")
                 comment_content = activity.get("comment", "")
                 comment_content_type = activity.get("contentType", "text/plain")
                 author_data = activity.get("author")
@@ -949,6 +949,7 @@ def process_inbox(author: Author):
             elif isinstance(activity, dict):
                 print(f"[DEBUG process_inbox] COMMENT: Processing comment activity with activity object = {activity}")
                 entry_id = activity.get("entry").get("entry")
+                print(f"[DEBUG process_inbox] COMMENT: Processing comment activity with activity object = {entry_id}")
                 comment_content = activity.get("entry").get("content", "")
                 comment_content_type = activity.get("entry").get("contentType", "text/plain")
                 comment_author_id = activity.get("entry").get("author")

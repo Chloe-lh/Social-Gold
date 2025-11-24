@@ -1690,7 +1690,7 @@ def follow_requests(request):
                 inbox_item.processed = True
                 inbox_item.save()
             
-            activity = create_reject_follow_activity(actor, follower_id)
+            #activity = create_reject_follow_activity(actor, follower_id)
             #distribute_activity(activity, actor=actor)
             #messages.success(request, f"Rejected follow request from {follow_request.actor.username}")
             return redirect("follow_requests")
@@ -1973,8 +1973,8 @@ def api_accept_follow_action(request):
         inbox_item.save()
         print(f"[DEBUG api_accept_follow_action] Marked inbox item as processed")
 
-    activity = create_accept_follow_activity(actor, follow_id)
-    distribute_activity(activity, actor=actor)
+    #activity = create_accept_follow_activity(actor, follow_id)
+    #distribute_activity(activity, actor=actor)
     
     print(f"[DEBUG api_accept_follow_action] Successfully accepted follow request")
 
@@ -2023,8 +2023,8 @@ def api_reject_follow_action(request):
         inbox_item.save()
         print(f"[DEBUG api_reject_follow_action] Marked inbox item as processed")
 
-    activity = create_reject_follow_activity(actor, follow_request.actor.id)
-    distribute_activity(activity, actor=actor)
+    #activity = create_reject_follow_activity(actor, follow_request.actor.id)
+    #distribute_activity(activity, actor=actor)
     
     print(f"[DEBUG api_reject_follow_action] Successfully rejected follow request")
 

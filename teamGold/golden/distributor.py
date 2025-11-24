@@ -190,7 +190,17 @@ def get_friends(author):
     author_id_raw = str(author.id).rstrip('/')
     
     print(f"[DEBUG get_friends] Finding friends for author: {author.username} (id={author.id})")
-    
+
+    #people following the user
+    followers_qs = Author.objects.filter(following=author)
+    #people user is following
+    following_qs = Author.objects.filter(followers_set=author)
+
+    #followers = followers_qs.values_list("id", flat=True)
+    #following = following_qs.values_list("id", flat=True)
+
+    friends = followers_qs.intersection(following_qs)#.values_list("id", flat=True)
+    """
     # Get followers (people who follow this author) - actor_id is ForeignKey to Author
     # Try both normalized and raw author.id
     follower_ids_set = set()
@@ -249,6 +259,8 @@ def get_friends(author):
         return Author.objects.filter(id__in=mutual_author_ids)
     
     return Author.objects.none()
+    """
+    return friends
 
 def previously_delivered(post):
     """Return all authors who already received this post."""

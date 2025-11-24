@@ -1406,7 +1406,7 @@ def public_profile_view(request, author_id):
     Only shows basic author info (name, github, email, etc.) and list of their entries.
     Tabs and editing are removed.
     """
-
+    print("------------> author id: ",author_id)
     # Get author
     author = get_object_or_404(Author, id=author_id)
 

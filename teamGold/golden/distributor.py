@@ -874,7 +874,7 @@ def process_inbox(author: Author):
                 Follow.objects.filter(actor=target, object=initiator.id).delete()
 
         # CREATE ENTRY
-        elif activity_type == "entry": #and isinstance(obj, dict) and obj.get("type") == "post":
+        elif activity_type == "entry" #and isinstance(obj, dict) and obj.get("type") == "post":
             entry_id = activity.get("id")
 
             entry, created = Entry.objects.update_or_create(
@@ -930,55 +930,69 @@ def process_inbox(author: Author):
         
         # COMMENT
         elif activity_type == "comment":
-            # Extract IDs and content
-            comment_id = activity.get("id")
-            entry_id = activity.get("entry")
-            comment_content = activity.get("comment", "")
-            comment_content_type = activity.get("contentType", "text/plain")
-            published = safe_parse_datetime(activity.get("published")) or timezone.now()
-
-            # Must have an entry ID
+            comment_id = activity.get("id")  
+            entry_id = None
+            comment_content = None
+            comment_content_type = None
+            comment_author_id = None
+            
+            if isinstance(activity.get("entry"), str):
+                print(f"[DEBUG process_inbox] COMMENT: Processing comment activity with entry={entry}")
+                entry_id = activity.get("entry")
+                comment_content = activity.get("comment", "")
+                comment_content_type = activity.get("contentType", "text/plain")
+                author_data = activity.get("author")
+                if isinstance(author_data, dict):
+                    comment_author_id = author_data.get("id")
+                elif isinstance(author_data, str):
+                    comment_author_id = author_data
+            elif isinstance(activity, dict):
+                print(f"[DEBUG process_inbox] COMMENT: Processing comment activity with activity object = {activity}")
+                entry_id = activity.get("entry").get("entry")
+                comment_content = activity.get("entry").get("content", "")
+                comment_content_type = activity.get("entry").get("contentType", "text/plain")
+                comment_author_id = activity.get("entry").get("author")
+                if not comment_id:
+                    comment_id = activity.get("entry").get("id")
+            
             if not entry_id:
                 return
-
-            # Resolve entry
+            
             entry = Entry.objects.filter(id=normalize_fqid(entry_id)).first()
             if not entry:
                 entry = Entry.objects.filter(id=entry_id).first()
-            if not entry:
-                return
+            
+            if entry:
+                comment_author = None
+                if comment_author_id:
+                    if isinstance(comment_author_id, dict):
+                        comment_author_id = comment_author_id.get("id")
+                    comment_author = Author.objects.filter(id=normalize_fqid(comment_author_id)).first()
+                    if not comment_author:
+                        # Extract username from author object if available
+                        author_obj = activity.get("author") if isinstance(activity.get("author"), dict) else None
+                        username = author_obj.get("username") or author_obj.get("displayName") if author_obj else None
+                        host = author_obj.get("host") if author_obj else None
+                        comment_author = get_or_create_foreign_author(comment_author_id, host=host, username=username)
+                
+                if not comment_author:
+                    comment_author = actor 
+                
+                if not comment_id:
+                    comment_id = generate_comment_fqid(comment_author, entry)
+                
+                Comment.objects.update_or_create(
+                    id=comment_id,
+                    defaults={
+                        "entry": entry,
+                        "author": comment_author,
+                        "content": comment_content or "",
+                        "contentType": comment_content_type or "text/plain",
+                        "published": safe_parse_datetime(activity.get("published")) or timezone.now()
+                    }
+                )
 
-            # Resolve author
-            author_data = activity.get("author")
-            if isinstance(author_data, dict):
-                author_id = author_data.get("id")
-            else:
-                author_id = author_data
-
-            comment_author = None
-            if author_id:
-                comment_author = Author.objects.filter(id=normalize_fqid(author_id)).first()
-
-            # If we still don't have an author, create a shadow
-            if not comment_author:
-                host = author_data.get("host") if isinstance(author_data, dict) else None
-                username = author_data.get("displayName") if isinstance(author_data, dict) else None
-                comment_author = get_or_create_foreign_author(author_id, host=host, username=username)
-
-            if not comment_id:
-                comment_id = generate_comment_fqid(comment_author, entry)
-
-            # Create or update the comment
-            Comment.objects.update_or_create(
-                id=comment_id,
-                defaults={
-                    "entry": entry,
-                    "author": comment_author,
-                    "content": comment_content,
-                    "contentType": comment_content_type,
-                    "published": published,
-                }
-            )
+                print(f"[DEBUG process_inbox] COMMENT: Processed comment {comment} for entry {entry.id} by author {comment_author.username}")
 
         # DELETE COMMENT
         elif activity_type == "delete" and isinstance(obj, dict) and obj.get("type") == "comment":

@@ -302,7 +302,7 @@ def distribute_activity(activity: dict, actor: Author):
     obj = activity.get("object")
 
     # CREATE ENTRY
-    if type_lower == "entry" :#and isinstance(activity, dict) and obj.get("type") == "post":
+    if type_lower == "entry" or type_lower == "post":
         
         visibility = activity.get("visibility", "PUBLIC").upper()
         
@@ -319,9 +319,9 @@ def distribute_activity(activity: dict, actor: Author):
         for r in recipients:
             send_activity_to_inbox(r, activity)
         return
-    '''
+    
     # UPDATE ENTRY
-    if type_lower == "update" and isinstance(obj, dict) and obj.get("type") == "post":
+    if type_lower == "update" or type_lower == "post":
         print(f"[DEBUG distribute_activity] UPDATE ENTRY: actor={actor.username} (id={actor.id})")
         print(f"[DEBUG distribute_activity] UPDATE ENTRY: entry_id={obj.get('id')}")
         print(f"[DEBUG distribute_activity] UPDATE ENTRY: title={obj.get('title')}")
@@ -356,15 +356,14 @@ def distribute_activity(activity: dict, actor: Author):
         return
     
     # DELETE ENTRY
-    if type_lower == "entry" and isinstance(obj, dict) and obj.get("type") == "post":
+    if type_lower == "entry" or type_lower == "post":
         recipients = set(get_followers(actor)) | set(get_friends(actor))
         for r in recipients:
             send_activity_to_inbox(r, activity)
         return
-    '''
-    # COMMENT 
+
     if type_lower == "comment":
-        entry_id = activity.get("entry")
+        entry_id = activity.get("entry") or activity.get("post")
         
         if not entry_id:
             return
@@ -901,8 +900,7 @@ def process_inbox(author: Author):
                     "published": safe_parse_datetime(activity.get("published")) or timezone.now(),
                 }
             )
-            print(f"[DEBUG process_inbox] CREATE ENTRY: {entry}")
-            '''   
+            
         # UPDATE ENTRY
         elif activity_type == "update" and isinstance(obj, dict) and obj.get("type") == "post":
             entry_id = obj.get("id")
@@ -932,13 +930,13 @@ def process_inbox(author: Author):
                 print(f"[DEBUG process_inbox] UPDATE ENTRY: ERROR - Entry {entry_id} not found in database!")
 
         # DELETE ENTRY
-        elif activity_type == "delete" and isinstance(obj, dict) and obj.get("type") == "post":
+        elif activity_type == "delete":
             entry_id = obj.get("id")
             entry = Entry.objects.filter(id=entry_id).first()
             if entry:
                 entry.visibility = "DELETED"
                 entry.save()
-        '''
+
         
         # COMMENT
         elif activity_type == "comment":
@@ -1065,13 +1063,6 @@ def process_inbox(author: Author):
                     comment.likes.add(author_obj)
                 print(f"[DEBUG] New like created for object={obj_id} by author={author_obj.username}")
 
-
-
-
-
-
-
-
         # UNLIKE
         elif activity_type == "unlike":
             obj_id = obj if isinstance(obj, str) else None
@@ -1089,24 +1080,7 @@ def process_inbox(author: Author):
                 
                 entry = Entry.objects.filter(id=obj_id).first()
                 if entry:
-                    entry.likes.remove(like_actor)
-                        
-        # UNLIKE (ActivityPub format - keep for backward compatibility)
-        elif activity_type == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "like":
-            obj_id = obj.get("object")
-            actor_id = obj.get("actor")
-            
-            like_actor = Author.objects.filter(id=actor_id).first()
-            if not like_actor and actor_id:
-                like_actor = get_or_create_foreign_author(actor_id)
-            
-            if like_actor:
-                Like.objects.filter(author=like_actor, object=obj_id).delete()
-                
-                entry = Entry.objects.filter(id=obj_id).first()
-                if entry:
-                    entry.likes.remove(like_actor)
-                
+                    entry.likes.remove(like_actor)    
 
         # Mark as processed after successful processing
         # Processed variable is only set for ACCEPT, so check activity_type for others

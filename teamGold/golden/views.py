@@ -202,7 +202,7 @@ def stream_view(request):
     followers = Author.objects.filter(following=user_author)
     #people the user is following
     following = Author.objects.filter(followers_set=user_author)
-    friends = followers.intersection(following)
+    friends = user_author.update_friends()
 
     remote_entries = []
     remote_nodes = Node.objects.filter(is_active=True)
@@ -557,7 +557,7 @@ def entry_detail_view(request, entry_uuid):
     followers = Author.objects.filter(following=viewer)
     #people the user is following
     following = Author.objects.filter(followers_set=viewer)
-    friends = followers.intersection(following)
+    friends = viewer.update_friends()
     process_inbox(viewer)
 
     if entry.visibility == "FRIENDS":

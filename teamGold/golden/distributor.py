@@ -261,7 +261,7 @@ def distribute_activity(activity: dict, actor: Author):
     obj = activity.get("object")
 
     # CREATE ENTRY
-    if type_lower == "entry" and isinstance(obj, dict) and obj.get("type") == "post":
+    if type_lower == "entry" :#and isinstance(activity, dict) and obj.get("type") == "post":
         
         visibility = obj.get("visibility", "PUBLIC").upper()
         
@@ -323,11 +323,7 @@ def distribute_activity(activity: dict, actor: Author):
     '''
     # COMMENT 
     if type_lower == "comment":
-        entry_id = None
-        if isinstance(obj, str):
-            entry_id = obj
-        elif isinstance(obj, dict):
-            entry_id = obj.get("entry")
+        entry_id = obj.get("entry")
         
         if not entry_id:
             return
@@ -379,7 +375,7 @@ def distribute_activity(activity: dict, actor: Author):
 
     # LIKE
     if type_lower == "like":
-        liked_fqid = obj if isinstance(obj, str) else None
+        liked_fqid = obj.get("object") if isinstance(obj.get("object"), str) else None
         if not liked_fqid:
             print(f"[DEBUG distribute_activity] LIKE: No liked_fqid in activity object")
             return
@@ -475,11 +471,11 @@ def distribute_activity(activity: dict, actor: Author):
 
     # UNLIKE handle "undo" (ActivityPub) formats
     if type_lower == "unlike":
-        liked = obj if isinstance(obj, dict) else None
+        liked = obj.get("object") if isinstance(obj.get("object"), str) else None
         if not liked:
             return
 
-        liked_fqid = liked.id
+        liked_fqid = liked
         # Try to find entry locally (with normalization)
         entry = Entry.objects.filter(id=normalize_fqid(liked_fqid)).first()
         if not entry:
@@ -635,7 +631,7 @@ def distribute_activity(activity: dict, actor: Author):
 
     # UNFOLLOW
     if type_lower == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "follow":
-        target_id = obj.get("object")
+        target_id = obj.get("id")
         target = Author.objects.filter(id=normalize_fqid(target_id)).first()
 
         if target:
@@ -644,7 +640,7 @@ def distribute_activity(activity: dict, actor: Author):
 
     # REMOVE FRIEND
     if type_lower == "removefriend":
-        target_id = obj
+        target_id = obj.get("id")
         target = Author.objects.filter(id=normalize_fqid(target_id)).first()
 
         if target:

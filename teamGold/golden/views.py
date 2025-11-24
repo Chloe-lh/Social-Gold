@@ -1402,114 +1402,79 @@ def profile_view(request):
 @login_required
 def public_profile_view(request, author_id):
     """
-    Display another author's profile.
-    Fetches from remote node if necessary and syncs entries.
+    Display another author's public profile.
+    Fetches from remote node if necessary.
+    Shows username, github, bio, email, and public entries.
     """
+    # Helper to fetch remote author info
+    def fetch_remote_author(author_url):
+        try:
+            response = requests.get(author_url, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                # Minimal info: username, github, bio, email
+                return {
+                    "id": data.get("id"),
+                    "username": data.get("username") or data.get("displayName"),
+                    "displayName": data.get("displayName") or data.get("username"),
+                    "profileImage": data.get("profileImage") or data.get("icon", {}).get("url", '') if isinstance(data.get("icon"), dict) else data.get("icon", ''),
+                    "github": data.get("github") or '',
+                    "bio": sanitize_markdown_to_html(data.get("bio") or data.get("description") or ''),
+                    "email": data.get("email") or '',
+                    "host": data.get("host") or urlparse(author_url).netloc
+                }
+            else:
+                print(f"[REMOTE PROFILE] Failed to fetch {author_url}: {response.status_code}")
+        except Exception as e:
+            print(f"[REMOTE PROFILE] Error fetching {author_url}: {e}")
+        return None
 
-    # Fetch the author (local or remote) using unified helper
-    author = fetch_or_create_author_by_id(author_id)
-    
+    author = None
+    entries = []
+
+    # Try to fetch from local DB first
+    try:
+        author = Author.objects.get(id=author_id)
+        # Get only public entries
+        entries_qs = Entry.objects.filter(author=author, visibility="PUBLIC").order_by("-published")
+        entries = list(entries_qs)
+        author.bio = sanitize_markdown_to_html(author.description)
+    except Author.DoesNotExist:
+        # If not local, try to fetch from remote nodes
+        nodes = Node.objects.filter(is_active=True)
+        for node in nodes:
+            node_base = node.id.rstrip('/')
+            author_url = f"{node_base}/api/authors/{author_id}"
+            remote_author = fetch_remote_author(author_url)
+            if remote_author:
+                author = remote_author
+                # Optionally fetch public entries from remote
+                try:
+                    entries_resp = requests.get(f"{author_url}/entries", timeout=5)
+                    if entries_resp.status_code == 200:
+                        entries_data = entries_resp.json()
+                        if isinstance(entries_data, dict) and "items" in entries_data:
+                            entries = entries_data["items"]
+                        elif isinstance(entries_data, list):
+                            entries = entries_data
+                    else:
+                        print(f"[REMOTE PROFILE] Failed to fetch entries: {entries_resp.status_code}")
+                except Exception as e:
+                    print(f"[REMOTE PROFILE] Error fetching entries: {e}")
+                break  # Stop after first successful remote fetch
+
     if not author:
-        raise Http404("Author not found")
-
-    # Sanitize description for display
-    author.description = sanitize_markdown_to_html(author.description)
-
-    # Viewer (current logged-in author) for visibility checks
-    viewer = Author.from_user(request.user) if request.user.is_authenticated else None
-
-    # Query all entries by this author (exclude deleted)
-    entries_qs = Entry.objects.filter(author=author).exclude(visibility="DELETED")
-    
-    if viewer == author:
-        # Viewing own profile - show all entries (except deleted)
-        entries = entries_qs.order_by("-published")
-    else:
-        # Viewing someone else's profile - filter by visibility
-        visible_entries = []
-        
-        # Check if viewer follows author (for UNLISTED visibility)
-        followed_by_viewer = False
-        if viewer:
-            followed_by_viewer = Follow.objects.filter(
-                actor=viewer,
-                object=author.id,
-                state="ACCEPTED"
-            ).exists()
-        
-        # Check if viewer is friends with author (mutual follow, for FRIENDS visibility)
-        is_friend_with_viewer = False
-        if viewer and followed_by_viewer:
-            # Check if author also follows viewer (mutual follow = friends)
-            is_friend_with_viewer = Follow.objects.filter(
-                actor=author,
-                object=viewer.id,
-                state="ACCEPTED"
-            ).exists()
-        
-        for entry in entries_qs:
-            if entry.visibility == "PUBLIC":
-                visible_entries.append(entry)
-            elif entry.visibility == "UNLISTED" and followed_by_viewer:
-                visible_entries.append(entry)
-            elif entry.visibility == "FRIENDS" and is_friend_with_viewer:
-                visible_entries.append(entry)
-        
-        entries = sorted(visible_entries, key=lambda x: x.published, reverse=True)
-
-    # Optionally, process inbox to update Follow/Like state
-    process_inbox(request.user)
+        messages.error(request, "Author not found")
+        return redirect("profile")
 
     context = {
         "author": author,
-        "entries": entries,
+        "entries": entries
     }
 
     return render(request, "public_profile.html", context)
 
-def fetch_or_create_author_by_id(author_id: str):
-    """
-    Fetch a local or remote author.
-    Remote authors are fetched directly from <HOST>/api/authors/<UUID>.
-    """
-    
-    print("[DEBUG] fetch_or_create_author_by_id() → Raw author_id:", author_id)
 
-    # Normalize author_id: strip trailing slashes
-    author_id = author_id.rstrip('/')
-
-    # If author_id is a full URL
-    parsed = urlparse(author_id)
-    site_host = urlparse(settings.SITE_URL).netloc
-    
-    print(" → is_local():", is_local(author_id))
-
-    if parsed.netloc == site_host:
-        # Treat as local author
-        local_uuid = parsed.path.split('/api/authors/')[-1]
-        return Author.objects.filter(id=f"{settings.SITE_URL.rstrip('/')}/api/authors/{local_uuid}").first()
-
-    # Otherwise, remote author
-    host, uuid = extract_host_and_uuid(author_id)
-    if not host or not uuid:
-        return None
-
-    url = f"{host}/api/authors/{uuid}/"
-    print("[DEBUG] Fetching remote author from URL:", url)
-    data = fetch_remote_author_data(url)
-    if not data:
-        return None
-
-    return Author(
-        id=data.get("id"),
-        host=data.get("host"),
-        url=data.get("url") or data.get("id"),
-        username=data.get("username"),
-        displayName=data.get("displayName"),
-        github=data.get("github", ""),
-        profileImage=data.get("profileImage", ""),
-        type="author",
-)
 
 # * ============================================================
 # * Helper View Functions

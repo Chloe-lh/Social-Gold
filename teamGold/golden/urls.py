@@ -6,11 +6,12 @@ from . import views
 from .api.profileAPIView import ProfileAPIView
 from .api.nodeAPIView import NodeAPIView
 from .api.friendsAPIView import AuthorFriendsView, FollowAPIView
-from .api.entryAPIView import EntryAPIView, EntryImageAPIView, ReadingAPIView
+from .api.entryAPIView import EntryAPIView, EntryImageAPIView, ReadingAPIView, AuthorEntriesView, AuthorEntryView
 from .api.commentAPIView import EntryCommentAPIView, SingleCommentAPIView
 from .api.likeAPIView import LikeAPIView
 from .api.inbox import InboxView
 from .api.authorsAPIView import AuthorsListView, SingleAuthorAPIView
+from .api.followersAPIView import FollowersView
 
 '''
 These URL Patterns registers all views 
@@ -46,10 +47,13 @@ urlpatterns = [
     path("api/Like/<path:id>/", LikeAPIView.as_view(), name="get-like"),
 
     # Entry-related API
-    path("api/Entry/<path:entry_id>/comments/", EntryCommentAPIView.as_view(), name="entry-comments-alias"),
-    path("api/Entry/<path:id>/", EntryAPIView.as_view(), name="get-entry"),
+    path("api/entries/<path:entry_serial>/comments/", EntryCommentAPIView.as_view(), name="entry-comments-alias"),
+    path("api/entries/<path:id>/", EntryAPIView.as_view(), name="get-entry"),
+    path("api/authors/<str:author_serial>/entries/", AuthorEntriesView.as_view(), name="get-author-entries"),
+    path("api/authors/<str:author_serial>/entries/<str:entry_serial>", AuthorEntryView.as_view(), name="get-author-entry"),
 
     # Follow-related API Endpoints
+    path("api/authors/<str:author_serial>/followers/<str:foreign_author_fqid>", FollowersView.as_view(), name="api-follower"),
     path("api/Follow/<path:author_id>/request/", views.api_follow_requests, name="api-follow-request"),
     path("api/Follow/<path:author_id>/accept/", views.api_accept_follow_action, name="api-accept-follow"),
     path("api/Follow/<path:author_id>/reject/", views.api_reject_follow_action, name="api-reject-follow"),
@@ -69,4 +73,3 @@ urlpatterns = [
     path("node_admin/", views.profile_view, name="node_admin"), 
     path("api/entries/", EntryAPIView.as_view(), name="api-entries-list"),
 ]
-    

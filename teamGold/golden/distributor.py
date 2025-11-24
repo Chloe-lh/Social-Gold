@@ -68,10 +68,11 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
     print(f"[DEBUG send_activity_to_inbox] SITE_URL: {settings.SITE_URL}")
     print("[DEBUG] type(recipient.host) =", type(recipient.host))
     print("[DEBUG] recipient.host =", recipient.host)
+    activity_clean = ensure_datetime_strings(activity)
     if recipient.host.rstrip("/") == settings.SITE_URL.rstrip("/"):
         # Local delivery to the inbox
         print(f"[DEBUG send_activity_to_inbox] LOCAL delivery: Creating inbox item for {recipient.username}")
-        Inbox.objects.create(author=recipient, data=activity)
+        Inbox.objects.create(author=recipient, data=activity_clean)
         print(f"[DEBUG send_activity_to_inbox] LOCAL delivery: Inbox item created successfully")
         return
 

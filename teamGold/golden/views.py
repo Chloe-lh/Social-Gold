@@ -208,7 +208,7 @@ def stream_view(request):
     remote_nodes = Node.objects.filter(is_active=True)
     for node in remote_nodes:
 
-        raw_items = fetch_remote_entries(node)
+        raw_items = fetch_remote_entries(node) or []
 
         for item in raw_items:
             author_data = item.get("author", {})

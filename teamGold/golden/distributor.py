@@ -711,7 +711,7 @@ def process_inbox(author: Author):
                 existing.delete()
                 print(f"[DEBUG process_inbox] FOLLOW REQUEST: Deleted {existing_count} existing follow requests")
 
-                follow_id = f"{actor.id.rstrip('/')}/{suffix}/{uuid.uuid4()}"
+                follow_id = f"{actor.id.rstrip('/')}/follow/{uuid.uuid4()}",
                 follow_obj = Follow.objects.create(
                     #id=activity.get("id"),
                     id = follow_id,

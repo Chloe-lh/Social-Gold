@@ -633,20 +633,3 @@ def notify(author, data):
 
     return results
 '''
-
-def extract_host_and_uuid(author_id):
-    """
-    Takes a full URL or partial URL and returns (host, uuid).
-    """
-    parsed = urlparse(author_id)
-
-    # If author_id is a raw UUID string, this is wrong for remote
-    if parsed.scheme == "" or parsed.netloc == "":
-        return None, None
-
-    host = f"{parsed.scheme}://{parsed.netloc}"
-
-    parts = parsed.path.rstrip('/').split('/')
-    uuid = parts[-1]  # should be the UUID
-
-    return host, uuid

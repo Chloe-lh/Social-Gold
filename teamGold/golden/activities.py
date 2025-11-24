@@ -25,6 +25,10 @@ def is_local(author_id):
     site_host = urlparse(settings.SITE_URL).netloc
     return author_host == site_host
 
+# * ============================================================
+# * Entry / Comment / Like Activities
+# * ============================================================
+
 def create_new_entry_activity(author, entry):
     activity_id = make_fqid(author, "posts")
 
@@ -60,7 +64,6 @@ def create_update_entry_activity(author, entry):
     commentList = get_comment_list_api(entry.id)
     likeList = get_like_api(entry.id)
    
-    
     activity = {
         "type": "Entry",
         "title" : entry.title,
@@ -142,6 +145,7 @@ def create_like_activity(author, liked_object_fqid):
 
     activity = {
         "type": "like",
+        "id":activity_id,
         "author":{
             "type":"author",
             "id":author.id,
@@ -149,13 +153,37 @@ def create_like_activity(author, liked_object_fqid):
             "host":author.host,
             "displayName":author.name,
             "github":author.github,
-            "profileImage":author.profileImage.url if author.profileImage else None,
+            "profileImage":author.profileImage.url if author.profileImage else None
         },
         "published":timezone.now().isoformat(),
-        "id":activity_id,
         "object":liked_object_fqid,
     }
     return activity
+
+def create_unlike_activity(author, liked_object_fqid):
+    activity_id = make_fqid(author, "unlike")
+
+    activity = {
+        "type": "unlike",
+        "id": activity_id,
+        "author": {
+            "type": "author",
+            "id": author.id,
+            "web": author.web,
+            "host": author.host,
+            "displayName": author.name,
+            "github": author.github,
+            "profileImage":author.profileImage.url if author.profileImage else None
+        },
+        "published": timezone.now().isoformat(),
+        "object": liked_object_fqid,
+    }
+
+    return activity
+
+# * ============================================================
+# * Author-Related Activities
+# * ============================================================
 
 def create_follow_activity(author, target):
     """
@@ -260,46 +288,9 @@ def create_profile_update_activity(actor_author):
 
     return activity
 
-def create_unlike_activity(author, liked_object):
-    activity_id = make_fqid(author, "unlike")
-
-    activity = {
-        "type": "unlike",
-        "id": activity_id,
-        "summary": f"{author.username} unliked an entry or comment",
-        "actor": {
-            "type": "Author",
-            "id": str(author.id),
-            "host": author.host,
-            "displayName": author.username,
-            "github": author.github,
-            "profileImage": author.profileImage.url if author.profileImage else None,
-            "web": author.web,
-        },
-        "published": timezone.now().isoformat(),
-        "object": {
-            "type": "Like",
-            "id": liked_object.id,
-            "author": {
-                "type": "Author",
-                "id": liked_object.author.id,
-                "host": liked_object.author.host,
-                "displayName": liked_object.author.username,
-                "github": liked_object.author.github,
-                "profileImage": liked_object.author.profileImage.url if liked_object.author.profileImage else None,
-                "web": liked_object.author.web,
-            },
-            "published": liked_object.published,
-            "object": liked_object.object,
-        }
-    }
-    
-    return activity
-
-
-'''
-HELPER FUNCTIONS
-'''
+# * ============================================================
+# * Helper Functions
+# * ============================================================
 
 def get_comment_list_api(entry_id):
     base = settings.SITE_URL.rstrip('/') + '/'

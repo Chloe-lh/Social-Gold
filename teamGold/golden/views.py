@@ -44,7 +44,6 @@ from golden.activities import ( # Kenneth: If you're adding new activities, plea
     create_follow_activity,
     create_like_activity,
     create_new_entry_activity,
-
     create_update_entry_activity,
     create_unlike_activity,
     create_profile_update_activity,
@@ -122,7 +121,7 @@ def validate_visibility(visibility):
     return visibility in ['PUBLIC', 'UNLISTED', 'FRIENDS', 'DELETED']
 
 # * ============================================================
-# * View Functions
+# * View Helper Classes
 # * ============================================================
 
 class CustomLoginView(LoginView):
@@ -147,7 +146,11 @@ class ApprovedUserBackend(ModelBackend):
         if isinstance(user, Author) and is_approved:
             return super().user_can_authenticate(user)
         return False # dont allow user to log in if not approved
-    
+
+# * ============================================================
+# * View Functions
+# * ============================================================
+
 def signup(request):
     # we want to log users out when they want to sign up
     logout(request)
@@ -413,7 +416,6 @@ def new_edit_entry_view(request):
         print(f"[DEBUG entry_post] Creating entry with visibility: {user_selected_visibility}")
         
         if not validate_visibility(user_selected_visibility):
-            messages.error(request, f"Invalid visibility setting: {user_selected_visibility}")
             return redirect("stream")
 
         markdown_content = request.POST.get("content", "")
@@ -442,7 +444,6 @@ def new_edit_entry_view(request):
 
         activity = create_new_entry_activity(request.current_author, entry)
         distribute_activity(activity, actor=request.current_author)
-        messages.success(request, "Entry created successfully!")
         return redirect("stream")
 
     # FEATURE: EDIT AN EXISTING ENTRY
@@ -470,7 +471,6 @@ def new_edit_entry_view(request):
         print(f"[DEBUG entry_update] Visibility change: {editing_entry.visibility} -> {user_selected_visibility}")
 
         if not validate_visibility(user_selected_visibility):
-            messages.error(request, f"Invalid visibility setting: {user_selected_visibility}")
             print(f"[DEBUG entry_update] ERROR: Invalid visibility: {user_selected_visibility}")
             return redirect("stream")
 
@@ -508,7 +508,6 @@ def new_edit_entry_view(request):
             activity = create_update_entry_activity(request.current_author, editing_entry)
             distribute_activity(activity, actor=request.current_author)
 
-        messages.success(request, "Entry updated successfully!")
         context.update({
             "form": EntryForm(),
             "editing_entry": None,
@@ -548,7 +547,6 @@ def entry_detail_view(request, entry_uuid):
         entry = get_object_or_404(Entry, id__endswith=str(entry_uuid))
     
     if entry.visibility == 'DELETED':
-        messages.warning(request, "This entry has been deleted.")
         return redirect('stream')
             
     viewer = Author.from_user(request.user)
@@ -624,7 +622,6 @@ def entry_detail_view(request, entry_uuid):
         activity = create_delete_entry_activity(viewer, entry)
         distribute_activity(activity, actor=viewer)
 
-        messages.success(request, "Entry deleted successfully!")
         return redirect('stream')
     
     # FEATURE: EDIT BUTTON CLICKED
@@ -780,7 +777,6 @@ def profile_view(request):
                     sha = c.get("sha")[:7]
                     msg = c.get("message", "")
                     url = c.get("url", "").replace("api.", "").replace("repos/", "").replace("commits", "commit")
-                    messages.append(f"[{sha}]({url}): {msg}")
                 content_text = f"**Pushed to [{repo_name}]({repo_url})**:\n\n" + "\n".join(messages)
 
             elif event_type == "IssuesEvent":
@@ -1036,7 +1032,6 @@ def profile_view(request):
             ).first()
             
             if not follow_request:
-                messages.error(request, "Follow request not found")
                 return redirect("profile")
 
             target_author = follow_request.actor
@@ -1112,13 +1107,10 @@ def profile_view(request):
                     
                     print(f"[DEBUG profile_view] REMOVE FOLLOWER: Deleted {deleted[0]} Follow objects")
                     
-                    messages.success(request, f"Removed {target.username} as a follower")
                 else:
                     print(f"[DEBUG profile_view] REMOVE FOLLOWER: ERROR - Target not found: {target_id}")
-                    messages.error(request, "Follower not found")
             except Exception as e:
                 print(f"[DEBUG profile_view] REMOVE FOLLOWER: Exception: {type(e).__name__}: {e}")
-                messages.error(request, "Error removing follower")
 
             return redirect("profile")
         
@@ -1178,16 +1170,13 @@ def profile_view(request):
                 except TypeError as e:
                     # Defensive: if services signature mismatched or unexpected error
                     print(f"[DEBUG profile_view] FOLLOW ACTION: TypeError in get_or_create_foreign_author: {e}")
-                    messages.error(request, "Unable to follow author due to internal error.")
                     return redirect("profile")
                 except Exception as e:
                     print(f"[DEBUG profile_view] FOLLOW ACTION: Exception in get_or_create_foreign_author: {type(e).__name__}: {e}")
-                    messages.error(request, "Unable to follow author due to internal error.")
                     return redirect("profile")
 
                 if not target:
                     print(f"[DEBUG profile_view] FOLLOW ACTION: ERROR - get_or_create_foreign_author returned None")
-                    messages.error(request, "Unable to follow author. Author not found.")
                     return redirect("profile")
 
             # Normalize target.id to ensure consistent matching with Follow objects from process_inbox
@@ -1217,8 +1206,6 @@ def profile_view(request):
             distribute_activity(activity, actor=author)
             print(f"[DEBUG profile_view] FOLLOW ACTION: Activity distributed successfully")
             
-            messages.success(request, "Follow request sent")
-
             return redirect("profile")
 
         if "remove_friend" in request.POST:
@@ -1232,7 +1219,6 @@ def profile_view(request):
 
                 #activity = create_unfriend_activity(author, target_id)
                 #distribute_activity(activity, actor=author)
-                messages.success(request, f"Removed {target.username} as a friend")
             except Author.DoesNotExist:
                 messages.error(request, "Author not found")
 
@@ -1244,9 +1230,6 @@ def profile_view(request):
                 form.save()
                 activity = create_profile_update_activity(author)
                 distribute_activity(activity, actor=author)
-                messages.success(request, "Profile updated successfully")
-            else:
-                messages.error(request, "Failed to update profile")
 
             return redirect("profile")
 
@@ -1656,7 +1639,6 @@ def follow_requests(request):
         ).first()
         
         if not follow_request:
-            messages.error(request, "Follow request not found")
             return redirect("follow_requests")
 
         follower_id = follow_request.actor.id  # who requested the follow
@@ -1677,7 +1659,6 @@ def follow_requests(request):
             
             #activity = create_accept_follow_activity(actor, request_id)
             #distribute_activity(activity, actor=actor)
-            messages.success(request, f"Accepted follow request from {follow_request.actor.username}")
             return redirect("follow_requests")
 
         elif action == "reject":
@@ -1690,9 +1671,8 @@ def follow_requests(request):
                 inbox_item.processed = True
                 inbox_item.save()
             
-            activity = create_reject_follow_activity(actor, follower_id)
+            #activity = create_reject_follow_activity(actor, follower_id)
             #distribute_activity(activity, actor=actor)
-            #messages.success(request, f"Rejected follow request from {follow_request.actor.username}")
             return redirect("follow_requests")
 
     # Only show REQUESTED state - exclude REJECTED and ACCEPTED
@@ -1736,7 +1716,6 @@ def add_comment(request):
     if request.method == "POST":
         form = CommentForm(request.POST)
         entry_id = request.POST.get("entry_id")
-        print(f"[DEBUG add_comment] entry_id={entry_id}")
 
         if not entry_id:
             return redirect(request.META.get("HTTP_REFERER", "stream"))
@@ -1767,13 +1746,17 @@ def add_comment(request):
 
 @login_required
 def toggle_like(request):
-    if request.method != "POST":
-        return redirect('stream')
+    """
+    This function handles the likes and unlikes process, using a toggle system. 
+    """
 
+    # FQID of the object being liked needs to be sent for this to work, otherwise fail gracefully.
+    # http://host/api/entries/<uuid> 
     object_fqid = request.POST.get('object')
     if not object_fqid:
         return redirect(request.META.get('HTTP_REFERER', 'stream'))
 
+    # If a foreign user accessed this illegitimately, redirect to login 
     author = Author.from_user(request.user)
     if author is None:
         return redirect('login')
@@ -1781,14 +1764,18 @@ def toggle_like(request):
     entry_obj = None
     comment_obj = None
 
+    # Feature Type 1: Attempts to resolve FQID as an Entry 
     try:
+        # Case 1: FQID is perfect 
         entry_obj = Entry.objects.get(id=object_fqid)
     except Entry.DoesNotExist:
         try:
+            # Case 2: Check endswith because it might be stored as a full URL, and we just got the tail
             entry_obj = Entry.objects.get(id__endswith=object_fqid)
         except Entry.DoesNotExist:
             entry_obj = None
 
+    # Feature Type 1: Attempts to resolve FQID as a Comment 
     if not entry_obj:
         try:
             comment_obj = Comment.objects.get(id=object_fqid)
@@ -1796,32 +1783,33 @@ def toggle_like(request):
             try:
                 comment_obj = Comment.objects.get(id__endswith=object_fqid)
             except Comment.DoesNotExist:
-                # if nothing exists, simply redirect back to stream
-                return redirect('stream')
+                comment_obj = None
 
-    target = entry_obj if entry_obj else comment_obj
+    target_id = (entry_obj.id if entry_obj else (comment_obj.id if comment_obj else object_fqid))
 
     with transaction.atomic():
-        existing = Like.objects.filter(author=author, object=target.id).first()
-        if existing:
-            activity = create_like_activity(author, target)
+        existing = Like.objects.filter(author=author, object=target_id).first()
+
+        if existing: # UNLIKING LOGIC 
             existing.delete()
             if entry_obj:
                 entry_obj.likes.remove(author)
-        else:
-            if not Like.objects.filter(author=author, object=target.id).exists():
-                like_id = (
-                    f"{settings.SITE_URL.rstrip('/')}/api/likes/{uuid.uuid4()}"
-                )
-                Like.objects.create(
-                    id=like_id,
-                    author=author,
-                    object=target.id,
-                    published=dj_timezone.now(),
-                )
-                if entry_obj:
-                    entry_obj.likes.add(author)
-            activity = create_like_activity(author, target.id)
+
+            activity = create_unlike_activity(author, existing.object)
+        else: # LIKING LOGIC 
+            like_id = f"{settings.SITE_URL.rstrip('/')}/api/likes/{uuid.uuid4()}"
+            Like.objects.create(
+                id=like_id,
+                author=author,    
+                object=target_id,  
+                published=dj_timezone.now(),
+            )
+
+            # If the target is an Entry, add to its many-to-many likes
+            if entry_obj:
+                entry_obj.likes.add(author)
+
+            activity = create_like_activity(author, target_id) 
 
     distribute_activity(activity, actor=author)
     return redirect(request.META.get("HTTP_REFERER", "stream"))
@@ -1829,21 +1817,6 @@ def toggle_like(request):
 # * ============================================================
 # * Endpoint Receiver Functions
 # * ============================================================   
-
-@login_required
-def entry_images_view(request, author_uuid, entry_uuid):
-    entry = get_object_or_404(
-        Entry,
-        id__icontains=f"/authors/{author_uuid}/entries/{entry_uuid}"
-    )
-    images = entry.images.all()
-
-    data = {
-        "type": "images",
-        "count": images.count(),
-        "src": EntryImageSerializer(images, many=True).data
-    }
-    return JsonResponse(data)
 
 @api_view(['GET'])
 def api_follow_requests(request, author_id):
@@ -1856,11 +1829,9 @@ def api_follow_requests(request, author_id):
     # Only return REQUESTED state - exclude REJECTED and ACCEPTED
     follow_requests = Follow.objects.filter(
         object=author.id, 
-        state="REQUESTED"  # Only pending requests
+        state="REQUESTED"
     )
-    
-    print(f"[DEBUG api_follow_requests] Found {follow_requests.count()} pending requests for author {author.username}")
-    
+        
     items = [{
         "id": fr.id,
         "type": "Follow",
@@ -1878,7 +1849,6 @@ def api_follow_requests(request, author_id):
 def api_follow_action(request):
     """Handle a user following another user. Works for both local and remote authors."""
     target_id = request.POST.get("author_id")
-    print(f"[DEBUG api_follow_action] Follow request: target_id={target_id}")
     
     actor = Author.from_user(request.user)
     if not actor:
@@ -1898,8 +1868,6 @@ def api_follow_action(request):
     if actor == target:
         return Response({"error": "You cannot follow yourself."}, status=400)
 
-    print(f"[DEBUG api_follow_action] Actor: {actor.username} (id={actor.id}), Target: {target.username} (id={target.id})")
-
     # Normalize target ID for consistent storage
     target_id_normalized = normalize_fqid(str(target.id))
     
@@ -1914,9 +1882,7 @@ def api_follow_action(request):
         if follow.state == "REJECTED":
             follow.state = "REQUESTED"
             follow.save()
-            print(f"[DEBUG api_follow_action] Updated existing REJECTED follow to REQUESTED")
 
-    print(f"[DEBUG api_follow_action] Follow object: id={follow.id}, state={follow.state}, created={created}")
 
     activity = create_follow_activity(actor, target)
     distribute_activity(activity, actor=actor)
@@ -1925,117 +1891,9 @@ def api_follow_action(request):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def api_accept_follow_action(request):
-    """Accept a follow request from another user. Works for both local and remote authors."""
-    follow_id = request.POST.get("follow_id")
-    print(f"[DEBUG api_accept_follow_action] Accept request: follow_id={follow_id}")
-    
-    actor = Author.from_user(request.user)
-    if not actor:
-        return Response({"error": "User not found"}, status=404)
-    
-    # Normalize actor ID for matching
-    actor_id_normalized = normalize_fqid(str(actor.id))
-    actor_id_str = str(actor.id).rstrip('/')
-    
-    # Find follow request - try both normalized and raw IDs
-    follow_request = Follow.objects.filter(
-        id=follow_id
-    ).filter(
-        Q(object=actor_id_normalized) | Q(object=actor_id_str) | Q(object=actor.id)
-    ).first()
-    
-    if not follow_request:
-        return Response({"error": "Follow request not found"}, status=404)
-
-    if follow_request.state != "REQUESTED":
-        return Response({"error": f"Invalid follow request state: {follow_request.state}"}, status=400)
-
-    print(f"[DEBUG api_accept_follow_action] Found follow request: actor={follow_request.actor.username}, object={follow_request.object}, state={follow_request.state}")
-
-    follow_request.state = "ACCEPTED"
-    follow_request.published = dj_timezone.now()
-    follow_request.save()
-
-    # Update following relationship
-    follower = follow_request.actor
-    target_id_normalized = normalize_fqid(str(actor.id))
-    
-    # Add to following ManyToMany (for local authors)
-    if actor not in follower.following.all():
-        follower.following.add(actor)
-        print(f"[DEBUG api_accept_follow_action] Added {actor.username} to {follower.username}'s following")
-
-    # Mark inbox item as processed if it exists
-    inbox_item = Inbox.objects.filter(author=actor, data__id=follow_id, processed=False).first()
-    if inbox_item:
-        inbox_item.processed = True
-        inbox_item.save()
-        print(f"[DEBUG api_accept_follow_action] Marked inbox item as processed")
-
-    activity = create_accept_follow_activity(actor, follow_id)
-    distribute_activity(activity, actor=actor)
-    
-    print(f"[DEBUG api_accept_follow_action] Successfully accepted follow request")
-
-    return Response({"status": "Follow request accepted."}, status=200)
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def api_reject_follow_action(request):
-    """Reject a follow request from another user. Works for both local and remote authors."""
-    follow_id = request.POST.get("follow_id")
-    print(f"[DEBUG api_reject_follow_action] Reject request: follow_id={follow_id}")
-    
-    actor = Author.from_user(request.user)
-    if not actor:
-        return Response({"error": "User not found"}, status=404)
-    
-    # Normalize actor ID for matching
-    actor_id_normalized = normalize_fqid(str(actor.id))
-    actor_id_str = str(actor.id).rstrip('/')
-    
-    # Find follow request - try both normalized and raw IDs
-    follow_request = Follow.objects.filter(
-        id=follow_id
-    ).filter(
-        Q(object=actor_id_normalized) | Q(object=actor_id_str) | Q(object=actor.id)
-    ).first()
-    
-    if not follow_request:
-        return Response({"error": "Follow request not found"}, status=404)
-
-    if follow_request.state != "REQUESTED":
-        return Response({"error": f"Invalid follow request state: {follow_request.state}"}, status=400)
-
-    print(f"[DEBUG api_reject_follow_action] Found follow request: actor={follow_request.actor.username}, object={follow_request.object}, state={follow_request.state}")
-
-    follow_request.state = "REJECTED"
-    follow_request.published = dj_timezone.now()
-    follow_request.save()
-    
-    print(f"[DEBUG api_reject_follow_action] Updated follow request state to REJECTED")
-
-    # Mark inbox item as processed if it exists
-    inbox_item = Inbox.objects.filter(author=actor, data__id=follow_id, processed=False).first()
-    if inbox_item:
-        inbox_item.processed = True
-        inbox_item.save()
-        print(f"[DEBUG api_reject_follow_action] Marked inbox item as processed")
-
-    activity = create_reject_follow_activity(actor, follow_request.actor.id)
-    distribute_activity(activity, actor=actor)
-    
-    print(f"[DEBUG api_reject_follow_action] Successfully rejected follow request")
-
-    return Response({"status": "Follow request rejected."}, status=200)
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
 def api_unfollow_action(request):
     """Unfollow a user. Works for both local and remote authors."""
     target_id = request.POST.get("author_id")
-    print(f"[DEBUG api_unfollow_action] Unfollow request: target_id={target_id}")
     
     actor = Author.from_user(request.user)
     if not actor:
@@ -2054,12 +1912,10 @@ def api_unfollow_action(request):
     if actor == target:
         return Response({"error": "You cannot unfollow yourself."}, status=400)
 
-    print(f"[DEBUG api_unfollow_action] Actor: {actor.username} (id={actor.id}), Target: {target.username} (id={target.id})")
 
     # Remove from ManyToMany (for local authors)
     if target in actor.following.all():
         actor.following.remove(target)
-        print(f"[DEBUG api_unfollow_action] Removed {target.username} from {actor.username}'s following")
 
     # Delete Follow objects - normalize IDs for consistent matching
     target_id_normalized = normalize_fqid(str(target.id))
@@ -2071,13 +1927,9 @@ def api_unfollow_action(request):
         Q(object=target.id)
     ).delete()
     
-    print(f"[DEBUG api_unfollow_action] Deleted {deleted[0]} Follow objects")
-
     #activity = create_unfollow_activity(actor, target.id)
     #distribute_activity(activity, actor=actor)
     
-    print(f"[DEBUG api_unfollow_action] Successfully unfollowed {target.username}")
-
     return Response({"status": f"Unfollowed {target.username}."}, status=200)
 
 @api_view(['GET'])

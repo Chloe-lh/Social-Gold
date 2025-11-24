@@ -180,125 +180,37 @@ def create_follow_activity(author, target):
     
     return activity
 
-def create_accept_follow_activity(acceptor_author, follower_id_or_follow_id):
-    """
-    Create an Accept activity for a follow request.
-    Accepts either a follower Author ID string or a Follow ID string.
-    If a Follow ID is provided, it will look up the Follow object to get the follower.
-    """
-    follower_id = follower_id_or_follow_id
-    follow_obj = None
-    
-    follow_obj = Follow.objects.filter(id=follower_id_or_follow_id).first()
-    if follow_obj:
-        follower_id = str(follow_obj.actor.id)
-        follow_id = follow_obj.id
-    else:
-        follow_id = None
-    
-    activity_id = make_fqid(acceptor_author, "accept")
+# def create_unfollow_activity(actor_author, target_id):
+#     activity_id = make_fqid(actor_author, "undo-follow")
 
-    if follow_id:
-        activity = {
-            "type": "Accept",
-            "id": activity_id,
-            "summary": f"{acceptor_author.username} accepted your follow request",
-            "actor": str(acceptor_author.id),
-            "object": follow_id, 
-            "published": timezone.now().isoformat(),
-        }
-    else:
-        activity = {
-            "type": "Accept",
-            "id": activity_id,
-            "summary": f"{acceptor_author.username} accepted your follow request",
-            "actor": str(acceptor_author.id),
-            "object": {
-                "type": "Follow",
-                "actor": str(follower_id),
-                "object": str(acceptor_author.id),
-            },
-            "published": timezone.now().isoformat(),
-        }
+#     activity = {
+#         "type": "Undo",
+#         "id": activity_id,
+#         "summary": f"{actor_author.username} stopped following you",
+#         "actor": str(actor_author.id),
+#         "object": {
+#             "type": "Follow",
+#             "actor": str(actor_author.id),
+#             "object": str(target_id)
+#         },
+#         "published": timezone.now().isoformat(),
+#     }
     
-    return activity
+#     return activity
 
-def create_reject_follow_activity(acceptor_author, follower_id_or_follow_id):
-    """
-    Create a Reject activity for a follow request.
-    Accepts either a follower Author ID string or a Follow ID string.
-    If a Follow ID is provided, it will look up the Follow object to get the follower.
-    """
+# def create_unfriend_activity(actor_author, target_id):
+#     activity_id = make_fqid(actor_author, "unfriend")
 
-    follower_id = follower_id_or_follow_id
-    follow_obj = None
+#     activity = {
+#         "type": "RemoveFriend",
+#         "id": activity_id,
+#         "summary": f"{actor_author.username} removed you as a friend",
+#         "actor": str(actor_author.id),
+#         "object": str(target_id),
+#         "published": timezone.now().isoformat(),
+#     }
     
-    follow_obj = Follow.objects.filter(id=follower_id_or_follow_id).first()
-    if follow_obj:
-        follower_id = str(follow_obj.actor.id)
-        follow_id = follow_obj.id
-    else:
-        follow_id = None
-    
-    activity_id = make_fqid(acceptor_author, "reject")
-
-    if follow_id:
-        activity = {
-            "type": "Reject",
-            "id": activity_id,
-            "summary": f"{acceptor_author.username} rejected your follow request",
-            "actor": str(acceptor_author.id),
-            "object": follow_id, 
-            "published": timezone.now().isoformat(),
-        }
-    else:
-        activity = {
-            "type": "Reject",
-            "id": activity_id,
-            "summary": f"{acceptor_author.username} rejected your follow request",
-            "actor": str(acceptor_author.id),
-            "object": {
-                "type": "Follow",
-                "actor": str(follower_id),
-                "object": str(acceptor_author.id),
-            },
-            "published": timezone.now().isoformat(),
-        }
-    
-    return activity
-    
-
-def create_unfollow_activity(actor_author, target_id):
-    activity_id = make_fqid(actor_author, "undo-follow")
-
-    activity = {
-        "type": "Undo",
-        "id": activity_id,
-        "summary": f"{actor_author.username} stopped following you",
-        "actor": str(actor_author.id),
-        "object": {
-            "type": "Follow",
-            "actor": str(actor_author.id),
-            "object": str(target_id)
-        },
-        "published": timezone.now().isoformat(),
-    }
-    
-    return activity
-
-def create_unfriend_activity(actor_author, target_id):
-    activity_id = make_fqid(actor_author, "unfriend")
-
-    activity = {
-        "type": "RemoveFriend",
-        "id": activity_id,
-        "summary": f"{actor_author.username} removed you as a friend",
-        "actor": str(actor_author.id),
-        "object": str(target_id),
-        "published": timezone.now().isoformat(),
-    }
-    
-    return activity
+#     return activity
 
 def create_profile_update_activity(actor_author):
     activity_id = make_fqid(actor_author, "profile-update")
@@ -307,10 +219,23 @@ def create_profile_update_activity(actor_author):
         "type": "Update",
         "id": activity_id,
         "summary": f"{actor_author.username} updated their profile",
-        "actor": str(actor_author.id),
+        "actor": {
+            "type": "Author",
+            "id": str(actor_author.id),
+            "host": actor_author.host,
+            "displayName": actor_author.username,
+            "github": actor_author.github,
+            "profileImage": actor_author.profile_image,
+            "web": actor_author.web,
+        },
         "object": {
             "type": "Author",
             "id": str(actor_author.id),
+            "host": actor_author.host,
+            "displayName": actor_author.username,
+            "github": actor_author.github,
+            "profileImage": actor_author.profile_image,
+            "web": actor_author.web,
         },
         "published": timezone.now().isoformat(),
     }

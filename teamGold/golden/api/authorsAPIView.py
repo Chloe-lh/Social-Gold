@@ -60,14 +60,16 @@ class AuthorsListView(APIView):
         
         try:
             page = int(page)
-            size = int(size)
         except (ValueError, TypeError):
             page = 1
+        
+        try:
+            size = int(size)
+        except (ValueError, TypeError):
             size = 50
         
         # Paginate
-        paginator = Paginator(authors, size)
-        page_obj = paginator.get_page(page)
+        page_obj = paginate(request, authors, 50)
         
         # Serialize
         serializer = AuthorSerializer(page_obj.object_list, many=True)

@@ -180,11 +180,13 @@ def stream_view(request):
     if not user_author:
         return redirect('login')
     process_inbox(user_author)
+    #following
+    #follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
+    #followed_author_fqids = [f.object for f in follows]
 
-    follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
-    followed_author_fqids = [f.object for f in follows]
-
-    friends_fqids = []
+    #use set intersection using the author's followings to get this part
+    
+    '''
     for f in follows:
         try:
             reciprocal = Follow.objects.get(
@@ -193,8 +195,14 @@ def stream_view(request):
                 state='ACCEPTED'
             )
             friends_fqids.append(f.object)
-        except Follow.DoesNotExist:
+        except Follow.DoesNotExist:     
             continue
+            '''
+    #people following the user
+    followers = Author.objects.filter(following=user_author)
+    #people the user is following
+    following = Author.objects.filter(followers_set=user_author)
+    friends = user_author.update_friends()
 
     remote_entries = []
     remote_nodes = Node.objects.filter(is_active=True)
@@ -205,29 +213,43 @@ def stream_view(request):
         for item in raw_items:
             author_data = item.get("author", {})
             remote_author_id = author_data.get("id")
+            #hm?
             entry_visibility = item.get("visibility", "PUBLIC").upper()
 
             if not remote_author_id:
                 continue
 
             # Check if user follows this author (for UNLISTED and FRIENDS entries)
-            is_following = Follow.objects.filter(
+            if remote_author_id in following:
+             is_following = True
+            else:
+                is_following = False
+            '''
+            Follow.objects.filter(
                 actor=user_author, 
                 object=remote_author_id, 
                 state="ACCEPTED"
             ).exists()
-            
+            '''
             # Check if user is friends with this author (for FRIENDS entries)
             # Friends = mutual follows (both follow each other)
+
             is_friend = False
+            if remote_author_id in friends:
+                is_friend =  True
+            else:
+                is_friend =  False
+
+            '''
             if is_following:
                 # Check if the remote author also follows the user (mutual follow)
+
                 is_friend = Follow.objects.filter(
                     actor__id=remote_author_id,
                     object=user_author.id,
                     state="ACCEPTED"
                 ).exists()
-            
+            '''
             should_fetch = False
             if entry_visibility == "PUBLIC":
                 should_fetch = True
@@ -246,8 +268,8 @@ def stream_view(request):
     local_entries = Entry.objects.filter(
         (Q(author=user_author) & ~Q(visibility="DELETED")) |
         Q(visibility='PUBLIC') |
-        Q(visibility='UNLISTED', author__id__in=followed_author_fqids) |
-        Q(visibility='FRIENDS', author__id__in=friends_fqids)
+        Q(visibility='UNLISTED', author__id__in=following) |
+        Q(visibility='FRIENDS', author__id__in=friends)
     )
     visible_remote = []
 
@@ -259,11 +281,18 @@ def stream_view(request):
 
         if e.visibility == "UNLISTED":
             # UNLISTED: only visible to followers
+
+            if e.author_id in following:
+                is_following = True
+            else:
+                is_following = False
+            '''
             is_following = Follow.objects.filter(
                 actor=user_author, 
                 object=e.author.id, 
                 state="ACCEPTED"
             ).exists()
+            '''
             if is_following:
                 visible_remote.append(e)
             continue
@@ -271,6 +300,13 @@ def stream_view(request):
         if e.visibility == "FRIENDS":
             # FRIENDS: only visible to mutual follows (friends)
             # Check both directions: user follows author AND author follows user
+            
+            friends = False
+            if e.author_id in friends:
+                friends =  True
+            else:
+                friends =  False
+            '''
             user_follows_author = Follow.objects.filter(
                 actor=user_author, 
                 object=e.author.id, 
@@ -284,6 +320,7 @@ def stream_view(request):
                     object=user_author.id,
                     state="ACCEPTED"
                 ).exists()
+            
                 # Also try with author ID as string if author is a remote Author object
                 if not author_follows_user:
                     author_follows_user = Follow.objects.filter(
@@ -291,9 +328,9 @@ def stream_view(request):
                         object=user_author.id,
                         state="ACCEPTED"
                     ).exists()
-            
-            is_mutual = user_follows_author and author_follows_user
-            if is_mutual:
+            '''
+            #is_mutual = user_follows_author and author_follows_user
+            if friends:
                 visible_remote.append(e)
             continue
 
@@ -316,8 +353,8 @@ def stream_view(request):
     context = {
         'entries': entries,
         'user_author': user_author,
-        'followed_author_fqids': followed_author_fqids,
-        'friends_fqids': friends_fqids,
+        'followed_author_fqids': following,
+        'friends_fqids': friends,
         'comment_form': CommentForm(),
         'remote_node': remote_nodes,
     }
@@ -516,12 +553,21 @@ def entry_detail_view(request, entry_uuid):
         return redirect('stream')
             
     viewer = Author.from_user(request.user)
+     #people following the user
+    followers = Author.objects.filter(following=viewer)
+    #people the user is following
+    following = Author.objects.filter(followers_set=viewer)
+    friends = viewer.update_friends()
     process_inbox(viewer)
 
     if entry.visibility == "FRIENDS":
         if viewer != entry.author:
             is_friend = False
             if viewer:
+                is_friend = False
+                if viewer.id in friends:
+                    is_friend = True
+                '''
                 viewer_follows_author = Follow.objects.filter(
                     actor=viewer,
                     object=entry.author.id,
@@ -534,24 +580,33 @@ def entry_detail_view(request, entry_uuid):
                         state="ACCEPTED"
                     ).exists()
                     is_friend = author_follows_viewer
-            
+                '''
             if not is_friend:
                 return HttpResponseForbidden("This post is visible to friends only.")
     elif entry.visibility == "UNLISTED":
         if viewer != entry.author:
+            is_follower = False
+            if viewer.id in following:
+                is_follower = True
+            '''
+            is_friend = False
             is_follower = Follow.objects.filter(
                 actor=viewer,
                 object=entry.author.id,
                 state="ACCEPTED"
             ).exists()
+            '''
             is_friend = False
+            if viewer.id in friends:
+                    is_friend = True
+            '''
             if viewer and is_follower:
                 is_friend = Follow.objects.filter(
                     actor=entry.author,
                     object=viewer.id,
                     state="ACCEPTED"
                 ).exists()
-            
+            '''
             if not (is_follower or is_friend):
                 return HttpResponseForbidden("You don't have permission to view this entry.")
     

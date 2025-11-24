@@ -261,7 +261,8 @@ def distribute_activity(activity: dict, actor: Author):
     obj = activity.get("object")
 
     # CREATE ENTRY
-    if type_lower == "create" and isinstance(obj, dict) and obj.get("type") == "post":
+    if type_lower == "entry" and isinstance(obj, dict) and obj.get("type") == "post":
+        
         visibility = obj.get("visibility", "PUBLIC").upper()
 
         if visibility == "PUBLIC":
@@ -313,7 +314,7 @@ def distribute_activity(activity: dict, actor: Author):
         return
 
     # DELETE ENTRY
-    if type_lower == "delete" and isinstance(obj, dict) and obj.get("type") == "post":
+    if type_lower == "entry" and isinstance(obj, dict) and obj.get("type") == "post":
         recipients = set(get_followers(actor)) | set(get_friends(actor))
         for r in recipients:
             send_activity_to_inbox(r, activity)

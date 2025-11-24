@@ -108,14 +108,17 @@ class LikeSerializer(serializers.ModelSerializer):
 
 class CommentSerializer(serializers.ModelSerializer):
     type = serializers.SerializerMethodField()
-    author = AuthorSerializer()
+    # Author should be read-only for incoming writes; the view provides the author via save(author=...)
+    author = AuthorSerializer(read_only=True)
     uuid = serializers.SerializerMethodField()
     comment = serializers.SerializerMethodField()
+    # Accept 'content' on write (maps to model.content)
+    content = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = Comment
         fields = [
-            "type", "author", "comment", "contentType",
+            "type", "author", "comment", "content", "contentType",
             "id", "published", "uuid"
         ]
 

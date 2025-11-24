@@ -105,25 +105,44 @@ class EntryCommentAPIView(APIView):
             404: openapi.Response(description="Entry or Author not found"),
         }
     )
-    def post(self, request, entry_id):
-        entry_id = unquote(entry_id).rstrip("/")
-        entry = Entry.objects.filter(id=entry_id).first() or Entry.objects.filter(id=entry_id + '/').first()
+    def post(self, request, author_serial=None, entry_serial=None, *args, **kwargs):
+        print("ENTER: EntryCommentAPIView.post")
+        raw_serial = unquote(entry_serial or '').rstrip("/")
+
+        # Resolve entry whether the URL passed a full FQID or just a UUID/serial
+        entry = None
+        if raw_serial.startswith('http'):
+            entry = Entry.objects.filter(id=raw_serial).first() or Entry.objects.filter(id=raw_serial + '/').first()
+        else:
+            # treat as a short serial (uuid) - try contains/endswith matches
+            entry = Entry.objects.filter(id__contains=raw_serial).first()
+            if not entry:
+                entry = Entry.objects.filter(id__endswith=raw_serial).first()
+
         if not entry:
             return Response({'detail': 'Entry not found'}, status=status.HTTP_404_NOT_FOUND)
-
+        print("Entry found", flush=True)
         if not request.content_type or 'application/json' not in request.content_type:
             return Response({'detail': 'Content-Type must be application/json'}, status=status.HTTP_400_BAD_REQUEST)
 
         author = get_object_or_404(Author, id=request.user.id)
+        print("Entry found", flush=True)
         data = request.data.copy()
+        # prefer 'content' then 'comment' from the incoming payload
+        comment_text = data.get('content') or data.get('comment')
+        if comment_text is None or (isinstance(comment_text, str) and not comment_text.strip()):
+            return Response({'detail': "'content' or 'comment' is required"}, status=status.HTTP_400_BAD_REQUEST)
+        data['content'] = comment_text
         data['entry'] = entry.id
         data['type'] = 'comment'
-        data['id'] = generate_comment_fqid(author, entry)
+        data['id'] = generate_comment_fqid(author)
         data['published'] = timezone.now().isoformat()
-        data.pop('author', None)
 
+        print(data, flush=True)
         serializer = CommentSerializer(data=data)
         if not serializer.is_valid():
+            print("serializer failed")
+            print(serializer.errors)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         comment = serializer.save(entry=entry, author=author)
@@ -199,6 +218,7 @@ class CommentedAPIView(APIView):
         }
     )
     def post(self, request, author_serial):
+        print("ENTER: CommentedAPI.post")
         entry_id = request.data.get("entry")
         if not entry_id:
             return Response({'detail': "'entry' field is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -211,7 +231,7 @@ class CommentedAPIView(APIView):
         data = request.data.copy()
         data['entry'] = entry.id
         data['type'] = 'comment'
-        data['id'] = generate_comment_fqid(author, entry)
+        data['id'] = generate_comment_fqid(author)
         data['published'] = timezone.now().isoformat()
         data.pop('author', None)
 
@@ -233,10 +253,10 @@ class CommentedAPIView(APIView):
             404: openapi.Response(description="Author not found"),
         }
     )
-    def get(self, request, author_serial=None, comment_serial=None):
-        if comment_serial:
+    def get(self, request, author_serial=None, comment_fqid=None):
+        if comment_fqid:
             # Retrieve a specific comment
-            comment = Comment.objects.filter(id=comment_serial).first() or Comment.objects.filter(id=comment_serial.rstrip('/') + '/').first()
+            comment = Comment.objects.filter(id=comment_fqid).first() or Comment.objects.filter(id=comment_fqid.rstrip('/') + '/').first()
             if not comment:
                 return Response({'detail': 'comment not found'}, status=status.HTTP_404_NOT_FOUND)
             if author_serial and author_serial not in comment.author.id:

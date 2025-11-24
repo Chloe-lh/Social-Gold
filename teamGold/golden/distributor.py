@@ -88,8 +88,13 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         # Fallback: use the last part of the URL
         author_id_part = recipient_id.split('/')[-1]
     
-    # Construct inbox URL: host/api/authors/{uuid}/inbox/
-    inbox_url = f"{recipient.host.rstrip('/')}/api/authors/{author_id_part}/inbox/"
+    base_host = recipient.host.rstrip('/')
+
+    # If host already ends with /api, do NOT append another `/api`
+    if base_host.endswith('/api'):
+        inbox_url = f"{base_host}/authors/{author_id_part}/inbox/"
+    else:
+        inbox_url = f"{base_host}/api/authors/{author_id_part}/inbox/"
 
     # Get node authentication if available
     from .models import Node

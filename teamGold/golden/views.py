@@ -1736,6 +1736,7 @@ def add_comment(request):
     if request.method == "POST":
         form = CommentForm(request.POST)
         entry_id = request.POST.get("entry_id")
+        print(f"[DEBUG add_comment] entry_id={entry_id}")
 
         if not entry_id:
             return redirect(request.META.get("HTTP_REFERER", "stream"))
@@ -1747,6 +1748,7 @@ def add_comment(request):
             comment.entry = get_object_or_404(Entry, id=entry_id)
             comment.published = dj_timezone.now()
             comment.save()
+            print(f"[DEBUG add_comment] Saved comment:{comment}")
 
             activity = create_comment_activity(
                 author=comment.author,

@@ -886,7 +886,7 @@ def process_inbox(author: Author):
 
         # CREATE ENTRY
         elif activity_type == "entry" or activity_type == "post":
-            entry_id = activity.get("id")
+            entry_id = activity.get("id") or activity.get("fqid")
 
             entry, created = Entry.objects.update_or_create(
                 id=entry_id,
@@ -903,8 +903,7 @@ def process_inbox(author: Author):
             
         # UPDATE ENTRY
         elif activity_type == "update" and isinstance(obj, dict) and obj.get("type") == "post":
-            entry_id = obj.get("id")
-         
+            entry_id = activity.get("id") or activity.get("fqid")
             
             entry = Entry.objects.filter(id=entry_id).first()
 
@@ -923,7 +922,7 @@ def process_inbox(author: Author):
 
         # DELETE ENTRY
         elif activity_type == "delete":
-            entry_id = obj.get("id")
+            entry_id = activity.get("id") or activity.get("fqid")
             entry = Entry.objects.filter(id=entry_id).first()
             if entry:
                 entry.visibility = "DELETED"

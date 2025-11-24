@@ -51,8 +51,6 @@ def create_new_entry_activity(author, entry):
         "likes": {}, 
         "published":entry.published,
         "visibility": entry.visibility,
-
-
     }
     
     return activity
@@ -118,6 +116,7 @@ def create_delete_entry_activity(author, entry):
     return activity
 
 def create_comment_activity(author, entry, comment):
+    activity_id = make_fqid(author, "comments")
     return {
         "type": "comment",
         "author":{
@@ -132,7 +131,7 @@ def create_comment_activity(author, entry, comment):
         "comment":comment.content,
         "contentType":comment.contentType,
         "published":comment.published,
-        "id":"",
+        "id":activity_id,
         "entry":entry.id,
         "likes":{},
     }
@@ -141,7 +140,7 @@ def create_like_activity(author, liked_object_fqid):
     activity_id = make_fqid(author, "likes")
 
     activity = {
-        "type": "Like",
+        "type": "like",
         "author":{
             "type":"author",
             "id":author.id,
@@ -155,7 +154,6 @@ def create_like_activity(author, liked_object_fqid):
         "id":activity_id,
         "object":liked_object_fqid,
     }
-    
     return activity
 
 def create_follow_activity(author, target):
@@ -170,7 +168,7 @@ def create_follow_activity(author, target):
     activity = {
         "type":"follow",
         "summary":f"{author.name} wants to follow {target.name}",
-        "actor":{
+        "author":{
             "type":"author",
             "id":author.id,
             "web":author.web,

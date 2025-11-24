@@ -702,14 +702,23 @@ def process_inbox(author: Author):
         activity_type = activity.get("type", "").lower()
         obj = activity.get("object")
 
-        actor_data = activity.get("actor") or activity.get("author")
+        actor_data = (
+            activity.get("actor") or
+            activity.get("author") or
+            activity.get("author_data") or
+            activity.get("authorData") 
+        )
         actor_id = None
         actor_username = None
         actor_host = None
         
         if isinstance(actor_data, dict):
             actor_id = actor_data.get("id") or actor_data.get("@id")
-            actor_username = actor_data.get("username") or actor_data.get("displayName")
+            actor_username = (
+                actor_data.get("username") or
+                actor_data.get("displayName") or
+                actor_data.get("name")
+            )
             actor_host = actor_data.get("host")
         elif isinstance(actor_data, str):
             actor_id = actor_data

@@ -18,7 +18,7 @@
                 {% csrf_token %} 
                 {% if editing_entry %}
                     <!-- EDITING MODE -->
-                    <textarea name="content" rows="10" cols="50" placeholder="Enter your text here...">{{ editing_entry.content|striptags }}</textarea><br><br>
+                    <textarea name="content" rows="10" cols="50" placeholder="Enter your text here...">{{ content|striptags }}</textarea><br><br>
 
                     <!-- Existing Images -->
                     {% if editing_entry.images.all %}
@@ -49,8 +49,8 @@
                     <!-- markdown -->
                     <!-- TODO: add label here -->
                     <select id="markdown" name="markdown">
-                        <option value="Plain" selected>Plain Text</option>
-                        <option value="Markdown">Markdown</option>
+                        <option value="Plain" {% if editing_entry.contentType == "text/plain" %}selected{% endif %}>Plain Text</option>
+                        <option value="Markdown"{% if editing_entry.contentType == "text/markdown" %}selected{% endif %}>Markdown</option>
                     </select><br><br>
 
                     <button type="submit" name="entry_update" value="{{ editing_entry.id }}">Save Changes</button>

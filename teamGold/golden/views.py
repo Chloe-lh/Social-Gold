@@ -54,6 +54,7 @@ from golden.activities import ( # Kenneth: If you're adding new activities, plea
 import bleach
 import markdown
 import requests
+import markdownify
 
 # * ============================================================
 # * Direct Security Utility 
@@ -105,6 +106,12 @@ def sanitize_markdown_to_html(markdown_content):
     
     # Sanitize the HTML
     return sanitize_html(html_content)
+
+def html_to_markdown(html_content):
+    """
+    Convert html to markdown
+    """
+    return markdownify.markdownify(html_content)
 
 def validate_url(url):
     if not url:
@@ -534,9 +541,13 @@ def new_edit_entry_view(request):
         if editing_entry.author.id != request.current_author.id:
             return HttpResponseForbidden("You don't have permission to edit this entry")
 
+        content = editing_entry.content
+        if editing_entry.contentType == 'text/markdown':
+            content = html_to_markdown(content)
         form = EntryForm(instance=editing_entry)
         context.update({
             "editing_entry": editing_entry,
+            "content": content,
             "form": form,
             "entries": Entry.objects.exclude(visibility="DELETED").order_by('-is_posted'),
         })

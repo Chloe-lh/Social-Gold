@@ -903,8 +903,8 @@ def process_inbox(author: Author):
                 id=entry_id,
                 defaults={
                     "title": activity.get("title", ""),
-                    "description": activity.get("description", ""),
-                    "content": activity.get("content", ""),
+                    "description": activity.get("description") or "",
+                    "content": activity.get("content") or "",
                     "contentType": get_content_type_from_payload(activity, default="text/plain"),
                     "author": actor,
                     "visibility": activity.get("visibility", "PUBLIC"),

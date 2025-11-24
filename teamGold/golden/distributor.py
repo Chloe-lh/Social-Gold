@@ -901,26 +901,27 @@ def process_inbox(author: Author):
                 }
             )
             
-        #  UPDATE ENTRY
+        # UPDATE ENTRY
         elif activity_type == "update" and isinstance(obj, dict) and obj.get("type") == "post":
             entry_id = obj.get("id")
+         
+            
             entry = Entry.objects.filter(id=entry_id).first()
 
             if entry:
+                old_title = entry.title
+                old_content = entry.content[:50] if entry.content else ""
                 raw_content = obj.get("content", entry.content) or entry.content
                 base_url = getattr(actor, "host", "") if actor else ""
                 content = absolutize_remote_images(raw_content, base_url)
-                new_content_type = (
-                    obj.get("contentType") or      
-                    obj.get("content_type") or     
-                    entry.contentType           
-                )
 
                 entry.title = obj.get("title", entry.title)
                 entry.content = content
-                entry.contentType = new_content_type
+                entry.contentType = obj.get("contentType", entry.contentType)
                 entry.visibility = obj.get("visibility", entry.visibility)
                 entry.save()
+            else:
+                print(f"[DEBUG process_inbox] UPDATE ENTRY: ERROR - Entry {entry_id} not found in database!")
 
         # DELETE ENTRY
         elif activity_type == "delete":

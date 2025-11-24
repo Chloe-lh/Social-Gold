@@ -199,10 +199,14 @@ def stream_view(request):
             continue
             '''
     #people following the user
-    followers = Author.objects.filter(following=user_author)
-    #people the user is following
-    following = Author.objects.filter(followers_set=user_author)
-    friends = user_author.update_friends()
+    followers_qs = Author.objects.filter(following=user_author)
+    #people user is following
+    following_qs = Author.objects.filter(followers_set=user_author)
+
+    followers = followers_qs.values_list("id", flat=True)
+    following = following_qs.values_list("id", flat=True)
+
+    friends = followers_qs.intersection(following_qs).values_list("id", flat=True)
 
     remote_entries = []
     remote_nodes = Node.objects.filter(is_active=True)
@@ -553,11 +557,14 @@ def entry_detail_view(request, entry_uuid):
         return redirect('stream')
             
     viewer = Author.from_user(request.user)
-     #people following the user
-    followers = Author.objects.filter(following=viewer)
-    #people the user is following
-    following = Author.objects.filter(followers_set=viewer)
-    friends = viewer.update_friends()
+    #people following the user
+    followers_qs = Author.objects.filter(following=viewer)
+    following_qs = Author.objects.filter(followers_set=viewer)
+
+    followers = followers_qs.values_list("id", flat=True)
+    following = following_qs.values_list("id", flat=True)
+
+    friends = followers_qs.intersection(following_qs).values_list("id", flat=True)
     process_inbox(viewer)
 
     if entry.visibility == "FRIENDS":

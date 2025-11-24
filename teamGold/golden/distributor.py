@@ -714,7 +714,7 @@ def process_inbox(author: Author):
                 follow_id = f"{actor.id.rstrip('/')}/{suffix}/{uuid.uuid4()}"
                 follow_obj = Follow.objects.create(
                     #id=activity.get("id"),
-                    id = follow_id
+                    id = follow_id,
                     actor=follower,
                     object=target_id,
                     state="REQUESTED",

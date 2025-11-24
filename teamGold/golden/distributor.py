@@ -282,7 +282,7 @@ def distribute_activity(activity: dict, actor: Author):
     # CREATE ENTRY
     if type_lower == "entry" :#and isinstance(activity, dict) and obj.get("type") == "post":
         
-        visibility = obj.get("visibility", "PUBLIC").upper()
+        visibility = activity.get("visibility", "PUBLIC").upper()
         
         
         if visibility == "PUBLIC" or visibility == "DELETED":

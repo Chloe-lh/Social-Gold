@@ -31,14 +31,14 @@ urlpatterns = [
 
     # Follow-related actions for views
     path('profile/follow/', views.api_follow_action, name="follow-action"),
-    path('profile/accept_follow/', views.api_accept_follow_action, name="accept-follow-action"),  # Accept follow
-    path('profile/reject_follow/', views.api_reject_follow_action, name="reject-follow-action"),  # Reject follow
-    path('profile/unfollow/', views.api_unfollow_action, name="unfollow-action"),  # Unfollow action
+    path('profile/accept_follow/', views.api_accept_follow_action, name="accept-follow-action"), 
+    path('profile/reject_follow/', views.api_reject_follow_action, name="reject-follow-action"), 
+    path('profile/unfollow/', views.api_unfollow_action, name="unfollow-action"), 
 
     # API Endpoints
-    path("api/authors/", AuthorsListView.as_view(), name="api-authors-list"),  # List all authors
-    path("api/authors/<str:author_uuid>/", SingleAuthorAPIView.as_view(), name="api-author-detail"),  # Single author
-    path("api/reading/", ReadingAPIView.as_view(), name="api-reading"),  # Public entries
+    path("api/authors/", AuthorsListView.as_view(), name="api-authors-list"), 
+    path("api/authors/<str:author_uuid>/", SingleAuthorAPIView.as_view(), name="api-author-detail"),  
+    path("api/reading/", ReadingAPIView.as_view(), name="api-reading"), 
     path("api/Profile/<path:id>/", ProfileAPIView.as_view(), name="get-profile"),
     path("api/Node/<path:id>/", NodeAPIView.as_view(), name="get-node"),
     path("api/Follow/<path:id>/", FollowAPIView.as_view(), name="get-follow"),

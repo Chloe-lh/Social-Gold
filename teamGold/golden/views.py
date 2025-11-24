@@ -38,16 +38,12 @@ from golden.models import (Author, Comment, Entry, EntryImage, Follow, Like, Nod
 from golden.serializers import *
 from golden.services import *
 from golden.services import get_or_create_foreign_author, fqid_to_uuid, is_local, normalize_fqid
-from golden.activities import ( # Kenneth: If you're adding new activities, please make sure they are uploaded here 
-    create_accept_follow_activity,
+from golden.activities import (
     create_comment_activity,
     create_delete_entry_activity,
     create_follow_activity,
     create_like_activity,
     create_new_entry_activity,
-    create_reject_follow_activity,
-    create_unfollow_activity,
-    create_unfriend_activity,
     create_update_entry_activity,
     create_unlike_activity,
     create_profile_update_activity,

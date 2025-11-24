@@ -168,7 +168,7 @@ def create_follow_activity(author, target):
     activity = {
         "type":"follow",
         "summary":f"{author.name} wants to follow {target.name}",
-        "author":{
+        "actor":{
             "type":"author",
             "id":author.id,
             "web":author.web,
@@ -177,7 +177,7 @@ def create_follow_activity(author, target):
             "github":author.github,
             "profileImage":author.profileImage,
         },
-        "actor":{
+        "object":{
             "type":"author",
             "id":target.id,
             "web":target.web,

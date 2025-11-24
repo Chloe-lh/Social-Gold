@@ -95,6 +95,31 @@ class ReadingAPIView(APIView):
     authentication_classes = [BasicAuthentication]
     permission_classes = [IsAuthenticated]
 
+
+    @swagger_auto_schema(
+        operation_summary="Get all public entries",
+        operation_description="Returns a paginated list of all public entries. Supports query params ?page=<number>&size=<number>.",
+        manual_parameters=[
+            openapi.Parameter('page', openapi.IN_QUERY, description="Page number", type=openapi.TYPE_INTEGER),
+            openapi.Parameter('size', openapi.IN_QUERY, description="Page size", type=openapi.TYPE_INTEGER),
+        ],
+        responses={
+            200: openapi.Response(
+                description="Public entries retrieved successfully",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        "type": openapi.Schema(type=openapi.TYPE_STRING, example="entries"),
+                        "page_number": openapi.Schema(type=openapi.TYPE_INTEGER, example=1),
+                        "size": openapi.Schema(type=openapi.TYPE_INTEGER, example=20),
+                        "count": openapi.Schema(type=openapi.TYPE_INTEGER, example=100),
+                        "src": openapi.Schema(type=openapi.TYPE_ARRAY, items=openapi.Schema(type=openapi.TYPE_OBJECT))
+                    }
+                )
+            ),
+            400: openapi.Response(description="Bad request")
+        }
+    )
     def get(self, request):
         from django.core.paginator import Paginator
         from golden.services import paginate
@@ -132,7 +157,7 @@ class ReadingAPIView(APIView):
 
 class EntryImageAPIView(APIView):
     """
-    This API view handles GET, POST, PUT, and DELETE requests for an entry's images.
+    This API view handles GET, POST, PUT requests for an entry's images.
     - GET /api/EntryImage/<id>/ is for retrieving an entry image
     - POST /api/Entry/<entry_id>/images/ is for creating a new entry
     - DELETE /api/EntryImage/<id>/ is for deleting an entry image
@@ -141,6 +166,19 @@ class EntryImageAPIView(APIView):
     authentication_classes = [BasicAuthentication]
     permission_classes = [IsAuthenticated]
 
+    @swagger_auto_schema(
+        operation_summary="Get an entry's images",
+        operation_description=(
+            "Returns a single entry image or the list of images for an author's entry. "
+            "Supports URLs /api/authors/{AUTHOR_SERIAL}/entries/{ENTRY_SERIAL}/images/ "
+            "and /api/EntryImage/{id}/"
+        ),
+        responses={
+            200: openapi.Response(description="Image(s) found"),
+            400: openapi.Response(description="Bad request"),
+            404: openapi.Response(description="Object not found"),
+        }
+    )
     def get(self, request, id=None, author_serial=None, entry_serial=None):
         # Handle deepskyblue spec endpoint: /api/authors/<author_uuid>/entries/<entry_uuid>/images/
         if author_serial and entry_serial:

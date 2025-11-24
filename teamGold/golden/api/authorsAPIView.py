@@ -92,6 +92,15 @@ class SingleAuthorAPIView(APIView):
     authentication_classes = [BasicAuthentication]
     permission_classes = [IsAuthenticated]
 
+
+    @swagger_auto_schema(
+        operation_summary="Get a single author",
+        operation_description="Returns details of a specific author given their UUID or full FQID.",
+        responses={
+            200: openapi.Response(description="Author found"),
+            404: openapi.Response(description="Author not found"),
+        }
+    )
     def get(self, request, author_uuid):
         from golden.services import fqid_to_uuid, is_local
         from django.conf import settings

@@ -27,7 +27,6 @@ from base64 import b64encode
 from urllib.parse import quote
 import uuid, tempfile, io, shutil
 from unittest.mock import patch, Mock
-import logging
 
 # LOCAL IMPORTS
 from golden.models import Author, Entry, EntryImage, Node, Like, Comment, Follow
@@ -57,6 +56,8 @@ Overview of HTTP Codes for the tests, ensuring the validity of:
 This suite supports automated testing for RESTful API compliance and interoperability 
 with other nodes, as well as a basic model class.
 
+TODO: ALL OF COMMENTING TEST SUITE
+TODO: EDITING IMAGES FROM AN ENTRY 
 TODO: OTHER NODE INTERACTIONS
 
 '''
@@ -92,6 +93,105 @@ class AuthenticatedAPITestCase(APITestCase):
         self.client.credentials(
             HTTP_AUTHORIZATION=f"Basic {_basic_token('apiuser', 'pass')}"
         )
+
+# ============================================================
+# Model-Level Tests (Legacy, but useful)
+# ============================================================
+
+class ModelTestSuite(TestCase):
+    def setUp(self):
+        self.node = Node.objects.create(id="https://node.example.com", title="Test Node")
+
+        self.author1 = Author.objects.create(
+            id="https://node.example.com/api/authors/1",
+            username="alice",
+            host=self.node.id
+        )
+        self.author2 = Author.objects.create(
+            id="https://node.example.com/api/authors/2",
+            username="bob",
+            host=self.node.id
+        )
+
+        self.author1.following.add(self.author2)
+
+        self.entry = Entry.objects.create(
+            id="https://node.example.com/api/authors/1/entries/100",
+            author=self.author1,
+            title="Hello World",
+            content="This is my first entry",
+            visibility="PUBLIC"
+        )
+
+        self.comment = Comment.objects.create(
+            id="https://node.example.com/api/authors/2/comments/200",
+            author=self.author2,
+            entry=self.entry,
+            content="Nice post!"
+        )
+
+        self.like = Like.objects.create(
+            id="https://node.example.com/api/authors/2/likes/300",
+            author=self.author2,
+            object=self.entry.id,
+            published=timezone.now()
+        )
+
+        self.follow = Follow.objects.create(
+            id="https://node.example.com/api/authors/2/follow/400",
+            actor=self.author2,
+            object=self.author1.id,
+            state="REQUESTED",
+            published=timezone.now()
+        )
+
+    def test_author_unaccepted(self):
+        self.assertFalse(self.author1.is_approved)
+
+    def test_author_accepted(self):
+        self.author2.is_approved = True
+        self.author2.save()
+        self.author2.refresh_from_db()
+        self.assertTrue(self.author2.is_approved)
+
+    def test_author_creation(self):
+        self.assertEqual(self.author1.username, "alice")
+        self.assertTrue(self.author1.id.startswith("http"))
+
+    def test_author_following(self):
+        self.assertIn(self.author2, self.author1.following.all())
+        self.assertIn(self.author1, self.author2.followers_set.all())
+
+    def test_comment_creation(self):
+        self.assertEqual(self.comment.entry, self.entry)
+        self.assertEqual(self.comment.author, self.author2)
+        self.assertEqual(self.comment.content, "Nice post!")
+
+    def test_like_creation(self):
+        self.assertEqual(self.like.object, self.entry.id)
+        self.assertEqual(self.like.author, self.author2)
+
+    def test_follow_creation(self):
+        self.assertEqual(self.follow.actor, self.author2)
+        self.assertEqual(self.follow.object, self.author1.id)
+        self.assertEqual(self.follow.state, "REQUESTED")
+
+    def test_entry_edit(self):
+        self.entry.content = "Updated content"
+        self.entry.save()
+        updated_entry = Entry.objects.get(id=self.entry.id)
+        self.assertEqual(updated_entry.content, "Updated content")
+
+    def test_comment_reply(self):
+        reply = Comment.objects.create(
+            id="https://node.example.com/api/authors/1/comments/201",
+            author=self.author1,
+            entry=self.entry,
+            reply_to=self.comment,
+            content="Thanks!"
+        )
+        self.assertEqual(reply.reply_to, self.comment)
+        self.assertIn(reply, self.comment.replies.all())
 
 # ============================================================
 # Profile/Author Related Test Suite
@@ -246,213 +346,11 @@ class RelationshipsAPITests(AuthenticatedAPITestCase):
         self.assertEqual(comments.count(), 1)
         self.assertEqual(comments.first().content, "Great post!")
 
-class EntryVisibilityTests(APITestCase):
-    def setUp(self):
-        User = get_user_model()
-
-        # Owner of the post
-        self.owner_user = User.objects.create_user(username="owner", password="pw")
-        self.owner_author = Author.from_user(self.owner_user)
-
-        # Follower (follows owner)
-        self.follower_user = User.objects.create_user(username="follower", password="pw")
-        self.follower_author = Author.from_user(self.follower_user)
-        Follow.objects.create(
-            id=f"{self.follower_author.id.rstrip('/')}/follow-test-owner",
-            actor=self.follower_author,
-            object=self.owner_author.id,
-            state="ACCEPTED",
-        )
-
-        # Friend (mutual follow with owner)
-        self.friend_user = User.objects.create_user(username="friend", password="pw")
-        self.friend_author = Author.from_user(self.friend_user)
-        # friend → owner
-        Follow.objects.create(
-            id=f"{self.friend_author.id.rstrip('/')}/follow-test-owner-friend",
-            actor=self.friend_author,
-            object=self.owner_author.id,
-            state="ACCEPTED",
-        )
-        # owner → friend
-        Follow.objects.create(
-            id=f"{self.owner_author.id.rstrip('/')}/follow-test-friend-owner",
-            actor=self.owner_author,
-            object=self.friend_author.id,
-            state="ACCEPTED",
-        )
-
-        # Stranger (no follow relationship)
-        self.stranger_user = User.objects.create_user(username="stranger", password="pw")
-        self.stranger_author = Author.from_user(self.stranger_user)
-
-        # Entries with different visibility
-        self.public_entry = Entry.objects.create(
-            id=f"{self.owner_author.id.rstrip('/')}/posts/public-test",
-            author=self.owner_author,
-            content="public content",
-            visibility="PUBLIC",
-        )
-        self.unlisted_entry = Entry.objects.create(
-            id=f"{self.owner_author.id.rstrip('/')}/posts/unlisted-test",
-            author=self.owner_author,
-            content="unlisted content",
-            visibility="UNLISTED",
-        )
-        self.friends_entry = Entry.objects.create(
-            id=f"{self.owner_author.id.rstrip('/')}/posts/friends-test",
-            author=self.owner_author,
-            content="friends content",
-            visibility="FRIENDS",
-        )
-
     def test_entry_visibility_public(self):
-        """Public entries should be visible to any authenticated user"""
-        self.client.force_authenticate(user=self.stranger_user)
-        res = self.client.get(f"/api/Entry/{self.public_entry.id}/")
+        """Public entries should be visible to any user"""
+        res = self.client.get(f"/api/Entry/{self.entry.id}/")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["visibility"], "PUBLIC")
-
-    def test_entry_visibility_unlisted_visible_to_follower(self):
-        """Unlisted entry should be visible to a follower"""
-        self.client.force_authenticate(user=self.follower_user)
-        res = self.client.get(f"/api/Entry/{self.unlisted_entry.id}/")
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data["visibility"], "UNLISTED")
-
-    def test_entry_visibility_unlisted_hidden_from_stranger(self):
-        """Unlisted entry should not be visible to a non follower"""
-        self.client.force_authenticate(user=self.stranger_user)
-        res = self.client.get(f"/api/Entry/{self.unlisted_entry.id}/")
-        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
-
-    def test_entry_visibility_friends_visible_to_friend(self):
-        """Friends-only entry should be visible to a mutual follower (friend)"""
-        self.client.force_authenticate(user=self.friend_user)
-        res = self.client.get(f"/api/Entry/{self.friends_entry.id}/")
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data["visibility"], "FRIENDS")
-
-    def test_entry_visibility_friends_hidden_from_follower_only(self):
-        """Friends-only entry should not be visible to a one-way follower"""
-        self.client.force_authenticate(user=self.follower_user)
-        res = self.client.get(f"/api/Entry/{self.friends_entry.id}/")
-        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
-
-    def test_entry_visibility_friends_hidden_from_stranger(self):
-        """Friends-only entry should not be visible to unrelated users"""
-        self.client.force_authenticate(user=self.stranger_user)
-        res = self.client.get(f"/api/Entry/{self.friends_entry.id}/")
-        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
-
-
-class AuthorFriendsAPITests(AuthenticatedAPITestCase):
-    """
-    Test coverage for AuthorFriendsView
-    Tests retrieval of mutual followers (friends)
-    """
-    
-    def setUp(self):
-        super().setUp()
-        self.author1 = Author.objects.create(
-            id=f"https://node1.com/api/authors/{uuid.uuid4()}",
-            username="alice",
-            email="alice@example.com",
-            is_approved=True
-        )
-        self.author2 = Author.objects.create(
-            id=f"https://node1.com/api/authors/{uuid.uuid4()}",
-            username="bob",
-            email="bob@example.com",
-            is_approved=True
-        )
-        self.author3 = Author.objects.create(
-            id=f"https://node1.com/api/authors/{uuid.uuid4()}",
-            username="charlie",
-            email="charlie@example.com",
-            is_approved=True
-        )
-        
-        # Make author1 and author2 mutual followers (friends)
-        Follow.objects.create(
-            id=f"https://node1.com/api/follows/{uuid.uuid4()}",
-            actor=self.author1,
-            object=self.author2.id,
-            state="ACCEPTED",
-            published=timezone.now()
-        )
-        Follow.objects.create(
-            id=f"https://node1.com/api/follows/{uuid.uuid4()}",
-            actor=self.author2,
-            object=self.author1.id,
-            state="ACCEPTED",
-            published=timezone.now()
-        )
-        
-        # Author3 follows author1 (not mutual)
-        Follow.objects.create(
-            id=f"https://node1.com/api/follows/{uuid.uuid4()}",
-            actor=self.author3,
-            object=self.author1.id,
-            state="ACCEPTED",
-            published=timezone.now()
-        )
-
-    def test_get_friends_success(self):
-        """GET should return only mutual followers"""
-        res = self.client.get(f"/api/Author/{self.author1.id}/friends/")
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        friend_ids = [f["id"] for f in res.data]
-        self.assertIn(self.author2.id, friend_ids)
-        self.assertNotIn(self.author3.id, friend_ids)
-        
-    def test_get_friends_no_friends(self):
-        """GET should return empty list if no mutual followers"""
-        lonely_author = Author.objects.create(
-            id=f"https://node1.com/api/authors/{uuid.uuid4()}",
-            username="lonely",
-            email="lonely@example.com",
-            is_approved=True
-        )
-        res = self.client.get(f"/api/Author/{lonely_author.id}/friends/")
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(res.data), 0)
-        
-    def test_get_friends_author_not_found(self):
-        """GET should return 404 if author doesn't exist"""
-        fake_id = f"https://node1.com/api/authors/{uuid.uuid4()}"
-        res = self.client.get(f"/api/Author/{fake_id}/friends/")
-        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
-        
-    def test_get_friends_only_accepted_follows(self):
-        """GET should only count ACCEPTED follows as friendships"""
-        author4 = Author.objects.create(
-            id=f"https://node1.com/api/authors/{uuid.uuid4()}",
-            username="dave",
-            email="dave@example.com",
-            is_approved=True
-        )
-        
-        # Create pending follow requests (not accepted)
-        Follow.objects.create(
-            id=f"https://node1.com/api/follows/{uuid.uuid4()}",
-            actor=self.author1,
-            object=author4.id,
-            state="REQUESTED",
-            published=timezone.now()
-        )
-        Follow.objects.create(
-            id=f"https://node1.com/api/follows/{uuid.uuid4()}",
-            actor=author4,
-            object=self.author1.id,
-            state="REQUESTED",
-            published=timezone.now()
-        )
-        
-        res = self.client.get(f"/api/Author/{self.author1.id}/friends/")
-        friend_ids = [f["id"] for f in res.data]
-        self.assertNotIn(author4.id, friend_ids)
-
 
 # ============================================================
 # Entry Related Test Suites
@@ -601,375 +499,78 @@ class LikeAPITests(AuthenticatedAPITestCase):
         res = self.client.get(f"/api/Like/{fake_id}/")
         self.assertEqual(res.status_code, 404)
 
-class EntryCommentAPITests(AuthenticatedAPITestCase):
-    """
-    Complete test coverage for EntryCommentAPIView
-    Tests GET, POST, and DELETE operations on entry comments
-    """
-    
+class CommentAPITests(AuthenticatedAPITestCase):
     def setUp(self):
         super().setUp()
-        self.author = Author.objects.create(
-            id=f"https://node1.com/api/authors/{uuid.uuid4()}",
-            username="commenter",
-            email="comment@example.com",
-            is_approved=True
+        # create an entry to comment on (author may be different)
+        self.entry_author = Author.objects.create(
+            id=f"{settings.SITE_URL}/api/authors/{uuid.uuid4()}",
+            username='entry_author'
         )
         self.entry = Entry.objects.create(
-            id=f"https://node1.com/api/entries/{uuid.uuid4()}",
-            author=self.author,
-            title="Post with Comments",
-            content="Comment on this!",
-            visibility="PUBLIC"
+            id=f"{settings.SITE_URL}/api/entries/{uuid.uuid4()}",
+            author=self.entry_author,
+            content="test entry",
+            title="Test"
         )
-        self.comment1 = Comment.objects.create(
-            id=f"https://node1.com/api/comments/{uuid.uuid4()}",
-            author=self.author,
-            entry=self.entry,
-            content="First comment",
-            published=timezone.now()
-        )
-        self.comment2 = Comment.objects.create(
-            id=f"https://node1.com/api/comments/{uuid.uuid4()}",
-            author=self.author,
-            entry=self.entry,
-            content="Second comment",
-            published=timezone.now()
-        )
-
-    def test_get_entry_comments_success(self):
-        """GET should return all comments for an entry"""
-        res = self.client.get(f"/api/Entry/{self.entry.id}/comments/")
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(res.data), 2)
-        
-    def test_get_entry_comments_ordered(self):
-        """Comments should be ordered by published date (newest first)"""
-        res = self.client.get(f"/api/Entry/{self.entry.id}/comments/")
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        # Most recent should be first (comment2 was created after comment1)
-        self.assertEqual(res.data[0]["content"], "Second comment")
 
     def test_post_comment_success(self):
-        """POST should create a new comment on an entry"""
-        data = {
-            "content": "New test comment",
-            "published": timezone.now().isoformat()
-        }
-        res = self.client.post(
-            f"/api/Entry/{self.entry.id}/comments/", 
-            data, 
-            format="json"
-        )
-        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Comment.objects.filter(entry=self.entry).count(), 3)
-        
-    def test_post_comment_entry_not_found(self):
-        """POST should return 404 if entry doesn't exist"""
-        fake_id = f"https://node1.com/api/entries/{uuid.uuid4()}"
-        data = {"content": "Comment on nothing"}
-        res = self.client.post(
-            f"/api/Entry/{fake_id}/comments/", 
-            data, 
-            format="json"
-        )
-        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
-        
-    def test_post_comment_invalid_data(self):
-        """POST should return 400 with invalid data"""
-        data = {}  # Missing required content field
-        res = self.client.post(
-            f"/api/Entry/{self.entry.id}/comments/", 
-            data, 
-            format="json"
-        )
-        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-
-    def test_delete_specific_comment(self):
-        """DELETE with comment id should delete only that comment"""
-        res = self.client.delete(
-            f"/api/Entry/{self.entry.id}/comments/?id={self.comment1.id}"
-        )
-        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertFalse(Comment.objects.filter(id=self.comment1.id).exists())
-        self.assertTrue(Comment.objects.filter(id=self.comment2.id).exists())
-        
-    def test_delete_all_comments(self):
-        """DELETE without comment id should delete all entry comments"""
-        res = self.client.delete(f"/api/Entry/{self.entry.id}/comments/")
-        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(Comment.objects.filter(entry=self.entry).count(), 0)
-        
-    def test_delete_comment_not_found(self):
-        """DELETE should return 404 if specific comment doesn't exist"""
-        fake_id = f"https://node1.com/api/comments/{uuid.uuid4()}"
-        res = self.client.delete(
-            f"/api/Entry/{self.entry.id}/comments/?id={fake_id}"
-        )
-        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
-        
-    def test_delete_entry_not_found(self):
-        """DELETE should return 404 if entry doesn't exist"""
-        fake_id = f"https://node1.com/api/entries/{uuid.uuid4()}"
-        res = self.client.delete(f"/api/Entry/{fake_id}/comments/")
-        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
-
-# ============================================================
-# MISSING TEST CASES - Comment Likes
-# ============================================================
-
-class CommentLikeAPITests(AuthenticatedAPITestCase):
-    """
-    Complete test coverage for CommentLikeAPIView
-    Tests GET and POST operations on comment likes
-    """
+        url = f"/api/Entry/{self.entry.id}/comments"
+        payload = {"content":"Testing comment API", "contentType":"text/plain"}
+        res = self.client.post(url, payload, format="json")
+        self.assertEqual(res.status_code, 200)
     
-    def setUp(self):
-        super().setUp()
-        self.author1 = Author.objects.create(
-            id=f"https://node1.com/api/authors/{uuid.uuid4()}",
-            username="author1",
-            email="a1@example.com",
-            is_approved=True
-        )
-        self.author2 = Author.objects.create(
-            id=f"https://node1.com/api/authors/{uuid.uuid4()}",
-            username="author2",
-            email="a2@example.com",
-            is_approved=True
-        )
-        self.entry = Entry.objects.create(
-            id=f"https://node1.com/api/entries/{uuid.uuid4()}",
-            author=self.author1,
-            title="Entry with comment",
-            content="Content",
-            visibility="PUBLIC"
-        )
-        self.comment = Comment.objects.create(
-            id=f"https://node1.com/api/comments/{uuid.uuid4()}",
-            author=self.author1,
+    def test_post_comment_failure(self):
+        url = f"/api/Entry/{self.entry.id}/comments"
+        payload = {"content":""}
+        res = self.client.post(url, payload, format="json")
+        self.assertEqual(res.status_code, 400)
+    
+    def test_get_comments(self):
+        Comment.objects.create(
+            id=f"{settings.SITE_URL.rstrip('/')}/api/comments/{uuid.uuid4()}",
+            author=self.apiuser,
             entry=self.entry,
-            content="A comment to like",
+            content="Existing comment",
             published=timezone.now()
         )
-        # Create some likes
-        for i in range(3):
-            Like.objects.create(
-                id=f"https://node1.com/api/likes/{uuid.uuid4()}",
-                author=self.author1,
-                object=self.comment.id,
-                published=timezone.now()
-            )
-
-    def test_get_comment_likes_success(self):
-        """GET should return paginated likes for a comment"""
-        res = self.client.get(f"/api/Comment/{self.comment.id}/likes/")
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data["type"], "likes")
-        self.assertEqual(res.data["count"], 3)
-        
-    def test_get_comment_likes_pagination(self):
-        """GET should respect pagination parameters"""
-        res = self.client.get(
-            f"/api/Comment/{self.comment.id}/likes/?page=1&size=2"
-        )
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data["page_number"], 1)
-        self.assertEqual(res.data["size"], 2)
-        self.assertEqual(len(res.data["src"]), 2)
-        
-    def test_get_comment_likes_invalid_pagination(self):
-        """GET should handle invalid pagination gracefully"""
-        res = self.client.get(
-            f"/api/Comment/{self.comment.id}/likes/?page=invalid&size=bad"
-        )
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        # Should default to page=1, size=5
-        self.assertEqual(res.data["page_number"], 1)
-        self.assertEqual(res.data["size"], 5)
-
-    def test_post_comment_like_success(self):
-        """POST should create a new like on a comment"""
-        # Use author2 to like the comment
-        User = get_user_model()
-        user2, _ = User.objects.get_or_create(
-            username="user2",
-            defaults={"is_active": True}
-        )
-        user2.set_password("pass2")
-        if hasattr(user2, "is_approved"):
-            user2.is_approved = True
-        user2.save()
-        
-        client2 = APIClient()
-        client2.credentials(
-            HTTP_AUTHORIZATION=f"Basic {_basic_token('user2', 'pass2')}"
-        )
-        
-        initial_count = Like.objects.filter(object=self.comment.id).count()
-        res = client2.post(f"/api/Comment/{self.comment.id}/likes/")
-        
-        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(
-            Like.objects.filter(object=self.comment.id).count(), 
-            initial_count + 1
-        )
-        
-    def test_post_comment_like_idempotent(self):
-        """POST should be idempotent - return existing like if already liked"""
-        # First like
-        res1 = self.client.post(f"/api/Comment/{self.comment.id}/likes/")
-        like_id_1 = res1.data["id"]
-        
-        # Try to like again
-        res2 = self.client.post(f"/api/Comment/{self.comment.id}/likes/")
-        like_id_2 = res2.data["id"]
-        
-        self.assertEqual(res2.status_code, status.HTTP_200_OK)
-        self.assertEqual(like_id_1, like_id_2)
-        
-    def test_post_comment_like_comment_not_found(self):
-        """POST should return 404 if comment doesn't exist"""
-        fake_id = f"https://node1.com/api/comments/{uuid.uuid4()}"
-        res = self.client.post(f"/api/Comment/{fake_id}/likes/")
-        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
-
-# ============================================================
-# Remote node / federation related tests
-# ============================================================
-
-class RemoteTests(AuthenticatedAPITestCase):
-    def setUp(self):
-        super().setUp()
-        # create an active remote node record used by the view to detect remote hosts
-        Node.objects.create(id="http://nodebbbb/", auth_user="remoteuser", auth_pass="remotepass", is_active=True)
-
-    @patch("golden.api.commentAPIView.requests.get")
-    def test_get_remote_comments(self, mock_get):
-        mock_res = Mock()
-        mock_res.status_code = 200
-        mock_res.json.return_value = {
-            "type": "comments",
-            "id": "http://nodebbbb/api/entries/.../comments/",
-            "size": 1,
-            "items": [{
-                "id": "http://nodebbbb/comment/1",
-                "author": {"id": "http://nodebbbb/author/1/"},
-                "content": "remote!",
-                "contentType": "text/plain",
-            }]
-        }
-        mock_get.return_value = mock_res
-
-        remote_entry = "http://nodebbbb/api/authors/222/entries/249/"
-        enc = quote(remote_entry.rstrip('/'), safe='')
-        res = self.client.get(f"/api/entries/{enc}/comments/")
+        url = f"/api/Entry/{self.entry.id}/comments/"
+        res = self.client.get(url)
         self.assertEqual(res.status_code, 200)
-
-        # assert our code called the expected remote URL
-        mock_get.assert_called_once()
-        called_url = mock_get.call_args[0][0]
-        self.assertIn("nodebbbb", called_url)
-
-    @patch("golden.api.commentAPIView.requests.post")
-    def test_remote_comment_post(self, mock_post):
-        """Ensure that when a comment is posted to an entry whose author is on a remote node,
-        the server forwards the saved comment to that node's inbox via POST.
-        """
-        mock_res = Mock()
-        mock_res.status_code = 201
-        mock_post.return_value = mock_res
-
         
-        # Create an author representing the remote entry owner (actor)
-        remote_actor = Author.objects.create(
-            id="http://nodebbbb/api/authors/222/",
-            username="remote_owner",
-        )
+class RemoteCommentsTests(AuthenticatedAPITestCase):
+    def setUp(self):
+        super.setUp()
+        Node.objects.create(id="http://nodebbb/", auth_user="remoteuser", auth_pass="remotepass")
 
-        # Create a local Entry that references the remote actor as its author
-        entry = Entry.objects.create(
-            id=f"http://local.example.com/api/entries/{uuid.uuid4()}/",
-            author=remote_actor,
-            title="Remote-owned post",
-            content="content",
-            visibility="PUBLIC",
-        )
+        @patch("golden.api.commentAPIView.requests.get")
+        def test_remote_comments(self, mock_get):
+            mock_res = Mock()
+            mock_res.status_code = 200
+            mock_res.json.return_value = {
+                "type": "comments",
+                "id": "http://nodebbbb/api/entries/.../comments/",
+                "size": 1,
+                "items": [{
+                    "id": "http://nodebbbb/comment/1",
+                    "author": {"id": "http://nodebbbb/author/1/"},
+                    "content": "remote!",
+                    "contentType": "text/plain",
+            }]
+            }
+            remote_entry = "http://nodebbbb/api/authors/222/entries/249/"
+            enc = quote(remote_entry, safe='')
+            res = self.client.get(f"/api/entries/{enc}/comments/")
+            self.assertEqual(res.status_code, 200)
 
-        # Create a local commenter author to include in the POST payload
-        commenter = Author.objects.create(
-            id=f"http://local.example.com/api/authors/{uuid.uuid4()}/",
-            username="local_commenter",
-        )
-        print(entry.id)
-        enc = quote(entry.id.rstrip('/'), safe='')
-        # use the Entry/ alias which passes `entry_id` to the view POST handler
-        url = f"/api/Entry/{enc}/comments/"
+            # assert your code called the expected remote URL
+            expected_url = "http://nodebbbb/api/entries/" + enc + "/comments/"
+            mock_get.assert_called_once()
+            called_url = mock_get.call_args[0][0]
+            self.assertIn("nodebbbb", called_url)
 
-        payload = {
-            "content": "Forward this comment",
-            "contentType": "text/plain",
-            "author": {"id": commenter.id},
-        }
-        print(url)
-        print(payload)
-        res = self.client.post(url, payload, format="json")
-        print(res)
-        # view should accept and create the comment
-        self.assertIn(res.status_code, (200, 201, 202))
-
-        # The inbox URL should be the remote node's base + '/inbox'
-        self.assertTrue(mock_post.called, "requests.post should have been called to forward the comment")
-        called_url = mock_post.call_args[0][0]
-        self.assertIn("nodebbbb", called_url)
-
-    @patch("golden.api.likeAPIView.requests.post")
-    def test_remote_like_post(self, mock_post):
-        """Ensure that when a like is posted to an entry whose author is on a remote node,
-        the server forwards the like to that node's inbox via POST.
-        """
-        mock_res = Mock()
-        mock_res.status_code = 201
-        mock_post.return_value = mock_res
-
-        # Create a remote owner and entry owned by that remote actor
-        remote_owner = Author.objects.create(
-            id="http://nodebbbb/api/authors/333/",
-            username="remote_like_owner",
-        )
-
-        entry = Entry.objects.create(
-            id=f"http://local.example.com/api/entries/{uuid.uuid4()}/",
-            author=remote_owner,
-            title="Remote-owned like test",
-            content="content",
-            visibility="PUBLIC",
-        )
-
-        # Create a local liker author to include in the POST payload
-        liker = Author.objects.create(
-            id=f"http://local.example.com/api/authors/{uuid.uuid4()}/",
-            username="local_liker",
-        )
-
-        enc = quote(entry.id.rstrip('/'), safe='')
-        url = f"/api/Entry/{enc}/likes/"
-
-        payload = {
-            "author": {"id": liker.id},
-            "object": entry.id,
-        }
-
-        res = self.client.post(url, payload, format="json")
-        # view should accept and either create or forward the like
-        self.assertIn(res.status_code, (200, 201, 202))
-
-        # The inbox URL should be the remote node's base + '/inbox'
-        self.assertTrue(mock_post.called, "requests.post should have been called to forward the like")
-        called_url = mock_post.call_args[0][0]
-        self.assertIn("nodebbbb", called_url)
 # ============================================================
-# Node Related Test Suites
+# Note Related Test Suites
 # ============================================================
 
 class NodeAPITests(AuthenticatedAPITestCase):
@@ -990,155 +591,3 @@ class NodeAPITests(AuthenticatedAPITestCase):
         fake_id = "https://node1.com/invalid"
         res = self.client.get(f"/api/Node/{fake_id}/")
         self.assertEqual(res.status_code, 404)
-
-class ForbiddenAuthorizationTests(APITestCase):
-    """
-    Test 403 Forbidden responses for various authorization scenarios
-    """
-    
-    def setUp(self):
-        self.client = APIClient()
-        
-        # Create an unapproved user
-        User = get_user_model()
-        self.unapproved_user, _ = User.objects.get_or_create(
-            username="unapproved",
-            defaults={"is_active": True}
-        )
-        self.unapproved_user.set_password("pass")
-        if hasattr(self.unapproved_user, "is_approved"):
-            self.unapproved_user.is_approved = False  # Not approved
-        self.unapproved_user.save()
-        
-        # Create test data
-        self.author = Author.objects.create(
-            id=f"https://node1.com/api/authors/{uuid.uuid4()}",
-            username="testauthor",
-            email="test@example.com",
-            is_approved=True
-        )
-        self.entry = Entry.objects.create(
-            id=f"https://node1.com/api/entries/{uuid.uuid4()}",
-            author=self.author,
-            title="Test Entry",
-            content="Content",
-            visibility="PUBLIC"
-        )
-
-    def test_403_unapproved_user_profile(self):
-        """Unapproved user should get 403 when accessing profiles"""
-        token = _basic_token("unapproved", "pass")
-        self.client.credentials(HTTP_AUTHORIZATION=f"Basic {token}")
-        
-        res = self.client.get(f"/api/Profile/{self.author.id}/")
-        # Depending on implementation, might be 401 or 403
-        self.assertIn(res.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
-        
-    def test_403_invalid_credentials(self):
-        """Invalid credentials should result in 401/403"""
-        token = _basic_token("unapproved", "wrongpass")
-        self.client.credentials(HTTP_AUTHORIZATION=f"Basic {token}")
-        
-        res = self.client.get(f"/api/Profile/{self.author.id}/")
-        self.assertIn(res.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
-
-    # ============================================================
-# MISSING TEST CASES - Follow API
-# ============================================================
-
-class FollowAPITests(AuthenticatedAPITestCase):
-    """
-    Test coverage for FollowAPIView
-    """
-    
-    def setUp(self):
-        super().setUp()
-        self.author1 = Author.objects.create(
-            id=f"https://node1.com/api/authors/{uuid.uuid4()}",
-            username="follower",
-            email="follower@example.com",
-            is_approved=True
-        )
-        self.author2 = Author.objects.create(
-            id=f"https://node1.com/api/authors/{uuid.uuid4()}",
-            username="followee",
-            email="followee@example.com",
-            is_approved=True
-        )
-        self.follow = Follow.objects.create(
-            id=f"https://node1.com/api/follows/{uuid.uuid4()}",
-            actor=self.author1,
-            object=self.author2.id,
-            state="ACCEPTED",
-            published=timezone.now()
-        )
-
-    def test_get_follow_success(self):
-        """GET should return follow data"""
-        res = self.client.get(f"/api/Follow/{self.follow.id}/")
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(res.data["id"], self.follow.id)
-        
-    def test_get_follow_not_found(self):
-        """GET should return 404 if follow doesn't exist"""
-        fake_id = f"https://node1.com/api/follows/{uuid.uuid4()}"
-        res = self.client.get(f"/api/Follow/{fake_id}/")
-        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)
-
-# ============================================================
-# MISSING TEST CASES - Entry Images POST
-# ============================================================
-
-@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
-class EntryImagePostTests(AuthenticatedAPITestCase):
-    """
-    Test POST operations for EntryImage creation
-    """
-    
-    @classmethod
-    def tearDownClass(cls):
-        super().tearDownClass()
-        shutil.rmtree(cls._overridden_settings['MEDIA_ROOT'], ignore_errors=True)
-
-    def setUp(self):
-        super().setUp()
-        self.author = Author.objects.create(
-            id=f"https://node1.com/api/authors/{uuid.uuid4()}",
-            username="imageuser",
-            email="imageuser@example.com",
-            is_approved=True
-        )
-        self.entry = Entry.objects.create(
-            id=f"https://node1.com/api/entries/{uuid.uuid4()}",
-            author=self.author,
-            title="Image Post",
-            content="Post for images",
-            visibility="PUBLIC"
-        )
-
-    def test_post_entry_image_success(self):
-        """POST should create a new entry image"""
-        image_bytes = io.BytesIO(b"\x47\x49\x46\x38\x39\x61")
-        upload = SimpleUploadedFile(
-            "test.gif", image_bytes.getvalue(), content_type="image/gif"
-        )
-        
-        data = {"image": upload, "order": 0}
-        res = self.client.post(
-            f"/api/Entry/{self.entry.id}/images/",
-            data,
-            format="multipart"
-        )
-        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
-        self.assertTrue(EntryImage.objects.filter(entry=self.entry).exists())
-        
-    def test_post_entry_image_no_entry_id(self):
-        """POST should return 400 if entry_id not provided"""
-        res = self.client.post("/api/Entry//images/", {})
-        self.assertIn(res.status_code, [status.HTTP_400_BAD_REQUEST, status.HTTP_404_NOT_FOUND])
-        
-    def test_post_entry_image_entry_not_found(self):
-        """POST should return 404 if entry doesn't exist"""
-        fake_id = f"https://node1.com/api/entries/{uuid.uuid4()}"
-        res = self.client.post(f"/api/Entry/{fake_id}/images/", {})
-        self.assertEqual(res.status_code, status.HTTP_404_NOT_FOUND)

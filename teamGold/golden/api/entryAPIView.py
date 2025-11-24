@@ -276,6 +276,7 @@ class AuthorEntriesView(APIView):
         }
     )
     def get(self, request, author_serial=None):
+        # TODO: this should not exist for remote? For local, implement authentication stuff?
         if not author_serial:
             return Response({'details': 'Author not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -314,65 +315,34 @@ class AuthorEntriesView(APIView):
 
 class AuthorEntryView(APIView):
     """
-    API view to list all entries by a specified author.
-    - GET /api/authors/<path:author_serial>/entries/ returns a list of paginated entries by the specified author
-    - Supports pagination via query parameters: ?page=<number>&size=<number>
+    API view to get the specified entry by a specified author.
+    - GET /api/authors/<str:author_serial>/entries/<str:entry_serial> returns a list of paginated entries by the specified author
     """
     authentication_classes = [BasicAuthentication]
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
-        operation_description="Get a list of paginated entries of the specified author",
+        operation_description="Get the specified entry of the specified author",
         responses={
-            200: openapi.Response(
-                description="Author entries",
-                schema=openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        'type': openapi.Schema(type=openapi.TYPE_STRING, example='entries'),
-                        'items': openapi.Schema(
-                            type=openapi.TYPE_ARRAY,
-                            items=openapi.Schema(type=openapi.TYPE_OBJECT)
-                        )
-                    }
-                )
-            ),
+            200: openapi.Response(description="Author entry"),
             404: openapi.Response(description="Author not found")
         }
     )
-    def get(self, request, author_serial=None):
+    def get(self, request, author_serial=None, entry_serial=None):
         if not author_serial:
             return Response({'details': 'Author not found'}, status=status.HTTP_404_NOT_FOUND)
+        if not entry_serial:
+            return Response({'details': 'Entry not found'}, status=status.HTTP_404_NOT_FOUND)
 
         # Find all entries of this author and paginate them
         author = get_object_or_404(Author, id__contains=author_serial)
-        entries = Entry.objects.filter(author=author.id).order_by('-published')
-        if not entries:
-            return Response({'details': 'Author does not have visible entries'}, status=status.HTTP_404_NOT_FOUND)
+        entry = get_object_or_404(Entry, id__contains=entry_serial)
         
-        # Pagination
-        page = request.GET.get('page', 1)
-        size = request.GET.get('size', 10)
-        page_obj = paginate(request, entries, 10)
+        # Make sure the specified author is the author of the specified entry
+        if entry.author.id != author.id:
+            return Response({'details': 'Entry not found'}, status=status.HTTP_404_NOT_FOUND)
         
         # Serialize
-        serializer = EntrySerializer(page_obj.object_list, many=True)
+        serializer = EntrySerializer(entry)
 
-        collection = {
-            "type": "entries",
-            "items": serializer.data,
-            "page": page,
-            "size": size,
-            "total": len(page_obj.object_list)
-        }
-
-        # add simple pagination links if applicable
-        if page_obj.has_next():
-            next_page = page_obj.next_page_number()
-            collection['next'] = f"{request.build_absolute_uri('?page=' + str(next_page))}"
-        if page_obj.has_previous():
-            prev_page = page_obj.previous_page_number()
-            collection['prev'] = f"{request.build_absolute_uri('?page=' + str(prev_page))}"
-        
-        # Return in paginated format
-        return Response(collection, status=status.HTTP_200_OK)
+        return Response(serializer.data, status=status.HTTP_200_OK)

@@ -988,7 +988,7 @@ def process_inbox(author: Author):
             obj_id = activity.get("object")
 
             Like.objects.filter(author=actor, object=obj_id).delete()
-            author_obj = Author.objects.filter(author = activity.get("author"))
+            author_obj = Author.objects.filter(id = activity.get("author").get("id"))
             like = Like.objects.create(
                 id=activity.get("id"),
                 author=author_obj,

@@ -989,7 +989,7 @@ def process_inbox(author: Author):
             remote_host=activity.get("author").get("host")
             remote_username =activity.get("author").get("displayName")
             author_obj = get_or_create_foreign_author(remote_id,remote_host, remote_username)
-            object_id = activity.get("object")
+            obj_id = activity.get("object")
             existing_like = Like.objects.filter(author=activity.get("author").get("id"), object=object_id).first()
 
             if existing_like:

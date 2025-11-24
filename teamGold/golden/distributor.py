@@ -986,31 +986,36 @@ def process_inbox(author: Author):
         # LIKE
         elif activity_type == "like":
             remote_id = activity.get("author").get("id")
-            remote_host=activity.get("author").get("host")
-            remote_username =activity.get("author").get("displayName")
-            author_obj = get_or_create_foreign_author(remote_id,remote_host, remote_username)
+            remote_host = activity.get("author").get("host")
+            remote_username = activity.get("author").get("displayName")
+            author_obj = get_or_create_foreign_author(remote_id, remote_host, remote_username)
+
             obj_id = activity.get("object")
-            existing_like = Like.objects.filter(author=author_obj, object=obj_id).first()
+            entry = Entry.objects.filter(id=obj_id).first()
+
+            if not entry:
+                print(f"[DEBUG] Entry not found: {obj_id}")
+                return  # cannot like an entry that doesn't exist
+
+            # Check if Like already exists
+            existing_like = Like.objects.filter(author=author_obj, object=entry).first()
 
             if existing_like:
-                # A like exists → remove it
+                # Remove existing like
                 existing_like.delete()
-                if Entry.objects.filter(id=obj_id).exists():
-                    entry = Entry.objects.get(id=obj_id)
-                    entry.likes.remove(author_obj)
+                entry.likes.remove(author_obj)
                 print(f"[DEBUG] Existing like removed for object={obj_id} by author={author_obj.username}")
             else:
-                # No like exists → create a new like
+                # Create new like
                 like = Like.objects.create(
                     id=activity.get("id"),
                     author=author_obj,
-                    object=activity.get("object"),
+                    object=entry,
                     published=safe_parse_datetime(activity.get("published")) or timezone.now()
                 )
-                if Entry.objects.filter(id=obj_id).exists():
-                    entry = Entry.objects.get(id=obj_id)
-                    entry.likes.add(author_obj)
+                entry.likes.add(author_obj)
                 print(f"[DEBUG] New like created for object={obj_id} by author={author_obj.username}")
+
 
 
 

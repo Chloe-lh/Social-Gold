@@ -418,7 +418,7 @@ def distribute_activity(activity: dict, actor: Author):
 
     # LIKE
     if type_lower == "like":
-        liked_fqid = activity.get("object") if isinstance(activity.get("object"), str) else None
+        liked_fqid = activity.get("object") or activity.get("object_fqid") if isinstance(activity.get("object"), str) or isinstance(activity.get("object_fqid"), str) else None 
         if not liked_fqid:
             print(f"[DEBUG distribute_activity] LIKE: No liked_fqid in activity object")
             return

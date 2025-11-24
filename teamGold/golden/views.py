@@ -1406,51 +1406,22 @@ def public_profile_view(request, author_id):
     Only shows basic author info (name, github, email, etc.) and list of their entries.
     Tabs and editing are removed.
     """
-    print("------------> author",author_id)
-    author_data = None
-    entries = []
+    print("author --------------------->", author_id)
 
-    # Try to get author from local DB
-    try:
-        author = Author.objects.get(id=author_id)
-        author.description = markdown.markdown(author.description)
-        entries = Entry.objects.filter(author=author).order_by("-published")
-        author_data = {
-            "type": "author",
-            "id": f"{request.scheme}://{request.get_host()}/api/authors/{author.uuid}",
-            "host": f"{request.scheme}://{request.get_host()}",
-            "username": author.username,
-            "github": author.github,
-            "profileImage": author.profileImage.url if author.profileImage else None,
-            "uuid": author.uuid,
-            "description": author.description,
-            "url": f"{request.scheme}://{request.get_host()}/api/authors/{author.uuid}"
-        }
-    except Author.DoesNotExist:
-        # If not local, try fetching from remote nodes
-        for node_url in REMOTE_NODES:
-            try:
-                api_url = f"{node_url}/api/authors/{author_id}"
-                resp = requests.get(api_url, timeout=5)
-                resp.raise_for_status()
-                author_data = resp.json()
-                
-                # Try to get entries for this remote author
-                entries_resp = requests.get(f"{api_url}/entries", timeout=5)
-                entries_resp.raise_for_status()
-                entries_json = entries_resp.json()
-                entries = entries_json.get("items") or entries_json.get("entries") or []
-                break  # stop after successfully fetching from one node
-            except requests.RequestException:
-                continue
 
-        if author_data is None:
-            raise Http404("Author not found locally or on any remote node")
+    # Get author
+    author = get_object_or_404(Author, id=author_id)
 
-    # Render template
+    # Convert description to HTML
+    author.description = markdown.markdown(author.description)
+
+    # Get entries for this author
+    entries = Entry.objects.filter(author=author).order_by("-published")
+
     context = {
-        "author": author_data,
+        "author": author,
         "entries": entries,
+        # We can add sidebar info like GitHub, email, website
     }
 
     return render(request, "public_profile.html", context)

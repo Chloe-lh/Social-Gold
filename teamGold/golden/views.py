@@ -1399,34 +1399,80 @@ def profile_view(request):
 
     return render(request, "profile.html", context)
 
+@login_required
 def public_profile_view(request, author_id):
     """
-    View for displaying another author's profile.
-
-    Only shows basic author info (name, github, email, etc.) and list of their entries.
-    Tabs and editing are removed.
+    Display another author's public profile.
+    Fetches from remote node if necessary.
+    Shows username, github, bio, email, and public entries.
     """
-    print("author --------------------->", author_id)
+    # Helper to fetch remote author info
+    def fetch_remote_author(author_url):
+        try:
+            response = requests.get(author_url, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                # Minimal info: username, github, bio, email
+                return {
+                    "id": data.get("id"),
+                    "username": data.get("username") or data.get("displayName"),
+                    "displayName": data.get("displayName") or data.get("username"),
+                    "profileImage": data.get("profileImage") or data.get("icon", {}).get("url", '') if isinstance(data.get("icon"), dict) else data.get("icon", ''),
+                    "github": data.get("github") or '',
+                    "bio": sanitize_markdown_to_html(data.get("bio") or data.get("description") or ''),
+                    "email": data.get("email") or '',
+                    "host": data.get("host") or urlparse(author_url).netloc
+                }
+            else:
+                print(f"[REMOTE PROFILE] Failed to fetch {author_url}: {response.status_code}")
+        except Exception as e:
+            print(f"[REMOTE PROFILE] Error fetching {author_url}: {e}")
+        return None
 
+    author = None
+    entries = []
 
-    # Get author
-    author = get_object_or_404(Author, id=author_id)
+    # Try to fetch from local DB first
+    try:
+        author = Author.objects.get(id=author_id)
+        # Get only public entries
+        entries_qs = Entry.objects.filter(author=author, visibility="PUBLIC").order_by("-published")
+        entries = list(entries_qs)
+        author.bio = sanitize_markdown_to_html(author.description)
+    except Author.DoesNotExist:
+        # If not local, try to fetch from remote nodes
+        nodes = Node.objects.filter(is_active=True)
+        for node in nodes:
+            node_base = node.id.rstrip('/')
+            author_url = f"{node_base}/api/authors/{author_id}"
+            remote_author = fetch_remote_author(author_url)
+            if remote_author:
+                author = remote_author
+                # Optionally fetch public entries from remote
+                try:
+                    entries_resp = requests.get(f"{author_url}/entries", timeout=5)
+                    if entries_resp.status_code == 200:
+                        entries_data = entries_resp.json()
+                        if isinstance(entries_data, dict) and "items" in entries_data:
+                            entries = entries_data["items"]
+                        elif isinstance(entries_data, list):
+                            entries = entries_data
+                    else:
+                        print(f"[REMOTE PROFILE] Failed to fetch entries: {entries_resp.status_code}")
+                except Exception as e:
+                    print(f"[REMOTE PROFILE] Error fetching entries: {e}")
+                break  # Stop after first successful remote fetch
 
-    # Convert description to HTML
-    author.description = markdown.markdown(author.description)
-
-    # Get entries for this author
-    entries = Entry.objects.filter(author=author).order_by("-published")
+    if not author:
+        messages.error(request, "Author not found")
+        return redirect("profile")
 
     context = {
         "author": author,
-        "entries": entries,
-        # We can add sidebar info like GitHub, email, website
+        "entries": entries
     }
 
     return render(request, "public_profile.html", context)
-
-
 # * ============================================================
 # * Helper View Functions
 # * ============================================================

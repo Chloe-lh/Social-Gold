@@ -1307,9 +1307,10 @@ def profile_view(request):
         following_ids_normalized.append(normalize_fqid(str(f.object))) 
     
     # Try to find authors by both raw and normalized IDs
-    following = Author.objects.filter(
-        Q(id__in=following_ids) | Q(id__in=following_ids_normalized)
-    ).distinct()
+    #following = Author.objects.filter(
+        #Q(id__in=following_ids) | Q(id__in=following_ids_normalized)
+    #).distinct()
+    following = Author.objects.filter(followers_set=author)
     
     friends_qs = get_friends(author)
     

@@ -25,7 +25,7 @@ import logging
 
 # LOCAL IMPORTS
 from golden.models import Author, Entry, Comment, Like, Follow, Node
-from golden.services import generate_comment_fqid, paginate, fqid_to_uuid, get_remote_node_from_fqid
+from golden.services import generate_comment_fqid, paginate, fqid_to_uuid, get_remote_node_from_fqid, notify
 from golden.distributor import distribute_activity
 from golden.activities import create_comment_activity
 
@@ -59,12 +59,16 @@ class EntryCommentAPIView(APIView):
             404: openapi.Response(description="Comment Not found"),
         }
     )
-    def get(self, request, entry_id=None, entry_fqid=None, *args, **kwargs):
+    def get(self, request, author_serial=None, entry_serial=None, *args, **kwargs):
         """Return a comments collection for an entry.
 
         Accepts either:
         - path param named `entry_id` or `entry_fqid` (URL-encoded FQID), or
         - kwargs keys like `entry_serial` (author+entry alias).
+
+        Queries (optional):
+        - page param denotes the page number; default 1
+        - size denotes the page size; default 10
 
         Behavior:
         - If the entry exists locally, return stored comments (paginated).
@@ -75,66 +79,40 @@ class EntryCommentAPIView(APIView):
         """
         print("ENTER EntryCommentAPIView.get", flush=True)
   
-        raw = entry_id or entry_fqid or kwargs.get('entry_serial') or kwargs.get('entry_fqid')
-        if not raw:
+        if not entry_serial:
             return Response({'detail': 'entry id required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        entry_fqid = unquote(raw).rstrip('/')
-        print("DEBUG entry_fqid: %s ", entry_fqid, flush=True)
-
-        # Try local lookup first
         try:
-            entry = Entry.objects.get(id=entry_fqid)
+            entry = Entry.objects.get(id__contains=entry_serial)
         except Entry.DoesNotExist:
-            entry = None
+            return Response({'detail': 'entry not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        # If local, return paginated local comments
-        if entry:
-            qs = Comment.objects.filter(entry_id=entry.id).order_by('-published')
-            page_obj = paginate(request, qs)
-            items = CommentSerializer(page_obj.object_list, many=True).data
+        # Make sure the author of the entry is the author specifed if author serial is provided
+        if author_serial and author_serial not in entry.author.id:
+            return Response({'detail': 'entry not found by specified author'}, status=status.HTTP_404_NOT_FOUND)
 
-            # Match deepskyblue spec format
-            collection = {
-                "type": "comments",
-                "page": page_obj.number,
-                "size": page_obj.paginator.per_page,
-                "count": qs.count(),
-                "src": items,  # Changed from "items" to "src" to match spec
-            }
+        # return paginated local comments
+        qs = Comment.objects.filter(entry_id=entry.id).order_by('-published')
+        page_obj = paginate(request, qs)
+        items = CommentSerializer(page_obj.object_list, many=True).data
 
-            # add simple pagination links if applicable
-            if page_obj.has_next():
-                next_page = page_obj.next_page_number()
-                collection['next'] = f"{request.build_absolute_uri('?page=' + str(next_page))}"
-            if page_obj.has_previous():
-                prev_page = page_obj.previous_page_number()
-                collection['prev'] = f"{request.build_absolute_uri('?page=' + str(prev_page))}"
+        collection = {
+            "type": "comments",
+            "id": request.build_absolute_uri(),
+            "size": qs.count(),
+            "items": items,
+        }
 
-            return Response(collection, status=status.HTTP_200_OK)
+        # add simple pagination links if applicable
+        if page_obj.has_next():
+            next_page = page_obj.next_page_number()
+            collection['next'] = f"{request.build_absolute_uri('?page=' + str(next_page))}"
+        if page_obj.has_previous():
+            prev_page = page_obj.previous_page_number()
+            collection['prev'] = f"{request.build_absolute_uri('?page=' + str(prev_page))}"
 
-        # attempt to find a remote node and find its comments endpoint
-        remote_node = get_remote_node_from_fqid(entry_fqid)
-        if remote_node and remote_node.id.rstrip('/') != settings.LOCAL_NODE_URL.rstrip('/'):
-            try:
-                remote_comments_url = remote_node.id.rstrip('/') + '/api/entries/' + quote(entry_fqid, safe='') + '/comments/'
-                resp = requests.get(
-                    remote_comments_url,
-                    auth=(remote_node.auth_user, remote_node.auth_pass) if getattr(remote_node, 'auth_user', None) else None,
-                    headers={'Accept': 'application/json'},
-                    timeout=5,
-                )
-                if resp.status_code == 200:
-                    return Response(resp.json(), status=status.HTTP_200_OK)
-                elif resp.status_code == 404:
-                    return Response({'detail': 'Remote entry not found'}, status=status.HTTP_404_NOT_FOUND)
-                else:
-                    return Response({'detail': 'Failed to fetch remote comments'}, status=status.HTTP_502_BAD_GATEWAY)
-            except Exception as e:
-                return Response({'detail': f'Failed to fetch remote comments: {e}'}, status=status.HTTP_502_BAD_GATEWAY)
-
-        return Response({'detail': 'Entry not found'}, status=status.HTTP_404_NOT_FOUND)
-
+        return Response(collection, status=status.HTTP_200_OK)
+        
     '''
     steps:
         1. create serializer data

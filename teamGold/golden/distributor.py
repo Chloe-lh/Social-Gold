@@ -267,7 +267,8 @@ def distribute_activity(activity: dict, actor: Author):
     obj = activity.get("object")
 
     # CREATE ENTRY
-    if type_lower == "create" and isinstance(obj, dict) and obj.get("type") == "post":
+    if type_lower == "entry" and isinstance(obj, dict) and obj.get("type") == "post":
+        
         visibility = obj.get("visibility", "PUBLIC").upper()
 
         if visibility == "PUBLIC":
@@ -319,7 +320,7 @@ def distribute_activity(activity: dict, actor: Author):
         return
 
     # DELETE ENTRY
-    if type_lower == "delete" and isinstance(obj, dict) and obj.get("type") == "post":
+    if type_lower == "entry" and isinstance(obj, dict) and obj.get("type") == "post":
         recipients = set(get_followers(actor)) | set(get_friends(actor))
         for r in recipients:
             send_activity_to_inbox(r, activity)
@@ -479,10 +480,11 @@ def distribute_activity(activity: dict, actor: Author):
 
     # UNLIKE handle "undo" (ActivityPub) formats
     if type_lower == "unlike":
-        liked_fqid = obj if isinstance(obj, str) else None
-        if not liked_fqid:
+        liked = obj if isinstance(obj, dict) else None
+        if not liked:
             return
 
+        liked_fqid = liked.id
         # Try to find entry locally (with normalization)
         entry = Entry.objects.filter(id=normalize_fqid(liked_fqid)).first()
         if not entry:

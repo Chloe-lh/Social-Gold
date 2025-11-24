@@ -34,6 +34,9 @@ urlpatterns = [
     path('profile/accept_follow/', views.api_accept_follow_action, name="accept-follow-action"), 
     path('profile/reject_follow/', views.api_reject_follow_action, name="reject-follow-action"), 
     path('profile/unfollow/', views.api_unfollow_action, name="unfollow-action"), 
+    path('profile/accept_follow/', views.api_accept_follow_action, name="accept-follow-action"), 
+    path('profile/reject_follow/', views.api_reject_follow_action, name="reject-follow-action"), 
+    path('profile/unfollow/', views.api_unfollow_action, name="unfollow-action"), 
 
     # API Endpoints
     path("api/authors/", AuthorsListView.as_view(), name="api-authors-list"), 

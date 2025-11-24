@@ -51,7 +51,6 @@ from golden.activities import ( # Kenneth: If you're adding new activities, plea
     create_update_entry_activity,
     create_unlike_activity,
     create_profile_update_activity,
-    create_delete_comment_activity,
 )
 
 # IMPORT Miscellaneous
@@ -341,17 +340,16 @@ def stream_view(request):
     entries = list(local_entries) + visible_remote
     entries.sort(key=lambda x: x.is_posted, reverse=True)
     
-    # Process inbox for all entry authors to get latest likes/comments from remote nodes
-    # This ensures we see up-to-date likes/comments for all entries in the stream
     entry_authors = {entry.author for entry in entries if entry.author}
+
     for entry_author in entry_authors:
-        # Refresh remote author usernames if they look like UUIDs
         if entry_author and not is_local(entry_author.id):
-            username_looks_like_uuid = len(entry_author.username) == 36 and '-' in entry_author.username and entry_author.username.count('-') == 4
-            if username_looks_like_uuid or entry_author.username.startswith("http") or entry_author.username == "goldenuser":
-                updated_author = get_or_create_foreign_author(entry_author.id)
-                if updated_author and updated_author.username != entry_author.username:
-                    entry_author.username = updated_author.username
+            
+            updated_author = get_or_create_foreign_author(entry_author.id)
+            
+            if updated_author and updated_author.username != entry_author.username:
+                entry_author.username = updated_author.username
+
         process_inbox(entry_author)
 
     context = {
@@ -1769,26 +1767,6 @@ def add_comment(request):
     return redirect("stream")
 
 @login_required
-def delete_comment(request, comment_id):
-    author = Author.from_user(request.user)
-    comment = get_object_or_404(Comment, id=comment_id)
-
-    if comment.author != author:
-        return HttpResponseForbidden("You don't have permission to delete this comment")
-
-    if request.method == "POST":
-        # Option A: let inbox processing handle deletion on this node too.
-        activity = create_delete_comment_activity(author, comment)
-        distribute_activity(activity, actor=author)
-        comment.delete()
-        # Redirect back to the entry
-        entry = comment.entry
-        return redirect('entry_detail', entry_uuid=entry.get_uuid())
-
-    # Refuses get delete
-    return HttpResponseBadRequest("Invalid request method")
-
-@login_required
 def toggle_like(request):
     if request.method != "POST":
         return redirect('stream')
@@ -1819,33 +1797,32 @@ def toggle_like(request):
             try:
                 comment_obj = Comment.objects.get(id__endswith=object_fqid)
             except Comment.DoesNotExist:
-                comment_obj = None
+                # if nothing exists, simply redirect back to stream
+                return redirect('stream')
 
-    target_id = (
-        entry_obj.id if entry_obj else (comment_obj.id if comment_obj else object_fqid)
-    )
+    target = entry_obj if entry_obj else comment_obj
 
     with transaction.atomic():
-        existing = Like.objects.filter(author=author, object=target_id).first()
+        existing = Like.objects.filter(author=author, object=target.id).first()
         if existing:
+            activity = create_unlike_activity(author, target)
             existing.delete()
             if entry_obj:
                 entry_obj.likes.remove(author)
-            activity = create_unlike_activity(author, target_id)
         else:
-            if not Like.objects.filter(author=author, object=target_id).exists():
+            if not Like.objects.filter(author=author, object=target.id).exists():
                 like_id = (
                     f"{settings.SITE_URL.rstrip('/')}/api/likes/{uuid.uuid4()}"
                 )
                 Like.objects.create(
                     id=like_id,
                     author=author,
-                    object=target_id,
+                    object=target.id,
                     published=dj_timezone.now(),
                 )
                 if entry_obj:
                     entry_obj.likes.add(author)
-            activity = create_like_activity(author, target_id)
+            activity = create_like_activity(author, target.id)
 
     distribute_activity(activity, actor=author)
     return redirect(request.META.get("HTTP_REFERER", "stream"))
@@ -2103,7 +2080,6 @@ def api_unfollow_action(request):
     print(f"[DEBUG api_unfollow_action] Successfully unfollowed {target.username}")
 
     return Response({"status": f"Unfollowed {target.username}."}, status=200)
-
 
 @api_view(['GET'])
 def list_inbox(request, author_id):

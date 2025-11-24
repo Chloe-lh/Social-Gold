@@ -64,7 +64,7 @@ def create_update_entry_activity(author, entry):
     activity = {
         "type": "Entry",
         "title" : entry.title,
-        "id": activity_id,
+        "id": entry.id,
         "web" : entry.web,
         "description" : entry.description,
         "contentType": entry.contentType,

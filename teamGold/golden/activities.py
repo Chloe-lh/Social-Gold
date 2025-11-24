@@ -117,7 +117,7 @@ def create_delete_entry_activity(author, entry):
 
 def create_comment_activity(author, entry, comment):
     activity_id = make_fqid(author, "comments")
-    return {
+    activity = {
         "type": "comment",
         "author":{
             "type":"author",
@@ -135,6 +135,7 @@ def create_comment_activity(author, entry, comment):
         "entry":entry.id,
         "likes":{},
     }
+    return activity
 
 def create_like_activity(author, liked_object_fqid):
     activity_id = make_fqid(author, "likes")

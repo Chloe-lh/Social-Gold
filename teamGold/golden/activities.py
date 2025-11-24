@@ -120,26 +120,21 @@ def create_delete_entry_activity(author, entry):
 def create_comment_activity(author, entry, comment):
     return {
         "type": "comment",
-        "id": comment.id,                      
-        "actor": {
-            "id": author.id,
-            "host": author.host,
-            "username": author.username,
+        "author":{
+            "type":"author",
+            "id":author.id,
+            "web":author.web,
+            "host":author.host,
+            "displayName":author.name,
+            "github":author.github,
+            "profileImage":author.profileImage,
         },
-        "object": {
-            "type": "comment",
-            "id": comment.id,                   
-            "entry": entry.id,
-            "content": comment.content,
-            "contentType": comment.contentType,
-            "author": {
-                "id": author.id,
-                "host": author.host,
-                "username": author.username,
-            },
-            "published": comment.published.isoformat(),
-        },
-        "published": comment.published.isoformat(),
+        "comment":comment.content,
+        "contentType":comment.contentType,
+        "published":comment.published,
+        "id":"",
+        "entry":entry.id,
+        "likes":{},
     }
 
 def create_like_activity(author, liked_object_fqid):
@@ -147,11 +142,18 @@ def create_like_activity(author, liked_object_fqid):
 
     activity = {
         "type": "Like",
-        "id": activity_id,
-        "actor": str(author.id),
-        "published": timezone.now().isoformat(),
-        "summary": f"{author.username} liked an entry",
-        "object": str(liked_object_fqid)
+        "author":{
+            "type":"author",
+            "id":author.id,
+            "web":author.web,
+            "host":author.host,
+            "displayName":author.name,
+            "github":author.github,
+            "profileImage":author.profileImage,
+        },
+        "published":timezone.now().isoformat(),
+        "id":activity_id,
+        "object":liked_object_fqid,
     }
     
     return activity
@@ -166,14 +168,26 @@ def create_follow_activity(author, target):
     print(f"[DEBUG create_follow_activity] Creating follow activity: actor={author.username} (id={author.id}), target={target.username} (id={target.id})")
     
     activity = {
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "type": "Follow",
-        "id": activity_id,
-        "summary": f"{author.username} wants to follow you",
-        "actor": str(author.id),
-        "object": str(target.id),
-        "published": timezone.now().isoformat(),
-        "state": "REQUESTED",
+        "type":"follow",
+        "summary":f"{author.name} wants to follow {target.name}",
+        "actor":{
+            "type":"author",
+            "id":author.id,
+            "web":author.web,
+            "host":author.host,
+            "displayName":author.name,
+            "github":author.github,
+            "profileImage":author.profileImage,
+        },
+        "actor":{
+            "type":"author",
+            "id":target.id,
+            "web":target.web,
+            "host":target.host,
+            "displayName":target.name,
+            "github":target.github,
+            "profileImage":target.profileImage,
+        },
     }
     
     print(f"[DEBUG create_follow_activity] Activity created: id={activity_id}, type={activity['type']}, object={activity['object']}")

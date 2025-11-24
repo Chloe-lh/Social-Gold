@@ -124,13 +124,18 @@ pagination for listing comments and likes
     returns: page object that is input for the correct serializer
     (CommentSerializer(page_obj.object_list, many=True).data)
 '''
-def paginate(request, allowed):
+
+def paginate(request, allowed, size_default=10):
+    # Handle cases where the queries given are invalid to avoid later issues
+    # Paginator also handles cases where accessed page exceeds max size
     try:
-        page_size = int(request.query_params.get('size', 10))
+        page_size = int(request.query_params.get('size', size_default))
+        assert page_size > 0, 'Page size is not valid'
     except Exception:
-        page_size = 10
+        page_size = size_default
     try:
         page_number = int(request.query_params.get('page', 1))
+        assert page_number > 0, 'Page number is not valid'
     except Exception:
         page_number = 1
 

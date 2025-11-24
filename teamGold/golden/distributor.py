@@ -1,7 +1,7 @@
 import requests
 from django.utils import timezone
 from golden.models import Entry, EntryImage, Author, Comment, Like, Follow, Node, Inbox
-from golden.services import get_or_create_foreign_author, normalize_fqid, generate_comment_fqid, fetch_and_sync_remote_entry
+from golden.services import get_or_create_foreign_author, normalize_fqid, generate_comment_fqid, fetch_and_sync_remote_entry, is_local
 from urllib.parse import urljoin
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
@@ -985,32 +985,41 @@ def process_inbox(author: Author):
 
         # LIKE
         elif activity_type == "like":
-            remote_id = activity.get("author").get("id")
+            id = activity.get("author").get("id")
             remote_host = activity.get("author").get("host")
             remote_username = activity.get("author").get("displayName")
-            author_obj = get_or_create_foreign_author(remote_id, remote_host, remote_username)
+            author_obj = None
+            if is_local(id):
+                author_obj = Author.objects.filter(id=id).first()
+            else:
+                author_obj = get_or_create_foreign_author(id, remote_host, remote_username)
 
             obj_id = activity.get("object")
+
             entry = Entry.objects.filter(id=obj_id).first()
 
             if not entry:
                 print(f"[DEBUG] Entry not found: {obj_id}")
                 return  # cannot like an entry that doesn't exist
+            comment = Comment.objects.filter(id = obj_id).first()
 
+            if not comment:
+                comment= None
             # Check if Like already exists
-            existing_like = Like.objects.filter(author=author_obj, object=entry).first()
+            existing_like = Like.objects.filter(author=author_obj, object=obj_id).first()
 
             if existing_like:
                 # Remove existing like
                 existing_like.delete()
-                entry.likes.remove(author_obj)
+                if entry:
+                    entry.likes.remove(author_obj)
                 print(f"[DEBUG] Existing like removed for object={obj_id} by author={author_obj.username}")
             else:
                 # Create new like
                 like = Like.objects.create(
                     id=activity.get("id"),
                     author=author_obj,
-                    object=entry,
+                    object= entry or comment,
                     published=safe_parse_datetime(activity.get("published")) or timezone.now()
                 )
                 entry.likes.add(author_obj)

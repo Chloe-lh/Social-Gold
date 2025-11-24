@@ -342,7 +342,7 @@ def distribute_activity(activity: dict, actor: Author):
     '''
     # COMMENT 
     if type_lower == "comment":
-        entry_id = obj.get("entry")
+        entry_id = activity.get("entry")
         
         if not entry_id:
             return
@@ -394,7 +394,7 @@ def distribute_activity(activity: dict, actor: Author):
 
     # LIKE
     if type_lower == "like":
-        liked_fqid = obj.get("object") if isinstance(obj.get("object"), str) else None
+        liked_fqid = activity.get("object") if isinstance(activity.get("object"), str) else None
         if not liked_fqid:
             print(f"[DEBUG distribute_activity] LIKE: No liked_fqid in activity object")
             return

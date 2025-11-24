@@ -820,12 +820,7 @@ def profile_view(request):
         query = query.strip() if query else ""
         
         # Local authors logic by search ALL authors in database (includes local + remote stubs)
-        logged_uuid = fqid_to_uuid(author.id)
-
-        local_qs = [
-        a for a in Author.objects.all()
-        if is_local(a.id) and fqid_to_uuid(a.id) != logged_uuid
-    ]
+        local_qs = Author.objects.exclude(id=author.id)
         print("logged_in_author_id =", author.id)
         if query:
             local_qs = local_qs.filter(Q(username__icontains=query) | Q(name__icontains=query))

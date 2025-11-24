@@ -475,10 +475,11 @@ def distribute_activity(activity: dict, actor: Author):
 
     # UNLIKE handle "undo" (ActivityPub) formats
     if type_lower == "unlike":
-        liked_fqid = obj if isinstance(obj, str) else None
-        if not liked_fqid:
+        liked = obj if isinstance(obj, dict) else None
+        if not liked:
             return
 
+        liked_fqid = liked.id
         # Try to find entry locally (with normalization)
         entry = Entry.objects.filter(id=normalize_fqid(liked_fqid)).first()
         if not entry:

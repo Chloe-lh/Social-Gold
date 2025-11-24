@@ -995,8 +995,8 @@ def process_inbox(author: Author):
             if existing_like:
                 # A like exists → remove it
                 existing_like.delete()
-                if Entry.objects.filter(id=object_id).exists():
-                    entry = Entry.objects.get(id=object_id)
+                if Entry.objects.filter(id=obj_id).exists():
+                    entry = Entry.objects.get(id=obj_id)
                     entry.likes.remove(activity.get("author").get("id"))
                 print(f"[DEBUG] Existing like removed for object={obj_id} by author={author_obj.username}")
             else:

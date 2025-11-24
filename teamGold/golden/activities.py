@@ -126,7 +126,7 @@ def create_comment_activity(author, entry, comment):
             "host":author.host,
             "displayName":author.name,
             "github":author.github,
-            "profileImage":author.profileImage,
+            "profileImage":author.profileImage.url if author.profileImage else None,
         },
         "comment":comment.content,
         "contentType":comment.contentType,
@@ -148,7 +148,7 @@ def create_like_activity(author, liked_object_fqid):
             "host":author.host,
             "displayName":author.name,
             "github":author.github,
-            "profileImage":author.profileImage,
+            "profileImage":author.profileImage.url if author.profileImage else None,
         },
         "published":timezone.now().isoformat(),
         "id":activity_id,
@@ -166,10 +166,8 @@ def create_follow_activity(author, target):
     print(f"[DEBUG create_follow_activity] Creating follow activity: actor={author.username} (id={author.id}), target={target.username} (id={target.id})")
     
     activity = {
-        #"@context": "https://www.w3.org/ns/activitystreams",
-        "type": "Follow",
-        #"id": activity_id,
-        "summary": f"{author.username} wants to follow you",
+        "type":"follow",
+        "summary":f"{author.name} wants to follow {target.name}",
         "actor":{
             "type":"author",
             "id":author.id,
@@ -195,7 +193,7 @@ def create_follow_activity(author, target):
         "state": "REQUESTED",
     }
     
-    print(f"[DEBUG create_follow_activity] Activity created: id={activity_id}, type={activity['type']}, object={activity['object']}")
+    print(f"[DEBUG create_follow_activity] Activity created: id={activity_id}, type={activity['type']}, ")
     
     return activity
 
@@ -244,7 +242,7 @@ def create_profile_update_activity(actor_author):
             "host": actor_author.host,
             "displayName": actor_author.username,
             "github": actor_author.github,
-            "profileImage": actor_author.profile_image,
+            "profileImage": actor_author.profileImage.url if actor_author.profileImage else None ,
             "web": actor_author.web,
         },
         "object": {
@@ -253,7 +251,7 @@ def create_profile_update_activity(actor_author):
             "host": actor_author.host,
             "displayName": actor_author.username,
             "github": actor_author.github,
-            "profileImage": actor_author.profile_image,
+            "profileImage": actor_author.profileImage.url if actor_author.profileImage else None,
             "web": actor_author.web,
         },
         "published": timezone.now().isoformat(),
@@ -274,7 +272,7 @@ def create_unlike_activity(author, liked_object):
             "host": author.host,
             "displayName": author.username,
             "github": author.github,
-            "profileImage": author.profile_image,
+            "profileImage": author.profileImage.url if author.profileImage else None,
             "web": author.web,
         },
         "published": timezone.now().isoformat(),
@@ -287,7 +285,7 @@ def create_unlike_activity(author, liked_object):
                 "host": liked_object.author.host,
                 "displayName": liked_object.author.username,
                 "github": liked_object.author.github,
-                "profileImage": liked_object.author.profile_image,
+                "profileImage": liked_object.author.profileImage.url if liked_object.author.profileImage else None,
                 "web": liked_object.author.web,
             },
             "published": liked_object.published,

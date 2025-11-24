@@ -67,11 +67,42 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
     print(f"[DEBUG send_activity_to_inbox] Called: recipient={recipient.username} (id={recipient.id}, host={recipient.host})")
     print(f"[DEBUG send_activity_to_inbox] Activity type: {activity.get('type')}")
     print(f"[DEBUG send_activity_to_inbox] SITE_URL: {settings.SITE_URL}")
-    
+    print("[DEBUG] type(recipient.host) =", type(recipient.host))
+    print("[DEBUG] recipient.host =", recipient.host)
+
+    def ensure_datetime_strings(obj):
+            """
+            Recursively convert datetime objects to ISO strings
+            and ensure all nested values are JSON-serializable.
+            """
+            # Handle datetime
+            if isinstance(obj, dt):
+                return obj.isoformat()
+
+            # Handle primitives
+            if isinstance(obj, (str, int, float, bool)) or obj is None:
+                return obj
+
+            # Handle dicts
+            if isinstance(obj, dict):
+                return {k: ensure_datetime_strings(v) for k, v in obj.items()}
+
+            # Handle lists/tuples
+            if isinstance(obj, (list, tuple)):
+                return [ensure_datetime_strings(item) for item in obj]
+
+            # Handle model objects or other custom objects
+            # Use string representation to avoid recursion issues
+            try:
+                return str(obj)
+            except Exception:
+                return repr(obj)
+            
+    activity_clean = ensure_datetime_strings(activity)
     if recipient.host.rstrip("/") == settings.SITE_URL.rstrip("/"):
         # Local delivery to the inbox
         print(f"[DEBUG send_activity_to_inbox] LOCAL delivery: Creating inbox item for {recipient.username}")
-        Inbox.objects.create(author=recipient, data=activity)
+        Inbox.objects.create(author=recipient, data=activity_clean)
         print(f"[DEBUG send_activity_to_inbox] LOCAL delivery: Inbox item created successfully")
         return
 
@@ -113,16 +144,8 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         print(f"[DEBUG send_activity_to_inbox] Activity: {json.dumps(activity, indent=2, default=str)}")
         
         # Ensure all datetime values are strings before JSON serialization
-        def ensure_datetime_strings(obj):
-            """Recursively convert datetime objects to ISO format strings"""
-            if isinstance(obj, dt):
-                return obj.isoformat()
-            elif isinstance(obj, dict):
-                return {k: ensure_datetime_strings(v) for k, v in obj.items()}
-            elif isinstance(obj, list):
-                return [ensure_datetime_strings(item) for item in obj]
-            return obj
         
+            
         activity_clean = ensure_datetime_strings(activity)
         
         response = requests.post(
@@ -267,11 +290,12 @@ def distribute_activity(activity: dict, actor: Author):
     obj = activity.get("object")
 
     # CREATE ENTRY
-    if type_lower == "entry" and isinstance(obj, dict) and obj.get("type") == "post":
+    if type_lower == "entry" :#and isinstance(activity, dict) and obj.get("type") == "post":
         
-        visibility = obj.get("visibility", "PUBLIC").upper()
-
-        if visibility == "PUBLIC":
+        visibility = activity.get("visibility", "PUBLIC").upper()
+        
+        
+        if visibility == "PUBLIC" or visibility == "DELETED":
             recipients = set(get_followers(actor)) | set(get_friends(actor))
         elif visibility == "UNLISTED":
             recipients = set(get_followers(actor))
@@ -283,7 +307,7 @@ def distribute_activity(activity: dict, actor: Author):
         for r in recipients:
             send_activity_to_inbox(r, activity)
         return
-
+    '''
     # UPDATE ENTRY
     if type_lower == "update" and isinstance(obj, dict) and obj.get("type") == "post":
         print(f"[DEBUG distribute_activity] UPDATE ENTRY: actor={actor.username} (id={actor.id})")
@@ -318,21 +342,17 @@ def distribute_activity(activity: dict, actor: Author):
             print(f"[DEBUG distribute_activity] UPDATE ENTRY: Sending to recipient {r.username} (id={r.id}, host={r.host})")
             send_activity_to_inbox(r, activity)
         return
-
+    
     # DELETE ENTRY
     if type_lower == "entry" and isinstance(obj, dict) and obj.get("type") == "post":
         recipients = set(get_followers(actor)) | set(get_friends(actor))
         for r in recipients:
             send_activity_to_inbox(r, activity)
         return
-
+    '''
     # COMMENT 
     if type_lower == "comment":
-        entry_id = None
-        if isinstance(obj, str):
-            entry_id = obj
-        elif isinstance(obj, dict):
-            entry_id = obj.get("entry")
+        entry_id = activity.get("entry")
         
         if not entry_id:
             return
@@ -384,7 +404,7 @@ def distribute_activity(activity: dict, actor: Author):
 
     # LIKE
     if type_lower == "like":
-        liked_fqid = obj if isinstance(obj, str) else None
+        liked_fqid = activity.get("object") if isinstance(activity.get("object"), str) else None
         if not liked_fqid:
             print(f"[DEBUG distribute_activity] LIKE: No liked_fqid in activity object")
             return
@@ -480,11 +500,11 @@ def distribute_activity(activity: dict, actor: Author):
 
     # UNLIKE handle "undo" (ActivityPub) formats
     if type_lower == "unlike":
-        liked = obj if isinstance(obj, dict) else None
+        liked = obj.get("object") if isinstance(obj.get("object"), str) else None
         if not liked:
             return
 
-        liked_fqid = liked.id
+        liked_fqid = liked
         # Try to find entry locally (with normalization)
         entry = Entry.objects.filter(id=normalize_fqid(liked_fqid)).first()
         if not entry:
@@ -586,6 +606,7 @@ def distribute_activity(activity: dict, actor: Author):
     # FOLLOW
     if type_lower == "follow":
         target_id = obj.get("id")
+        target_id = obj.get("id")
         print(f"[DEBUG distribute_activity] FOLLOW: Processing follow activity")
         print(f"[DEBUG distribute_activity] FOLLOW: actor={actor.username} (id={actor.id})")
         print(f"[DEBUG distribute_activity] FOLLOW: target_id (raw)={target_id}")
@@ -640,7 +661,7 @@ def distribute_activity(activity: dict, actor: Author):
 
     # UNFOLLOW
     if type_lower == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "follow":
-        target_id = obj.get("object")
+        target_id = obj.get("id")
         target = Author.objects.filter(id=normalize_fqid(target_id)).first()
 
         if target:
@@ -649,7 +670,7 @@ def distribute_activity(activity: dict, actor: Author):
 
     # REMOVE FRIEND
     if type_lower == "removefriend":
-        target_id = obj
+        target_id = obj.get("id")
         target = Author.objects.filter(id=normalize_fqid(target_id)).first()
 
         if target:
@@ -853,24 +874,22 @@ def process_inbox(author: Author):
                 Follow.objects.filter(actor=target, object=initiator.id).delete()
 
         # CREATE ENTRY
-        elif activity_type == "create" and isinstance(obj, dict) and obj.get("type") == "post":
-            entry_id = obj.get("id")
+        elif activity_type == "entry" and isinstance(obj, dict) and obj.get("type") == "post":
+            entry_id = activity.get("id")
 
             entry, created = Entry.objects.update_or_create(
                 id=entry_id,
                 defaults={
-                    "title": obj.get("title", ""),
+                    "title": activity.get("title", ""),
                     "description": "",
-                    "content": obj.get("content", ""),
-                    "contentType": obj.get("contentType", "text/plain"),
+                    "content": activity.get("content", ""),
+                    "contentType": activity.get("contentType", "text/plain"),
                     "author": actor or author,
-                    "visibility": obj.get("visibility", "PUBLIC"),
-                    "published": safe_parse_datetime(obj.get("published")) or timezone.now(),
+                    "visibility": activity.get("visibility", "PUBLIC"),
+                    "published": safe_parse_datetime(activity.get("published")) or timezone.now(),
                 }
             )
-          
-            attachments = obj.get("attachments", []) 
-
+            '''   
         # UPDATE ENTRY
         elif activity_type == "update" and isinstance(obj, dict) and obj.get("type") == "post":
             entry_id = obj.get("id")
@@ -906,7 +925,8 @@ def process_inbox(author: Author):
             if entry:
                 entry.visibility = "DELETED"
                 entry.save()
-
+        '''
+        
         # COMMENT
         elif activity_type == "comment":
             comment_id = activity.get("id")  
@@ -915,8 +935,8 @@ def process_inbox(author: Author):
             comment_content_type = None
             comment_author_id = None
             
-            if isinstance(obj, str):
-                entry_id = obj
+            if isinstance(activity.get("entry"), str):
+                entry_id = activity.get("entry")
                 comment_content = activity.get("comment", "")
                 comment_content_type = activity.get("contentType", "text/plain")
                 author_data = activity.get("author")
@@ -924,13 +944,13 @@ def process_inbox(author: Author):
                     comment_author_id = author_data.get("id")
                 elif isinstance(author_data, str):
                     comment_author_id = author_data
-            elif isinstance(obj, dict):
-                entry_id = obj.get("entry")
-                comment_content = obj.get("content", "")
-                comment_content_type = obj.get("contentType", "text/plain")
-                comment_author_id = obj.get("author")
+            elif isinstance(activity, dict):
+                entry_id = activity.get("entry").get("entry")
+                comment_content = activity.get("entry").get("content", "")
+                comment_content_type = activity.get("entry").get("contentType", "text/plain")
+                comment_author_id = activity.get("entry").get("author")
                 if not comment_id:
-                    comment_id = obj.get("id")
+                    comment_id = activity.get("entry").get("id")
             
             if not entry_id:
                 return

@@ -874,7 +874,7 @@ def process_inbox(author: Author):
                 Follow.objects.filter(actor=target, object=initiator.id).delete()
 
         # CREATE ENTRY
-        elif activity_type == "entry" #and isinstance(obj, dict) and obj.get("type") == "post":
+        elif activity_type == "entry": #and isinstance(obj, dict) and obj.get("type") == "post":
             entry_id = activity.get("id")
 
             entry, created = Entry.objects.update_or_create(

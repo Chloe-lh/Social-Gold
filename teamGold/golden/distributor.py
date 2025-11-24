@@ -1012,8 +1012,8 @@ def process_inbox(author: Author):
                 print(f"[DEBUG] No Entry or Comment found for object: {obj_id}")
                 return
 
-            # Check if Like already exists
-            existing_like = Like.objects.filter(author=author_obj, object=obj_id).first()
+            like_id = activity.get("id")
+            existing_like = Like.objects.filter(id=like_id).first()
 
             if existing_like:
                 # Like exists → remove it

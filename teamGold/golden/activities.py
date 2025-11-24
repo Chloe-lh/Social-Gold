@@ -175,7 +175,7 @@ def create_follow_activity(author, target):
             "host":author.host,
             "displayName":author.username,
             "github":author.github,
-            "profileImage":author.profileImage,
+            "profileImage":author.profileImage.url if author.profileImage else None,
         },
         "object":{
             "type":"author",
@@ -184,7 +184,7 @@ def create_follow_activity(author, target):
             "host":target.host,
             "displayName":target.username,
             "github":target.github,
-            "profileImage":target.profileImage,
+            "profileImage":target.profileImage.url if target.profileImage else None,
         },
     }
     
@@ -237,7 +237,7 @@ def create_profile_update_activity(actor_author):
             "host": actor_author.host,
             "displayName": actor_author.username,
             "github": actor_author.github,
-            "profileImage": actor_author.profile_image,
+            "profileImage": actor_author.profile_image.url if actor_author.profile_image else None ,
             "web": actor_author.web,
         },
         "object": {
@@ -246,7 +246,7 @@ def create_profile_update_activity(actor_author):
             "host": actor_author.host,
             "displayName": actor_author.username,
             "github": actor_author.github,
-            "profileImage": actor_author.profile_image,
+            "profileImage": actor_author.profile_image.url if actor_author.profile_image else None,
             "web": actor_author.web,
         },
         "published": timezone.now().isoformat(),
@@ -267,7 +267,7 @@ def create_unlike_activity(author, liked_object):
             "host": author.host,
             "displayName": author.username,
             "github": author.github,
-            "profileImage": author.profile_image,
+            "profileImage": author.profile_image.url if author.profile_image else None,
             "web": author.web,
         },
         "published": timezone.now().isoformat(),
@@ -280,7 +280,7 @@ def create_unlike_activity(author, liked_object):
                 "host": liked_object.author.host,
                 "displayName": liked_object.author.username,
                 "github": liked_object.author.github,
-                "profileImage": liked_object.author.profile_image,
+                "profileImage": liked_object.author.profile_image.url if liked_object.author.profile_image else None,
                 "web": liked_object.author.web,
             },
             "published": liked_object.published,

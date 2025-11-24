@@ -982,7 +982,7 @@ def process_inbox(author: Author):
                 if not comment_id:
                     comment_id = generate_comment_fqid(comment_author, entry)
                 
-                Comment.objects.update_or_create(
+                comment = Comment.objects.update_or_create(
                     id=comment_id,
                     defaults={
                         "entry": entry,
@@ -993,7 +993,7 @@ def process_inbox(author: Author):
                     }
                 )
 
-                print(f"[DEBUG process_inbox] COMMENT: Processed comment {comment} for entry {entry.id} by author {comment_author.username}")
+                print(f"[DEBUG process_inbox] COMMENT: Processed comment {comment} for entry {entry.id} by author {comment_author}")
 
         # DELETE COMMENT
         elif activity_type == "delete" and isinstance(obj, dict) and obj.get("type") == "comment":

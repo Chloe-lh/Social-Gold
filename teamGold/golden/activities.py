@@ -114,7 +114,7 @@ def create_delete_entry_activity(author, entry):
         "comments":commentList,
         "likes": likeList,
         "published":entry.published,
-        "visibility": entry.visibility, # this is possibly where u can delete
+        "visibility": "DELETED", # this is possibly where u can delete
     }
     return activity
 

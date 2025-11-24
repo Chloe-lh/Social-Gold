@@ -242,16 +242,38 @@ def create_profile_update_activity(actor_author):
 
     return activity
 
-def create_unlike_activity(author, liked_object_fqid):
+def create_unlike_activity(author, liked_object):
     activity_id = make_fqid(author, "unlike")
 
     activity = {
         "type": "unlike",
         "id": activity_id,
         "summary": f"{author.username} unliked an entry or comment",
-        "actor": str(author.id),
+        "actor": {
+            "type": "Author",
+            "id": str(author.id),
+            "host": author.host,
+            "displayName": author.username,
+            "github": author.github,
+            "profileImage": author.profile_image,
+            "web": author.web,
+        },
         "published": timezone.now().isoformat(),
-        "object": str(liked_object_fqid) 
+        "object": {
+            "type": "Like",
+            "id": liked_object.id,
+            "author": {
+                "type": "Author",
+                "id": liked_object.author.id,
+                "host": liked_object.author.host,
+                "displayName": liked_object.author.username,
+                "github": liked_object.author.github,
+                "profileImage": liked_object.author.profile_image,
+                "web": liked_object.author.web,
+            },
+            "published": liked_object.published,
+            "object": liked_object.object,
+        }
     }
     
     return activity

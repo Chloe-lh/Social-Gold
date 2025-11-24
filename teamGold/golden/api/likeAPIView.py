@@ -40,40 +40,71 @@ class LikeAPIView(APIView):
     """
     authentication_classes = [BasicAuthentication]
     permission_classes = [IsAuthenticated]
-    #! WIP
-    def get(self, request, entry_id):
-        # Normalize entry_id and build queryset of Likes targeting that entry FQID
-        entry_id = unquote(entry_id).rstrip('/')
-        likes_qs = Like.objects.filter(object=entry_id).order_by('-published')
+    
+    @swagger_auto_schema(
+        operation_summary='Gets all likes for an entry',
+        operation_description='Will return JSON data representing a list of Like Objects./' \
+        'Every like has a nested author object. This method accepts URLS specifying entry and author.' \
+        'Body is always a comments object',
+        responses={
+            200: openapi.Response(description="Comments found"),
+            404: openapi.Response(description="Comment Not found"),
+        }
+    )
+    def get(self, request, author_serial=None, entry_serial=None, *args, **kwargs):
+        """Return a comments collection for an entry.
+
+        Accepts either:
+        - path param named `entry_id` or `entry_fqid` (URL-encoded FQID), or
+        - kwargs keys like `entry_serial` (author+entry alias).
+
+        Queries (optional):
+        - page param denotes the page number; default 1
+        - size denotes the page size; default 10
+
+        Behavior:
+        - If the entry exists locally, return stored comments (paginated).
+        - If the entry is not local but belongs to a known remote Node, fetch from that node's
+          `/api/entries/{ENTRY_FQID}/comments/` endpoint and proxy the result.
+        - Otherwise return 404.
+        The response body is a "comments" collection object with `type`, `id`, `size`, and `items`.
+        """
+        print("ENTER EntryLikeAPIView.get", flush=True)
+  
+        if not entry_serial:
+            return Response({'detail': 'entry id required'}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
-            page_size = int(request.query_params.get('size', 5))
-        except Exception:
-            page_size = 5
-        try:
-            page_number = int(request.query_params.get('page', 1))
-        except Exception:
-            page_number = 1
+            entry = Entry.objects.get(id__contains=entry_serial)
+        except Entry.DoesNotExist:
+            return Response({'detail': 'entry not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        paginator = Paginator(likes_qs, page_size)
-        page_obj = paginator.get_page(page_number)
+        # Make sure the author of the entry is the author specifed if author serial is provided
+        if author_serial and author_serial not in entry.author.id:
+            return Response({'detail': 'entry not found by specified author'}, status=status.HTTP_404_NOT_FOUND)
 
-        serialized = LikeSerializer(page_obj.object_list, many=True).data
+        # return paginated local comments
+        qs = Like.objects.filter(entry_id=entry.id).order_by('-published')
+        page_obj = paginate(request, qs)
+        items = LikeSerializer(page_obj.object_list, many=True).data
 
-        host = request.build_absolute_uri('/').rstrip('/')
-        collection_id = f"{host}/api/Entry/{entry_id}/likes/"
-
-        # Match deepskyblue spec format
         collection = {
-            "type": "likes",
-            "object": entry_id,  # Add object field to match spec
-            "count": paginator.count,
-            "src": serialized,
+            "type": "comments",
+            "id": request.build_absolute_uri(),
+            "size": qs.count(),
+            "items": items,
         }
 
-        # Return the collection
+        # add simple pagination links if applicable
+        if page_obj.has_next():
+            next_page = page_obj.next_page_number()
+            collection['next'] = f"{request.build_absolute_uri('?page=' + str(next_page))}"
+        if page_obj.has_previous():
+            prev_page = page_obj.previous_page_number()
+            collection['prev'] = f"{request.build_absolute_uri('?page=' + str(prev_page))}"
+
         return Response(collection, status=status.HTTP_200_OK)
 
-    
     @swagger_auto_schema(
         operation_summary="Liking an entry",
         operation_description="User likes an entry and if the host is remote, send it to the remote inbox." \

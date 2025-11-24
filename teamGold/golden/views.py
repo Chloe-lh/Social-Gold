@@ -1472,12 +1472,7 @@ def fetch_or_create_author_by_id(author_id: str):
     Fetch a local or remote author.
     Remote authors are fetched directly from <HOST>/api/authors/<UUID>.
     """
-
-    print("\n[DEBUG] fetch_or_create_author_by_id()")
-    print(" → Raw author_id:", author_id)
-    print(" → is_local():", is_local(author_id))
-
-    def fetch_or_create_author_by_id(author_id: str):
+    
     print("[DEBUG] fetch_or_create_author_by_id() → Raw author_id:", author_id)
 
     # Normalize author_id: strip trailing slashes
@@ -1514,7 +1509,7 @@ def fetch_or_create_author_by_id(author_id: str):
         github=data.get("github", ""),
         profileImage=data.get("profileImage", ""),
         type="author",
-    )
+)
 
 # * ============================================================
 # * Helper View Functions

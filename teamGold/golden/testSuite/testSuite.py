@@ -297,7 +297,6 @@ class CreateUnlikeActivityTestCase(TestCase):
         self.assertEqual(obj.object, self.liked_object.object)
         self.assertEqual(obj.author.id, self.liked_object.author.id)
 
-
 # ============================================================
 # Author Related Tests
 # ============================================================

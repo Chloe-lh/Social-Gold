@@ -886,7 +886,7 @@ def process_inbox(author: Author):
                 Follow.objects.filter(actor=target, object=initiator.id).delete()
 
         # CREATE ENTRY
-        elif activity_type == "entry": #and isinstance(obj, dict) and obj.get("type") == "post":
+        elif activity_type == "entry" or activity_type == "post":
             entry_id = activity.get("id")
 
             entry, created = Entry.objects.update_or_create(
@@ -1110,6 +1110,6 @@ def process_inbox(author: Author):
 
         # Mark as processed after successful processing
         # Processed variable is only set for ACCEPT, so check activity_type for others
-        if activity_type in ["follow", "accept", "reject", "unlike", "undo", "removefriend", "create", "update", "delete", "comment", "like", "entry"]:
+        if activity_type in ["post", "follow", "accept", "reject", "unlike", "undo", "removefriend", "create", "update", "delete", "comment", "like", "entry"]:
             item.processed = True
             item.save()

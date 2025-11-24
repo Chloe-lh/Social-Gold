@@ -1,7 +1,7 @@
 import requests
 from django.utils import timezone
 from golden.models import Entry, EntryImage, Author, Comment, Like, Follow, Node, Inbox
-from golden.services import get_or_create_foreign_author, normalize_fqid, generate_comment_fqid, fetch_and_sync_remote_entry
+from golden.services import get_or_create_foreign_author, normalize_fqid, generate_comment_fqid, fetch_and_sync_remote_entry, is_local
 from urllib.parse import urljoin
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
@@ -995,20 +995,64 @@ def process_inbox(author: Author):
 
         # LIKE
         elif activity_type == "like":
+            # Get author information
+            author_data = activity.get("author", {})
+            remote_id = author_data.get("id")
+            remote_host = author_data.get("host")
+            remote_username = author_data.get("displayName")
+
+            # Get or create the Author object (local or remote)
+            if is_local(remote_id):
+                author_obj = Author.objects.filter(id=remote_id).first()
+            else:
+                author_obj = get_or_create_foreign_author(remote_id, remote_host, remote_username)
+
+            if not author_obj:
+                print(f"[DEBUG] Author not found or could not be created: {remote_id}")
+                return
+
+            # Object ID being liked
             obj_id = activity.get("object")
 
-            Like.objects.filter(author=actor, object=obj_id).delete()
-            
-            like = Like.objects.create(
-                id=activity.get("id"),
-                author=actor,
-                object=obj_id,
-                published=safe_parse_datetime(activity.get("published")) or timezone.now()
-            )
-            
+            # Check if it exists as Entry or Comment
             entry = Entry.objects.filter(id=obj_id).first()
-            if entry:
-                entry.likes.add(actor)
+            comment = Comment.objects.filter(id=obj_id).first()
+
+            if not entry and not comment:
+                print(f"[DEBUG] No Entry or Comment found for object: {obj_id}")
+                return
+
+            like_id = activity.get("id")
+            existing_like = Like.objects.filter(id=like_id).first()
+
+            if existing_like:
+                # Like exists → remove it
+                existing_like.delete()
+                if entry:
+                    entry.likes.remove(author_obj)
+                if comment:
+                    comment.likes.remove(author_obj)
+                print(f"[DEBUG] Existing like removed for object={obj_id} by author={author_obj.username}")
+            else:
+                # Like does not exist → create new Like
+                like = Like.objects.create(
+                    id=activity.get("id"),
+                    author=author_obj,
+                    object=obj_id,  # FQID string, NOT Entry/Comment object
+                    published=safe_parse_datetime(activity.get("published")) or timezone.now()
+                )
+                if entry:
+                    entry.likes.add(author_obj)
+                if comment:
+                    comment.likes.add(author_obj)
+                print(f"[DEBUG] New like created for object={obj_id} by author={author_obj.username}")
+
+
+
+
+
+
+
 
         # UNLIKE
         elif activity_type == "unlike":

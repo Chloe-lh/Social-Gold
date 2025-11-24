@@ -174,7 +174,7 @@ def create_follow_activity(author, target):
             "host":target.host,
             "displayName":target.username,
             "github": target.github,
-            "profileImage":target.profileImage,url if target.profileImage else None,
+            "profileImage":target.profileImage.url if target.profileImage else None,
             # URL of the user's HTML profile page
             "web": target.web
         },

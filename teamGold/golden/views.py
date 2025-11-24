@@ -1797,33 +1797,32 @@ def toggle_like(request):
             try:
                 comment_obj = Comment.objects.get(id__endswith=object_fqid)
             except Comment.DoesNotExist:
-                comment_obj = None
+                # if nothing exists, simply redirect back to stream
+                return redirect('stream')
 
-    target_id = (
-        entry_obj.id if entry_obj else (comment_obj.id if comment_obj else object_fqid)
-    )
+    target = entry_obj if entry_obj else comment_obj
 
     with transaction.atomic():
-        existing = Like.objects.filter(author=author, object=target_id).first()
+        existing = Like.objects.filter(author=author, object=target.id).first()
         if existing:
-            activity = create_unlike_activity(author, existing)
+            activity = create_unlike_activity(author, target)
             existing.delete()
             if entry_obj:
                 entry_obj.likes.remove(author)
         else:
-            if not Like.objects.filter(author=author, object=target_id).exists():
+            if not Like.objects.filter(author=author, object=target.id).exists():
                 like_id = (
                     f"{settings.SITE_URL.rstrip('/')}/api/likes/{uuid.uuid4()}"
                 )
                 Like.objects.create(
                     id=like_id,
                     author=author,
-                    object=target_id,
+                    object=target.id,
                     published=dj_timezone.now(),
                 )
                 if entry_obj:
                     entry_obj.likes.add(author)
-            activity = create_like_activity(author, target_id)
+            activity = create_like_activity(author, target.id)
 
     distribute_activity(activity, actor=author)
     return redirect(request.META.get("HTTP_REFERER", "stream"))

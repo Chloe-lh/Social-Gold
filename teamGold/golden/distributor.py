@@ -1013,7 +1013,7 @@ def process_inbox(author: Author):
                 if entry:
                     entry.likes.remove(like_actor)    
 
-    
+        
         # COMMENT
         elif activity_type == "comment":
             comment_id = activity.get("id")  
@@ -1034,7 +1034,7 @@ def process_inbox(author: Author):
                     comment_author_id = author_data
             elif isinstance(activity, dict):
                 print(f"[DEBUG process_inbox] COMMENT: Processing comment activity with activity object = {activity}")
-                entry_id = activity.get("entry").get("entry")
+                entry_id = activity.get("entry").get("id")
                 print(f"[DEBUG process_inbox] COMMENT: Processing comment activity with activity object = {entry_id}")
                 comment_content = activity.get("entry").get("content", "")
                 comment_content_type = activity.get("entry").get("contentType", "text/plain")
@@ -1078,6 +1078,7 @@ def process_inbox(author: Author):
                         "published": safe_parse_datetime(activity.get("published")) or timezone.now()
                     }
                 )
+        
 
         # Mark as processed after successful processing
         # Processed variable is only set for ACCEPT, so check activity_type for others

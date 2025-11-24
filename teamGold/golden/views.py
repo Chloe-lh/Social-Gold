@@ -1477,28 +1477,34 @@ def fetch_or_create_author_by_id(author_id: str):
     print(" → Raw author_id:", author_id)
     print(" → is_local():", is_local(author_id))
 
-    # LOCAL AUTHOR CASE
-    if is_local(author_id):
-        return Author.objects.filter(id=author_id).first()
+    def fetch_or_create_author_by_id(author_id: str):
+    print("[DEBUG] fetch_or_create_author_by_id() → Raw author_id:", author_id)
 
-    # REMOTE AUTHOR CASE
+    # Normalize author_id: strip trailing slashes
+    author_id = author_id.rstrip('/')
+
+    # If author_id is a full URL
+    parsed = urlparse(author_id)
+    site_host = urlparse(settings.SITE_URL).netloc
+    
+    print(" → is_local():", is_local(author_id))
+
+    if parsed.netloc == site_host:
+        # Treat as local author
+        local_uuid = parsed.path.split('/api/authors/')[-1]
+        return Author.objects.filter(id=f"{settings.SITE_URL.rstrip('/')}/api/authors/{local_uuid}").first()
+
+    # Otherwise, remote author
     host, uuid = extract_host_and_uuid(author_id)
-
     if not host or not uuid:
         return None
 
-    # Build the correct API URL
-    url = f"{host.rstrip('/')}/api/authors/{uuid}/"
-
-    print("[DEBUG] host:", host)
-    print("[DEBUG] uuid:", uuid)
-    print("[DEBUG] final URL:", url)
-    
+    url = f"{host}/api/authors/{uuid}/"
+    print("[DEBUG] Fetching remote author from URL:", url)
     data = fetch_remote_author_data(url)
     if not data:
         return None
 
-    # Return a temporary Author object (not saved)
     return Author(
         id=data.get("id"),
         host=data.get("host"),

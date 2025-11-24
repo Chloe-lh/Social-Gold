@@ -1462,20 +1462,35 @@ def public_profile_view(request, author_id):
     Only shows basic author info (name, github, email, etc.) and list of their entries.
     Tabs and editing are removed.
     """
-    print("------------> author id: ",author_id)
-    # Get author
-    author = get_object_or_404(Author, id=author_id)
+    # Fetch author data from the API
+    try:
+        response = requests.get(author_id, timeout=5)
+        response.raise_for_status()
+        author_data = response.json()
+    except requests.RequestException:
+        raise Http404("Author not found via API")
 
-    # Convert description to HTML
-    author.description = markdown.markdown(author.description)
+    # Convert description to HTML if it exists
+    description = author_data.get("description", "")
+    description_html = markdown.markdown(description) if description else ""
 
-    # Get entries for this author
-    entries = Entry.objects.filter(author=author).order_by("-published")
+    # Try to fetch entries from the author's entries endpoint
+    entries = []
+    entries_url = f"{author_id.rstrip('/')}/entries"
+    try:
+        entries_resp = requests.get(entries_url, timeout=5)
+        entries_resp.raise_for_status()
+        entries_json = entries_resp.json()
+        entries = entries_json.get("items") or entries_json.get("entries") or []
+    except requests.RequestException:
+        # If the API fails, just leave entries empty
+        entries = []
 
+    # Pass data to template
     context = {
-        "author": author,
+        "author": author_data,
+        "description_html": description_html,
         "entries": entries,
-        # We can add sidebar info like GitHub, email, website
     }
 
     return render(request, "public_profile.html", context)

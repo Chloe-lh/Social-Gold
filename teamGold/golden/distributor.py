@@ -990,7 +990,7 @@ def process_inbox(author: Author):
             remote_username =activity.get("author").get("displayName")
             author_obj = get_or_create_foreign_author(remote_id,remote_host, remote_username)
             obj_id = activity.get("object")
-            existing_like = Like.objects.filter(author=activity.get("author").get("id"), object=object_id).first()
+            existing_like = Like.objects.filter(author=activity.get("author").get("id"), object=obj_id).first()
 
             if existing_like:
                 # A like exists → remove it

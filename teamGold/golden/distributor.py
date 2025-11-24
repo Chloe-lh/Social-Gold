@@ -689,7 +689,7 @@ def process_inbox(author: Author):
         activity_type = activity.get("type", "").lower()
         obj = activity.get("object")
 
-        actor_data = activity.get("actor")
+        actor_data = activity.get("actor") or activity.get("author")
         actor_id = None
         actor_username = None
         actor_host = None
@@ -881,10 +881,10 @@ def process_inbox(author: Author):
                 id=entry_id,
                 defaults={
                     "title": activity.get("title", ""),
-                    "description": "",
+                    "description": activity.get("description", ""),
                     "content": activity.get("content", ""),
                     "contentType": activity.get("contentType", "text/plain"),
-                    "author": actor or author,
+                    "author": actor,
                     "visibility": activity.get("visibility", "PUBLIC"),
                     "published": safe_parse_datetime(activity.get("published")) or timezone.now(),
                 }
@@ -1092,6 +1092,6 @@ def process_inbox(author: Author):
 
         # Mark as processed after successful processing
         # Processed variable is only set for ACCEPT, so check activity_type for others
-        if activity_type in ["follow", "accept", "reject", "unlike", "undo", "removefriend", "create", "update", "delete", "comment", "like"]:
+        if activity_type in ["follow", "accept", "reject", "unlike", "undo", "removefriend", "create", "update", "delete", "comment", "like", "entry"]:
             item.processed = True
             item.save()

@@ -703,7 +703,7 @@ def process_inbox(author: Author):
         # FOLLOW REQUEST
         if activity_type == "follow":
             follower = actor
-            target_id = normalize_fqid(obj)
+            target_id = normalize_fqid(obj.get("id"))
             
             print(f"[DEBUG process_inbox] FOLLOW REQUEST: Processing Follow activity")
             print(f"[DEBUG process_inbox] FOLLOW REQUEST: follower={follower.username if follower else 'None'} (id: {actor_id})")
@@ -861,18 +861,18 @@ def process_inbox(author: Author):
 
         # CREATE ENTRY
         elif activity_type == "entry" and isinstance(obj, dict) and obj.get("type") == "post":
-            entry_id = obj.get("id")
+            entry_id = activity.get("id")
 
             entry, created = Entry.objects.update_or_create(
                 id=entry_id,
                 defaults={
-                    "title": obj.get("title", ""),
+                    "title": activity.get("title", ""),
                     "description": "",
-                    "content": obj.get("content", ""),
-                    "contentType": obj.get("contentType", "text/plain"),
+                    "content": activity.get("content", ""),
+                    "contentType": activity.get("contentType", "text/plain"),
                     "author": actor or author,
-                    "visibility": obj.get("visibility", "PUBLIC"),
-                    "published": safe_parse_datetime(obj.get("published")) or timezone.now(),
+                    "visibility": activity.get("visibility", "PUBLIC"),
+                    "published": safe_parse_datetime(activity.get("published")) or timezone.now(),
                 }
             )
             '''   
@@ -921,8 +921,8 @@ def process_inbox(author: Author):
             comment_content_type = None
             comment_author_id = None
             
-            if isinstance(obj, str):
-                entry_id = obj
+            if isinstance(activity.get("entry"), str):
+                entry_id = activity.get("entry")
                 comment_content = activity.get("comment", "")
                 comment_content_type = activity.get("contentType", "text/plain")
                 author_data = activity.get("author")
@@ -930,13 +930,13 @@ def process_inbox(author: Author):
                     comment_author_id = author_data.get("id")
                 elif isinstance(author_data, str):
                     comment_author_id = author_data
-            elif isinstance(obj, dict):
-                entry_id = obj.get("entry")
-                comment_content = obj.get("content", "")
-                comment_content_type = obj.get("contentType", "text/plain")
-                comment_author_id = obj.get("author")
+            elif isinstance(activity, dict):
+                entry_id = activity.get("entry").get("entry")
+                comment_content = activity.get("entry").get("content", "")
+                comment_content_type = activity.get("entry").get("contentType", "text/plain")
+                comment_author_id = activity.get("entry").get("author")
                 if not comment_id:
-                    comment_id = obj.get("id")
+                    comment_id = activity.get("entry").get("id")
             
             if not entry_id:
                 return

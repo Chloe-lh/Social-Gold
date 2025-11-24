@@ -988,10 +988,10 @@ def process_inbox(author: Author):
             obj_id = activity.get("object")
 
             Like.objects.filter(author=actor, object=obj_id).delete()
-            
+            author_obj = Author.objects.filter(author = activity.get("author"))
             like = Like.objects.create(
                 id=activity.get("id"),
-                author=activity.get("author"),
+                author=author_obj,
                 object=obj_id,
                 published=safe_parse_datetime(activity.get("published")) or timezone.now()
             )

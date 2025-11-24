@@ -1431,7 +1431,7 @@ def public_profile_view(request, author_id):
 
     author = None
     entries = []
-
+    print("------------------>author_id: ",author_id)
     # Try to fetch from local DB first
     try:
         author = Author.objects.get(id=author_id)
@@ -1443,9 +1443,7 @@ def public_profile_view(request, author_id):
         # If not local, try to fetch from remote nodes
         nodes = Node.objects.filter(is_active=True)
         for node in nodes:
-            node_base = node.id.rstrip('/')
-            author_url = f"{node_base}/api/authors/{author_id}"
-            remote_author = fetch_remote_author(author_url)
+            remote_author = fetch_remote_author(author_id)
             if remote_author:
                 author = remote_author
                 # Optionally fetch public entries from remote

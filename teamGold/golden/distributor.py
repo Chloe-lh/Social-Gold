@@ -403,6 +403,7 @@ def distribute_activity(activity: dict, actor: Author):
                 friends = get_friends(entry.author)
                 recipients |= set(friends)
                 print(f"[DEBUG distribute_activity] COMMENT: Adding {len(friends)} friends (FRIENDS)")
+                print(f"[DEBUG distribute_activity] COMMENT: Found {len(recipients)} total recipients") 
             
             print(f"[DEBUG distribute_activity] COMMENT: Sending to {len(recipients)} recipients")
             for r in recipients:

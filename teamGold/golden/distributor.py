@@ -580,7 +580,7 @@ def distribute_activity(activity: dict, actor: Author):
 
     # FOLLOW
     if type_lower == "follow":
-        target_id = obj
+        target_id = obj.id
         print(f"[DEBUG distribute_activity] FOLLOW: Processing follow activity")
         print(f"[DEBUG distribute_activity] FOLLOW: actor={actor.username} (id={actor.id})")
         print(f"[DEBUG distribute_activity] FOLLOW: target_id (raw)={target_id}")

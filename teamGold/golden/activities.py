@@ -188,7 +188,7 @@ def create_follow_activity(author, target):
         },
     }
     
-    print(f"[DEBUG create_follow_activity] Activity created: id={activity_id}, type={activity['type']}, object={activity['object']}")
+    print(f"[DEBUG create_follow_activity] Activity created: id={activity_id}, type={activity['type']}, ")
     
     return activity
 

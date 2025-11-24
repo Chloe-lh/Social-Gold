@@ -985,45 +985,58 @@ def process_inbox(author: Author):
 
         # LIKE
         elif activity_type == "like":
-            id = activity.get("author").get("id")
-            remote_host = activity.get("author").get("host")
-            remote_username = activity.get("author").get("displayName")
-            author_obj = None
-            if is_local(id):
-                author_obj = Author.objects.filter(id=id).first()
-            else:
-                author_obj = get_or_create_foreign_author(id, remote_host, remote_username)
+            # Get author information
+            author_data = activity.get("author", {})
+            remote_id = author_data.get("id")
+            remote_host = author_data.get("host")
+            remote_username = author_data.get("displayName")
 
+            # Get or create the Author object (local or remote)
+            if is_local(remote_id):
+                author_obj = Author.objects.filter(id=remote_id).first()
+            else:
+                author_obj = get_or_create_foreign_author(remote_id, remote_host, remote_username)
+
+            if not author_obj:
+                print(f"[DEBUG] Author not found or could not be created: {remote_id}")
+                return
+
+            # Object ID being liked
             obj_id = activity.get("object")
 
+            # Check if it exists as Entry or Comment
             entry = Entry.objects.filter(id=obj_id).first()
+            comment = Comment.objects.filter(id=obj_id).first()
 
-            if not entry:
-                print(f"[DEBUG] Entry not found: {obj_id}")
-                return  # cannot like an entry that doesn't exist
-            comment = Comment.objects.filter(id = obj_id).first()
+            if not entry and not comment:
+                print(f"[DEBUG] No Entry or Comment found for object: {obj_id}")
+                return
 
-            if not comment:
-                comment= None
             # Check if Like already exists
             existing_like = Like.objects.filter(author=author_obj, object=obj_id).first()
 
             if existing_like:
-                # Remove existing like
+                # Like exists → remove it
                 existing_like.delete()
                 if entry:
                     entry.likes.remove(author_obj)
+                if comment:
+                    comment.likes.remove(author_obj)
                 print(f"[DEBUG] Existing like removed for object={obj_id} by author={author_obj.username}")
             else:
-                # Create new like
+                # Like does not exist → create new Like
                 like = Like.objects.create(
                     id=activity.get("id"),
                     author=author_obj,
-                    object= entry.id or comment.id,
+                    object=obj_id,  # FQID string, NOT Entry/Comment object
                     published=safe_parse_datetime(activity.get("published")) or timezone.now()
                 )
-                entry.likes.add(author_obj)
+                if entry:
+                    entry.likes.add(author_obj)
+                if comment:
+                    comment.likes.add(author_obj)
                 print(f"[DEBUG] New like created for object={obj_id} by author={author_obj.username}")
+
 
 
 

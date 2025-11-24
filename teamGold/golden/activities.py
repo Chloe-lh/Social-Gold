@@ -278,27 +278,6 @@ def create_unlike_activity(author, liked_object):
     
     return activity
 
-def create_delete_comment_activity(author, comment):
-    """
-    Create a delete comment activity.
-    """
-    activity_id = make_fqid(author, "comments")
-
-    activity = {
-        "type": "Delete",
-        "id": activity_id,
-        "actor": str(author.id),
-        "published": timezone.now().isoformat(),
-        "summary": f"{author.username} deleted a comment",
-        "object": {
-            "type": "comment",
-            "id": str(comment.id)
-        }
-    }
-    
-    return activity
-
-
 
 '''
 HELPER FUNCTIONS

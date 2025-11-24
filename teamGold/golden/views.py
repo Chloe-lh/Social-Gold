@@ -51,7 +51,6 @@ from golden.activities import ( # Kenneth: If you're adding new activities, plea
     create_update_entry_activity,
     create_unlike_activity,
     create_profile_update_activity,
-    create_delete_comment_activity,
 )
 
 # IMPORT Miscellaneous
@@ -1766,26 +1765,6 @@ def add_comment(request):
 
     # Fallback for non-POST: just go back to stream
     return redirect("stream")
-
-@login_required
-def delete_comment(request, comment_id):
-    author = Author.from_user(request.user)
-    comment = get_object_or_404(Comment, id=comment_id)
-
-    if comment.author != author:
-        return HttpResponseForbidden("You don't have permission to delete this comment")
-
-    if request.method == "POST":
-        # Option A: let inbox processing handle deletion on this node too.
-        activity = create_delete_comment_activity(author, comment)
-        distribute_activity(activity, actor=author)
-        comment.delete()
-        # Redirect back to the entry
-        entry = comment.entry
-        return redirect('entry_detail', entry_uuid=entry.get_uuid())
-
-    # Refuses get delete
-    return HttpResponseBadRequest("Invalid request method")
 
 @login_required
 def toggle_like(request):

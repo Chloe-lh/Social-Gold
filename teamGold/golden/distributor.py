@@ -66,7 +66,8 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
     print(f"[DEBUG send_activity_to_inbox] Called: recipient={recipient.username} (id={recipient.id}, host={recipient.host})")
     print(f"[DEBUG send_activity_to_inbox] Activity type: {activity.get('type')}")
     print(f"[DEBUG send_activity_to_inbox] SITE_URL: {settings.SITE_URL}")
-    
+    print("[DEBUG] type(recipient.host) =", type(recipient.host))
+    print("[DEBUG] recipient.host =", recipient.host)
     if recipient.host.rstrip("/") == settings.SITE_URL.rstrip("/"):
         # Local delivery to the inbox
         print(f"[DEBUG send_activity_to_inbox] LOCAL delivery: Creating inbox item for {recipient.username}")
@@ -108,15 +109,33 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         
         # Ensure all datetime values are strings before JSON serialization
         def ensure_datetime_strings(obj):
-            """Recursively convert datetime objects to ISO format strings"""
+            """
+            Recursively convert datetime objects to ISO strings
+            and ensure all nested values are JSON-serializable.
+            """
+            # Handle datetime
             if isinstance(obj, dt):
                 return obj.isoformat()
-            elif isinstance(obj, dict):
+
+            # Handle primitives
+            if isinstance(obj, (str, int, float, bool)) or obj is None:
+                return obj
+
+            # Handle dicts
+            if isinstance(obj, dict):
                 return {k: ensure_datetime_strings(v) for k, v in obj.items()}
-            elif isinstance(obj, list):
+
+            # Handle lists/tuples
+            if isinstance(obj, (list, tuple)):
                 return [ensure_datetime_strings(item) for item in obj]
-            return obj
-        
+
+            # Handle model objects or other custom objects
+            # Use string representation to avoid recursion issues
+            try:
+                return str(obj)
+            except Exception:
+                return repr(obj)
+            
         activity_clean = ensure_datetime_strings(activity)
         
         response = requests.post(

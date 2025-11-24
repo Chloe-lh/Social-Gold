@@ -46,6 +46,13 @@
                         <option value="FRIENDS" {% if editing_entry.visibility == "FRIENDS" %}selected{% endif %}>Friends-Only</option>
                     </select><br><br>
 
+                    <!-- markdown -->
+                    <!-- TODO: add label here -->
+                    <select id="markdown" name="markdown">
+                        <option value="Plain" selected>Plain Text</option>
+                        <option value="Markdown">Markdown</option>
+                    </select><br><br>
+
                     <button type="submit" name="entry_update" value="{{ editing_entry.id }}">Save Changes</button>
                     <a href="{% url 'entry_detail' editing_entry.get_uuid %}" class="btn">Cancel</a>
                 {% else %}
@@ -61,6 +68,13 @@
                         <option value="PUBLIC" selected>Public</option>
                         <option value="UNLISTED">Unlisted</option>
                         <option value="FRIENDS">Friends-Only</option>
+                    </select><br><br>
+                    
+                    <!-- markdown -->
+                    <!-- TODO: add label here -->
+                    <select id="markdown" name="markdown">
+                        <option value="text/plain" selected>Plain Text</option>
+                        <option value="text/markdown">Markdown</option>
                     </select><br><br>
                     
                     <button type="submit" name="entry_post">Post</button>

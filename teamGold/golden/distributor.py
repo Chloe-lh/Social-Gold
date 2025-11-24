@@ -991,7 +991,7 @@ def process_inbox(author: Author):
             
             like = Like.objects.create(
                 id=activity.get("id"),
-                author=activity.author,
+                author=activity.get("author"),
                 object=obj_id,
                 published=safe_parse_datetime(activity.get("published")) or timezone.now()
             )

@@ -129,8 +129,8 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         )
         print(f"[DEBUG send_activity_to_inbox] Response status: {response.status_code}")
         if response.status_code >= 400:
-            print(f"[DEBUG send_activity_to_inbox] ERROR: HTTP {response.status_code} - {response.text}")
-            raise Exception(f"Error {response.status_code}: {response.text}")
+            print(f"[WARN send_activity_to_inbox] Remote node returned error {response.status_code}: {response.text}")
+            return False  # Do NOT crash — federated nodes commonly fail
         print(f"[DEBUG send_activity_to_inbox] Successfully sent activity")
     except requests.exceptions.RequestException as e:
         print(f"[DEBUG send_activity_to_inbox] EXCEPTION: {e}")

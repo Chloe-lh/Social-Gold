@@ -1395,11 +1395,41 @@ def profile_view(request):
     friends_qs, friend_ids = get_friends_context(author)
     # Convert friends queryset to list for template checks
     friends_list = list(friends_qs)
+
+    followers_qs = Author.objects.filter(following=author)
+    following_qs = Author.objects.filter(followers_set=author)
+    following_ids = set(following_qs.values_list("id", flat=True))
+    friends = followers_qs.intersection(following_qs).values_list("id", flat=True)
     
     for a in authors:
+
         # Normalize author ID for consistent Follow object matching (for both local and remote)
         a_id_normalized = normalize_fqid(str(a["id"]))
         a_id_str = str(a["id"]).rstrip('/')
+
+        a_id = a.get("id")
+
+        # Normalize string vs FQID vs plain UUID
+        a_id_normalized = normalize_fqid(a_id)
+        a_id_str = str(a_id)
+
+        # Is the current user following this author?
+        a["is_following"] = (
+            str(a_id_normalized) in following_ids or
+            str(a_id_str) in following_ids
+        )
+
+        # Are they friends?
+        a["is_friend"] = (
+            str(a_id_normalized) in friend_ids or
+            str(a_id_str) in friend_ids
+        )
+
+        """
+        authors = []
+        for a in queryset_of_authors:
+            a.is_following = a.id in following_ids
+            authors.append(a)
         
         if a.get("is_local"):
             # Local author, checking if follow relationship is stored using normalized ID
@@ -1438,6 +1468,7 @@ def profile_view(request):
                 a["is_friend"] = reciprocal_follow is not None
             else:
                 a["is_friend"] = False
+            """
     
     print(f"[SEARCH DEBUG] Profile view - Query: '{query}', Results: {len(authors)}")
     

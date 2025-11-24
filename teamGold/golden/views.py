@@ -1483,9 +1483,6 @@ def fetch_or_create_author_by_id(author_id: str):
 
     # REMOTE AUTHOR CASE
     host, uuid = extract_host_and_uuid(author_id)
-    print("[DEBUG] host:", host)
-    print("[DEBUG] uuid:", uuid)
-    print("[DEBUG] final URL:", url)
 
     if not host or not uuid:
         return None
@@ -1493,6 +1490,10 @@ def fetch_or_create_author_by_id(author_id: str):
     # Build the correct API URL
     url = f"{host.rstrip('/')}/api/authors/{uuid}/"
 
+    print("[DEBUG] host:", host)
+    print("[DEBUG] uuid:", uuid)
+    print("[DEBUG] final URL:", url)
+    
     data = fetch_remote_author_data(url)
     if not data:
         return None

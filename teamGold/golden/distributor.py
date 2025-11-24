@@ -889,6 +889,7 @@ def process_inbox(author: Author):
                     "published": safe_parse_datetime(activity.get("published")) or timezone.now(),
                 }
             )
+            print(f"[DEBUG process_inbox] CREATE ENTRY: {entry}")
             '''   
         # UPDATE ENTRY
         elif activity_type == "update" and isinstance(obj, dict) and obj.get("type") == "post":

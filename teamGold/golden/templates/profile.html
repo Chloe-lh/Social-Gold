@@ -211,7 +211,7 @@
               <img src="{% static 'golden/icons/user-loading-icon.png' %}" alt="pending" title="Author needs to accept you silly."> 
             </button>
 
-          {% elif a.follow_state == "ACCEPTED" %}
+          {% elif a.is_following %}
             <button class="follow-btn" disabled>
               <img src="{% static 'golden/icons/user-following-icon.png' %}" alt="following" title="You follow this author">
             </button>

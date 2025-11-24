@@ -1290,9 +1290,10 @@ def profile_view(request):
         following_ids_normalized.append(normalize_fqid(str(f.object))) 
     
     # Try to find authors by both raw and normalized IDs
-    following = Author.objects.filter(
-        Q(id__in=following_ids) | Q(id__in=following_ids_normalized)
-    ).distinct()
+    #following = Author.objects.filter(
+        #Q(id__in=following_ids) | Q(id__in=following_ids_normalized)
+    #).distinct()
+    following = Author.objects.filter(followers_set=author)
     
     friends_qs = get_friends(author)
     
@@ -1377,11 +1378,41 @@ def profile_view(request):
     friends_qs, friend_ids = get_friends_context(author)
     # Convert friends queryset to list for template checks
     friends_list = list(friends_qs)
+
+    followers_qs = Author.objects.filter(following=author)
+    following_qs = Author.objects.filter(followers_set=author)
+    following_ids = set(following_qs.values_list("id", flat=True))
+    friends = followers_qs.intersection(following_qs).values_list("id", flat=True)
     
     for a in authors:
+
         # Normalize author ID for consistent Follow object matching (for both local and remote)
         a_id_normalized = normalize_fqid(str(a["id"]))
         a_id_str = str(a["id"]).rstrip('/')
+
+        a_id = a.get("id")
+
+        # Normalize string vs FQID vs plain UUID
+        a_id_normalized = normalize_fqid(a_id)
+        a_id_str = str(a_id)
+
+        # Is the current user following this author?
+        a["is_following"] = (
+            str(a_id_normalized) in following_ids or
+            str(a_id_str) in following_ids
+        )
+
+        # Are they friends?
+        a["is_friend"] = (
+            str(a_id_normalized) in friend_ids or
+            str(a_id_str) in friend_ids
+        )
+
+        """
+        authors = []
+        for a in queryset_of_authors:
+            a.is_following = a.id in following_ids
+            authors.append(a)
         
         if a.get("is_local"):
             # Local author, checking if follow relationship is stored using normalized ID
@@ -1420,6 +1451,7 @@ def profile_view(request):
                 a["is_friend"] = reciprocal_follow is not None
             else:
                 a["is_friend"] = False
+            """
     
     print(f"[SEARCH DEBUG] Profile view - Query: '{query}', Results: {len(authors)}")
     
@@ -1888,6 +1920,113 @@ def api_follow_action(request):
     distribute_activity(activity, actor=actor)
 
     return Response({"status": "Follow request sent.", "follow_id": follow.id}, status=201)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_accept_follow_action(request):
+    """Accept a follow request from another user. Works for both local and remote authors."""
+    follow_id = request.POST.get("follow_id")
+    print(f"[DEBUG api_accept_follow_action] Accept request: follow_id={follow_id}")
+    
+    actor = Author.from_user(request.user)
+    if not actor:
+        return Response({"error": "User not found"}, status=404)
+    
+    # Normalize actor ID for matching
+    actor_id_normalized = normalize_fqid(str(actor.id))
+    actor_id_str = str(actor.id).rstrip('/')
+    
+    # Find follow request - try both normalized and raw IDs
+    follow_request = Follow.objects.filter(
+        id=follow_id
+    ).filter(
+        Q(object=actor_id_normalized) | Q(object=actor_id_str) | Q(object=actor.id)
+    ).first()
+    
+    if not follow_request:
+        return Response({"error": "Follow request not found"}, status=404)
+
+    if follow_request.state != "REQUESTED":
+        return Response({"error": f"Invalid follow request state: {follow_request.state}"}, status=400)
+
+    print(f"[DEBUG api_accept_follow_action] Found follow request: actor={follow_request.actor.username}, object={follow_request.object}, state={follow_request.state}")
+
+    follow_request.state = "ACCEPTED"
+    follow_request.published = dj_timezone.now()
+    follow_request.save()
+
+    # Update following relationship
+    follower = follow_request.actor
+    target_id_normalized = normalize_fqid(str(actor.id))
+    
+    # Add to following ManyToMany (for local authors)
+    if actor not in follower.following.all():
+        follower.following.add(actor)
+        print(f"[DEBUG api_accept_follow_action] Added {actor.username} to {follower.username}'s following")
+
+    # Mark inbox item as processed if it exists
+    inbox_item = Inbox.objects.filter(author=actor, data__id=follow_id, processed=False).first()
+    if inbox_item:
+        inbox_item.processed = True
+        inbox_item.save()
+        print(f"[DEBUG api_accept_follow_action] Marked inbox item as processed")
+
+    #activity = create_accept_follow_activity(actor, follow_id)
+    #distribute_activity(activity, actor=actor)
+    
+    print(f"[DEBUG api_accept_follow_action] Successfully accepted follow request")
+
+    return Response({"status": "Follow request accepted."}, status=200)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def api_reject_follow_action(request):
+    """Reject a follow request from another user. Works for both local and remote authors."""
+    follow_id = request.POST.get("follow_id")
+    print(f"[DEBUG api_reject_follow_action] Reject request: follow_id={follow_id}")
+    
+    actor = Author.from_user(request.user)
+    if not actor:
+        return Response({"error": "User not found"}, status=404)
+    
+    # Normalize actor ID for matching
+    actor_id_normalized = normalize_fqid(str(actor.id))
+    actor_id_str = str(actor.id).rstrip('/')
+    
+    # Find follow request - try both normalized and raw IDs
+    follow_request = Follow.objects.filter(
+        id=follow_id
+    ).filter(
+        Q(object=actor_id_normalized) | Q(object=actor_id_str) | Q(object=actor.id)
+    ).first()
+    
+    if not follow_request:
+        return Response({"error": "Follow request not found"}, status=404)
+
+    if follow_request.state != "REQUESTED":
+        return Response({"error": f"Invalid follow request state: {follow_request.state}"}, status=400)
+
+    print(f"[DEBUG api_reject_follow_action] Found follow request: actor={follow_request.actor.username}, object={follow_request.object}, state={follow_request.state}")
+
+    follow_request.state = "REJECTED"
+    follow_request.published = dj_timezone.now()
+    follow_request.save()
+    
+    print(f"[DEBUG api_reject_follow_action] Updated follow request state to REJECTED")
+
+    # Mark inbox item as processed if it exists
+    inbox_item = Inbox.objects.filter(author=actor, data__id=follow_id, processed=False).first()
+    if inbox_item:
+        inbox_item.processed = True
+        inbox_item.save()
+        print(f"[DEBUG api_reject_follow_action] Marked inbox item as processed")
+
+    #activity = create_reject_follow_activity(actor, follow_request.actor.id)
+    #distribute_activity(activity, actor=actor)
+    
+    print(f"[DEBUG api_reject_follow_action] Successfully rejected follow request")
+
+    return Response({"status": "Follow request rejected."}, status=200)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])

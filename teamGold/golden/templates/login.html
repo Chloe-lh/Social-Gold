@@ -16,9 +16,6 @@
                 <h2>GOLDEN</h2>
             </header>
             
-            <!-- TODO: if user is cached, use the corresponding pfp -->
-            <img src="{% static 'golden/icons/profile-picture.png' %}"alt="Default Profile">
-
             <form name="login" method="POST" enctype="application/x-www-form-urlencoded">
                 {% csrf_token %}
                 <input name="username" aria-label="Username" placeholder="username" autocomplete="username">

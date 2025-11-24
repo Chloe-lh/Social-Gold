@@ -180,13 +180,11 @@ def stream_view(request):
     if not user_author:
         return redirect('login')
     process_inbox(user_author)
-    #following
-    #follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
-    #followed_author_fqids = [f.object for f in follows]
 
-    #use set intersection using the author's followings to get this part
-    
-    '''
+    follows = Follow.objects.filter(actor=user_author, state='ACCEPTED')
+    followed_author_fqids = [f.object for f in follows]
+
+    friends_fqids = []
     for f in follows:
         try:
             reciprocal = Follow.objects.get(
@@ -195,14 +193,8 @@ def stream_view(request):
                 state='ACCEPTED'
             )
             friends_fqids.append(f.object)
-        except Follow.DoesNotExist:     
+        except Follow.DoesNotExist:
             continue
-            '''
-    #people following the user
-    followers = Author.objects.filter(following=user_author)
-    #people the user is following
-    following = Author.objects.filter(followers_set=user_author)
-    friends = user_author.update_friends()
 
     remote_entries = []
     remote_nodes = Node.objects.filter(is_active=True)
@@ -213,43 +205,29 @@ def stream_view(request):
         for item in raw_items:
             author_data = item.get("author", {})
             remote_author_id = author_data.get("id")
-            #hm?
             entry_visibility = item.get("visibility", "PUBLIC").upper()
 
             if not remote_author_id:
                 continue
 
             # Check if user follows this author (for UNLISTED and FRIENDS entries)
-            if remote_author_id in following:
-             is_following = True
-            else:
-                is_following = False
-            '''
-            Follow.objects.filter(
+            is_following = Follow.objects.filter(
                 actor=user_author, 
                 object=remote_author_id, 
                 state="ACCEPTED"
             ).exists()
-            '''
+            
             # Check if user is friends with this author (for FRIENDS entries)
             # Friends = mutual follows (both follow each other)
-
             is_friend = False
-            if remote_author_id in friends:
-                is_friend =  True
-            else:
-                is_friend =  False
-
-            '''
             if is_following:
                 # Check if the remote author also follows the user (mutual follow)
-
                 is_friend = Follow.objects.filter(
                     actor__id=remote_author_id,
                     object=user_author.id,
                     state="ACCEPTED"
                 ).exists()
-            '''
+            
             should_fetch = False
             if entry_visibility == "PUBLIC":
                 should_fetch = True
@@ -268,8 +246,8 @@ def stream_view(request):
     local_entries = Entry.objects.filter(
         (Q(author=user_author) & ~Q(visibility="DELETED")) |
         Q(visibility='PUBLIC') |
-        Q(visibility='UNLISTED', author__id__in=following) |
-        Q(visibility='FRIENDS', author__id__in=friends)
+        Q(visibility='UNLISTED', author__id__in=followed_author_fqids) |
+        Q(visibility='FRIENDS', author__id__in=friends_fqids)
     )
     visible_remote = []
 
@@ -281,18 +259,11 @@ def stream_view(request):
 
         if e.visibility == "UNLISTED":
             # UNLISTED: only visible to followers
-
-            if e.author_id in following:
-                is_following = True
-            else:
-                is_following = False
-            '''
             is_following = Follow.objects.filter(
                 actor=user_author, 
                 object=e.author.id, 
                 state="ACCEPTED"
             ).exists()
-            '''
             if is_following:
                 visible_remote.append(e)
             continue
@@ -300,13 +271,6 @@ def stream_view(request):
         if e.visibility == "FRIENDS":
             # FRIENDS: only visible to mutual follows (friends)
             # Check both directions: user follows author AND author follows user
-            
-            friends = False
-            if e.author_id in friends:
-                friends =  True
-            else:
-                friends =  False
-            '''
             user_follows_author = Follow.objects.filter(
                 actor=user_author, 
                 object=e.author.id, 
@@ -320,7 +284,6 @@ def stream_view(request):
                     object=user_author.id,
                     state="ACCEPTED"
                 ).exists()
-            
                 # Also try with author ID as string if author is a remote Author object
                 if not author_follows_user:
                     author_follows_user = Follow.objects.filter(
@@ -328,9 +291,9 @@ def stream_view(request):
                         object=user_author.id,
                         state="ACCEPTED"
                     ).exists()
-            '''
-            #is_mutual = user_follows_author and author_follows_user
-            if friends:
+            
+            is_mutual = user_follows_author and author_follows_user
+            if is_mutual:
                 visible_remote.append(e)
             continue
 
@@ -353,8 +316,8 @@ def stream_view(request):
     context = {
         'entries': entries,
         'user_author': user_author,
-        'followed_author_fqids': following,
-        'friends_fqids': friends,
+        'followed_author_fqids': followed_author_fqids,
+        'friends_fqids': friends_fqids,
         'comment_form': CommentForm(),
         'remote_node': remote_nodes,
     }
@@ -553,21 +516,12 @@ def entry_detail_view(request, entry_uuid):
         return redirect('stream')
             
     viewer = Author.from_user(request.user)
-     #people following the user
-    followers = Author.objects.filter(following=viewer)
-    #people the user is following
-    following = Author.objects.filter(followers_set=viewer)
-    friends = viewer.update_friends()
     process_inbox(viewer)
 
     if entry.visibility == "FRIENDS":
         if viewer != entry.author:
             is_friend = False
             if viewer:
-                is_friend = False
-                if viewer.id in friends:
-                    is_friend = True
-                '''
                 viewer_follows_author = Follow.objects.filter(
                     actor=viewer,
                     object=entry.author.id,
@@ -580,33 +534,24 @@ def entry_detail_view(request, entry_uuid):
                         state="ACCEPTED"
                     ).exists()
                     is_friend = author_follows_viewer
-                '''
+            
             if not is_friend:
                 return HttpResponseForbidden("This post is visible to friends only.")
     elif entry.visibility == "UNLISTED":
         if viewer != entry.author:
-            is_follower = False
-            if viewer.id in following:
-                is_follower = True
-            '''
-            is_friend = False
             is_follower = Follow.objects.filter(
                 actor=viewer,
                 object=entry.author.id,
                 state="ACCEPTED"
             ).exists()
-            '''
             is_friend = False
-            if viewer.id in friends:
-                    is_friend = True
-            '''
             if viewer and is_follower:
                 is_friend = Follow.objects.filter(
                     actor=entry.author,
                     object=viewer.id,
                     state="ACCEPTED"
                 ).exists()
-            '''
+            
             if not (is_follower or is_friend):
                 return HttpResponseForbidden("You don't have permission to view this entry.")
     
@@ -1135,8 +1080,8 @@ def profile_view(request):
                     Q(object__iexact=target_id_normalized)
                 ).delete()
 
-                #activity = create_unfollow_activity(author, target_id)
-                #distribute_activity(activity, actor=author)
+                activity = create_unfollow_activity(author, target_id)
+                distribute_activity(activity, actor=author)
                 messages.success(request, f"Unfollowed {target.username}")
             except Author.DoesNotExist:
                 messages.error(request, "Author not found")
@@ -1228,8 +1173,8 @@ def profile_view(request):
                 Follow.objects.filter(actor=author, object=target.id).delete()
                 Follow.objects.filter(actor=target, object=author.id).delete()
 
-                #activity = create_unfriend_activity(author, target_id)
-                #distribute_activity(activity, actor=author)
+                activity = create_unfriend_activity(author, target_id)
+                distribute_activity(activity, actor=author)
                 messages.success(request, f"Removed {target.username} as a friend")
             except Author.DoesNotExist:
                 messages.error(request, "Author not found")
@@ -1438,7 +1383,6 @@ def profile_view(request):
     
     print(f"[SEARCH DEBUG] Profile view - Query: '{query}', Results: {len(authors)}")
     
-    
     context = {
         "author": author,
         "entries": entries,
@@ -1462,34 +1406,50 @@ def public_profile_view(request, author_id):
     Only shows basic author info (name, github, email, etc.) and list of their entries.
     Tabs and editing are removed.
     """
-    # Fetch author data from the API
-    try:
-        response = requests.get(author_id, timeout=5)
-        response.raise_for_status()
-        author_data = response.json()
-    except requests.RequestException:
-        raise Http404("Author not found via API")
-
-    # Convert description to HTML if it exists
-    description = author_data.get("description", "")
-    description_html = markdown.markdown(description) if description else ""
-
-    # Try to fetch entries from the author's entries endpoint
+    print("------------> author",author_id)
+    author_data = None
     entries = []
-    entries_url = f"{author_id.rstrip('/')}/entries"
-    try:
-        entries_resp = requests.get(entries_url, timeout=5)
-        entries_resp.raise_for_status()
-        entries_json = entries_resp.json()
-        entries = entries_json.get("items") or entries_json.get("entries") or []
-    except requests.RequestException:
-        # If the API fails, just leave entries empty
-        entries = []
 
-    # Pass data to template
+    # Try to get author from local DB
+    try:
+        author = Author.objects.get(id=author_id)
+        author.description = markdown.markdown(author.description)
+        entries = Entry.objects.filter(author=author).order_by("-published")
+        author_data = {
+            "type": "author",
+            "id": f"{request.scheme}://{request.get_host()}/api/authors/{author.uuid}",
+            "host": f"{request.scheme}://{request.get_host()}",
+            "username": author.username,
+            "github": author.github,
+            "profileImage": author.profileImage.url if author.profileImage else None,
+            "uuid": author.uuid,
+            "description": author.description,
+            "url": f"{request.scheme}://{request.get_host()}/api/authors/{author.uuid}"
+        }
+    except Author.DoesNotExist:
+        # If not local, try fetching from remote nodes
+        for node_url in REMOTE_NODES:
+            try:
+                api_url = f"{node_url}/api/authors/{author_id}"
+                resp = requests.get(api_url, timeout=5)
+                resp.raise_for_status()
+                author_data = resp.json()
+                
+                # Try to get entries for this remote author
+                entries_resp = requests.get(f"{api_url}/entries", timeout=5)
+                entries_resp.raise_for_status()
+                entries_json = entries_resp.json()
+                entries = entries_json.get("items") or entries_json.get("entries") or []
+                break  # stop after successfully fetching from one node
+            except requests.RequestException:
+                continue
+
+        if author_data is None:
+            raise Http404("Author not found locally or on any remote node")
+
+    # Render template
     context = {
         "author": author_data,
-        "description_html": description_html,
         "entries": entries,
     }
 

@@ -57,11 +57,15 @@ urlpatterns = [
 
     # Comments
     path("api/authors/<path:author_serial>/entries/<path:entry_serial>/comments/", EntryCommentAPIView.as_view(), name="author-entry-comments"),
-    path("api/authors/<path:author_serial>/entries/<path:entry_serial>/likes/", LikeAPIView.as_view(), name="author-entry-likes"),
     path("api/authors/<path:author_serial>/entries/<path:entry_serial>/images/", EntryImageAPIView.as_view(), name="author-entry-images"),
 
+    # Likes 
+    path("api/authors/<path:author_serial>/entries/<path:entry_serial>/likes/", LikeAPIView.as_view(), name="author-entry-likes"),
+    path("api/authors/<path:author_serial>/entries/<path:entry_serial>/comments/<path:comment_fqid>/likes", LikeAPIView.as_view(), name="author-entry-comment-likes"),
+    path("api/entries/<path:entry_fqid>/likes", LikeAPIView.as_view(), LikeAPIView.as_view(), name="entry-likes"),
+
     # Miscellaneous API Endpoints
-    path("api/authors/<path:author_id>/inbox/", views.inbox_view, name="author-inbox"),
+    path("api/authors/<path:author_serial>/inbox/", views.inbox_view, name="author-inbox"),
 
     path("friends/", views.friends, name="friends"),
     path('add_comment/', views.add_comment, name = "add_comment"),

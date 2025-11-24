@@ -1000,7 +1000,7 @@ def process_inbox(author: Author):
             
             entry = Entry.objects.filter(id=obj_id).first()
             if entry:
-                entry.likes.add(actor)
+                entry.likes.add(author_obj)
 
         # UNLIKE
         elif activity_type == "unlike":

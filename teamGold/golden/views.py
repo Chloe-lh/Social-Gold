@@ -341,17 +341,16 @@ def stream_view(request):
     entries = list(local_entries) + visible_remote
     entries.sort(key=lambda x: x.is_posted, reverse=True)
     
-    # Process inbox for all entry authors to get latest likes/comments from remote nodes
-    # This ensures we see up-to-date likes/comments for all entries in the stream
     entry_authors = {entry.author for entry in entries if entry.author}
+
     for entry_author in entry_authors:
-        # Refresh remote author usernames if they look like UUIDs
         if entry_author and not is_local(entry_author.id):
-            username_looks_like_uuid = len(entry_author.username) == 36 and '-' in entry_author.username and entry_author.username.count('-') == 4
-            if username_looks_like_uuid or entry_author.username.startswith("http") or entry_author.username == "goldenuser":
-                updated_author = get_or_create_foreign_author(entry_author.id)
-                if updated_author and updated_author.username != entry_author.username:
-                    entry_author.username = updated_author.username
+            
+            updated_author = get_or_create_foreign_author(entry_author.id)
+            
+            if updated_author and updated_author.username != entry_author.username:
+                entry_author.username = updated_author.username
+
         process_inbox(entry_author)
 
     context = {
@@ -2103,7 +2102,6 @@ def api_unfollow_action(request):
     print(f"[DEBUG api_unfollow_action] Successfully unfollowed {target.username}")
 
     return Response({"status": f"Unfollowed {target.username}."}, status=200)
-
 
 @api_view(['GET'])
 def list_inbox(request, author_id):

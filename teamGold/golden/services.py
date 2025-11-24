@@ -7,6 +7,7 @@ from datetime import timezone
 from requests.exceptions import RequestException
 from urllib.parse import urlparse
 from golden.models import Node, Follow, Author, Entry
+from django.core.paginator import Paginator
 
 def normalize_fqid(fqid: str) -> str:
     """Normalize FQID by removing trailing slashes and ensuring consistent format."""
@@ -123,6 +124,7 @@ def fqid_to_uuid(fqid: str) -> str:
     """Convert a full FQID to UUID, ensuring correct extraction."""
     fqid = fqid.rstrip("/")
     return fqid.split("/")[-1]
+
 
 '''
 pagination for listing comments and likes

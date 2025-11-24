@@ -2097,8 +2097,8 @@ def api_unfollow_action(request):
     
     print(f"[DEBUG api_unfollow_action] Deleted {deleted[0]} Follow objects")
 
-    activity = create_unfollow_activity(actor, target.id)
-    distribute_activity(activity, actor=actor)
+    #activity = create_unfollow_activity(actor, target.id)
+    #distribute_activity(activity, actor=actor)
     
     print(f"[DEBUG api_unfollow_action] Successfully unfollowed {target.username}")
 

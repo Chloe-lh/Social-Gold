@@ -6,6 +6,7 @@ from urllib.parse import urljoin
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
 from datetime import datetime as dt
+import uuid
 
 import uuid
 import json
@@ -685,7 +686,8 @@ def process_inbox(author: Author):
         # FOLLOW REQUEST
         if activity_type == "follow":
             follower = actor
-            target_id = normalize_fqid(obj)
+            target_id_raw = obj.get("id")
+            target_id = normalize_fqid(target_id_raw)
             
             print(f"[DEBUG process_inbox] FOLLOW REQUEST: Processing Follow activity")
             print(f"[DEBUG process_inbox] FOLLOW REQUEST: follower={follower.username if follower else 'None'} (id: {actor_id})")
@@ -709,8 +711,10 @@ def process_inbox(author: Author):
                 existing.delete()
                 print(f"[DEBUG process_inbox] FOLLOW REQUEST: Deleted {existing_count} existing follow requests")
 
+                follow_id = f"{actor.id.rstrip('/')}/{suffix}/{uuid.uuid4()}"
                 follow_obj = Follow.objects.create(
-                    id=activity.get("id"),
+                    #id=activity.get("id"),
+                    id = follow_id
                     actor=follower,
                     object=target_id,
                     state="REQUESTED",

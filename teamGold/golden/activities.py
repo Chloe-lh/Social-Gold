@@ -155,10 +155,29 @@ def create_follow_activity(author, target):
     activity = {
         "@context": "https://www.w3.org/ns/activitystreams",
         "type": "Follow",
-        "id": activity_id,
+        #"id": activity_id,
         "summary": f"{author.username} wants to follow you",
-        "actor": str(author.id),
-        "object": str(target.id),
+        "actor":{
+            "type":"author",
+            "id":author.id,
+            "host":author.host,
+            "displayName":author.username,
+            "github": author.github,
+            "profileImage":author.profileImage,url if author.profileImage else None,
+            # URL of the user's HTML profile page
+            "web": author.web
+        },
+        #"actor": str(author.id),
+        "object": {
+            "type":"author",
+            "id":target.id,
+            "host":target.host,
+            "displayName":target.username,
+            "github": target.github,
+            "profileImage":target.profileImage,url if target.profileImage else None,
+            # URL of the user's HTML profile page
+            "web": target.web
+        },
         "published": timezone.now().isoformat(),
         "state": "REQUESTED",
     }

@@ -68,6 +68,35 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
     print(f"[DEBUG send_activity_to_inbox] SITE_URL: {settings.SITE_URL}")
     print("[DEBUG] type(recipient.host) =", type(recipient.host))
     print("[DEBUG] recipient.host =", recipient.host)
+
+    def ensure_datetime_strings(obj):
+            """
+            Recursively convert datetime objects to ISO strings
+            and ensure all nested values are JSON-serializable.
+            """
+            # Handle datetime
+            if isinstance(obj, dt):
+                return obj.isoformat()
+
+            # Handle primitives
+            if isinstance(obj, (str, int, float, bool)) or obj is None:
+                return obj
+
+            # Handle dicts
+            if isinstance(obj, dict):
+                return {k: ensure_datetime_strings(v) for k, v in obj.items()}
+
+            # Handle lists/tuples
+            if isinstance(obj, (list, tuple)):
+                return [ensure_datetime_strings(item) for item in obj]
+
+            # Handle model objects or other custom objects
+            # Use string representation to avoid recursion issues
+            try:
+                return str(obj)
+            except Exception:
+                return repr(obj)
+            
     activity_clean = ensure_datetime_strings(activity)
     if recipient.host.rstrip("/") == settings.SITE_URL.rstrip("/"):
         # Local delivery to the inbox
@@ -109,33 +138,7 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         print(f"[DEBUG send_activity_to_inbox] Activity: {json.dumps(activity, indent=2, default=str)}")
         
         # Ensure all datetime values are strings before JSON serialization
-        def ensure_datetime_strings(obj):
-            """
-            Recursively convert datetime objects to ISO strings
-            and ensure all nested values are JSON-serializable.
-            """
-            # Handle datetime
-            if isinstance(obj, dt):
-                return obj.isoformat()
-
-            # Handle primitives
-            if isinstance(obj, (str, int, float, bool)) or obj is None:
-                return obj
-
-            # Handle dicts
-            if isinstance(obj, dict):
-                return {k: ensure_datetime_strings(v) for k, v in obj.items()}
-
-            # Handle lists/tuples
-            if isinstance(obj, (list, tuple)):
-                return [ensure_datetime_strings(item) for item in obj]
-
-            # Handle model objects or other custom objects
-            # Use string representation to avoid recursion issues
-            try:
-                return str(obj)
-            except Exception:
-                return repr(obj)
+        
             
         activity_clean = ensure_datetime_strings(activity)
         

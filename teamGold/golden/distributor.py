@@ -7,6 +7,8 @@ from django.conf import settings
 from django.utils.dateparse import parse_datetime
 from datetime import datetime as dt
 import uuid
+from golden.services import get_content_type_from_payload
+
 
 import uuid
 import json
@@ -321,7 +323,7 @@ def distribute_activity(activity: dict, actor: Author):
         return
     
     # UPDATE ENTRY
-    if type_lower == "update" or type_lower == "post":
+    if type_lower == "update":
         print(f"[DEBUG distribute_activity] UPDATE ENTRY: actor={actor.username} (id={actor.id})")
         print(f"[DEBUG distribute_activity] UPDATE ENTRY: entry_id={obj.get('id')}")
         print(f"[DEBUG distribute_activity] UPDATE ENTRY: title={obj.get('title')}")
@@ -356,7 +358,7 @@ def distribute_activity(activity: dict, actor: Author):
         return
     
     # DELETE ENTRY
-    if type_lower == "entry" or type_lower == "post":
+    if type_lower == "delete":
         recipients = set(get_followers(actor)) | set(get_friends(actor))
         for r in recipients:
             send_activity_to_inbox(r, activity)
@@ -894,7 +896,7 @@ def process_inbox(author: Author):
                     "title": activity.get("title", ""),
                     "description": activity.get("description", ""),
                     "content": activity.get("content", ""),
-                    "contentType": activity.get("contentType") or activity.get("content_type", "text/plain"),
+                    "contentType": get_content_type_from_payload(activity, default="text/plain"),
                     "author": actor,
                     "visibility": activity.get("visibility", "PUBLIC"),
                     "published": safe_parse_datetime(activity.get("published")) or timezone.now(),
@@ -914,7 +916,7 @@ def process_inbox(author: Author):
 
                 entry.title = obj.get("title", entry.title)
                 entry.content = content
-                entry.contentType = obj.get("contentType", entry.contentType)
+                entry.contentType = get_content_type_from_payload(obj, default=entry.contentType)
                 entry.visibility = obj.get("visibility", entry.visibility)
                 entry.save()
             else:

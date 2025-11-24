@@ -28,6 +28,12 @@ def is_local_to_node(author_id, node):
     # If author's ID starts with the node base URL → it is local to that node
     return a.startswith(n)
 
+def get_content_type_from_payload(data, default="text/plain"):
+    if not isinstance(data, dict):
+        return default
+    return data.get("contentType") or data.get("content_type") or default
+
+
 def get_or_create_author(fqid: str) -> Author:
     """
     Fetch or create a remote or local author.
@@ -139,57 +145,52 @@ def paginate(request, allowed):
     return page_obj
 
 def sync_remote_entry(remote_entry, node):
-    """
-    Sync a remote entry (fetched from a node) with the local database.
-
-    :param remote_entry: The entry data retrieved from the remote node.
-    :param node: The remote node where the entry was fetched.
-    :return: The local Entry object, or None if the sync failed.
-    """
     try:
         entry_id = remote_entry.get('id')
         title = remote_entry.get('title', '')
         raw_content = remote_entry.get('content', '')
         author_data = remote_entry.get('author', {})
         author_id = author_data.get('id')
-        
-        # Get or create the author - extract username from author_data if available
+
+        # Handle contentType + content_type
+        content_type = get_content_type_from_payload(remote_entry, default="text/plain")
+
+        # Fetch/prepare author
         author_username = None
         author_host = None
         if isinstance(author_data, dict):
             author_username = author_data.get("username") or author_data.get("displayName")
             author_host = author_data.get("host")
-        
+
         author = Author.objects.filter(id=author_id).first()
         if not author:
             author = get_or_create_foreign_author(author_id, host=author_host, username=author_username)
         elif author_username and author.username != author_username:
-            # Update username if we have new data
             author.username = author_username
             author.save(update_fields=['username'])
-        
+
         if not author:
             print(f"Error syncing remote entry: Could not get or create author {author_id}")
             return None
 
-        # Absolutize image URLs in content (convert relative to absolute)
+        # Absolutize images
         from .distributor import absolutize_remote_images
         base_url = node.id.rstrip('/')
         content = absolutize_remote_images(raw_content, base_url)
 
-        # Create or update the entry
+        # Save/update entry
         entry, created = Entry.objects.update_or_create(
             id=entry_id,
             defaults={
                 'author': author,
                 'title': title,
                 'content': content,
-                'contentType': remote_entry.get('contentType', 'text/plain'),
+                'contentType': content_type,
                 'visibility': remote_entry.get('visibility', 'PUBLIC'),
                 'published': remote_entry.get('published'),
             }
         )
-        
+
         return entry
     except Exception as e:
         print(f"Error syncing remote entry: {e}")

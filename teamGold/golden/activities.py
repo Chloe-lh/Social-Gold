@@ -3,6 +3,11 @@ from django.utils import timezone
 from django.conf import settings
 from urllib.parse import urlparse
 from golden.models import Follow
+from api.commentAPIView import EntryCommentAPIView
+import requests
+from django.conf import settings
+
+node_url = settings.SITE_URL
 
 def make_fqid(author, suffix: str):
     """
@@ -24,84 +29,93 @@ def is_local(author_id):
 def create_new_entry_activity(author, entry):
     activity_id = make_fqid(author, "posts")
 
+    commentList = get_comment_list_api(entry.id)
+    likeList = get_like_api(entry.id)
     activity = {
-        "type": "Create",
+        "type": "Entry",
+        "title" : entry.title,
         "id": activity_id,
-        "actor": str(author.id),
-        "published": timezone.now().isoformat(),
-        "summary": f"{author.username} created a new entry",
-        "object": {
-            "type": "post",
-            "id": str(entry.id),
-            "title": entry.title,
-            "content": entry.content,
-            "contentType": entry.contentType,
-            "visibility": entry.visibility,
-            "published": entry.published.isoformat(),
-            "author": str(author.id),
-            "attachments": [
-                {
-                    "type": "Image",
-                    "mediaType": "image/jpeg",
-                    "name": img.name,
-                    "url": img.image.url,
-                    "order": img.order,
-                }
-                for img in entry.images.all()
-            ]
-        }
+        "web" : entry.web,
+        "description" : entry.description,
+        "contentType": entry.contentType,
+        "content": entry.content,
+        "author":{"type":"author",
+            "id":author.id,
+            "host":author.host,
+            "displayName":author.username,
+            "web": author.web,
+            "github": author.github,
+            "profileImage":author.profileImage.url if author.profileImage else None
+            },
+
+        "comments": {},
+        "likes": {}, 
+        "published":entry.published,
+        "visibility": entry.visibility,
+
+
     }
     
     return activity
 
 def create_update_entry_activity(author, entry):
     activity_id = make_fqid(author, "posts")
-
+    commentList = get_comment_list_api(entry.id)
+    likeList = get_like_api(entry.id)
+   
+    
     activity = {
-        "type": "Update",
+        "type": "Entry",
+        "title" : entry.title,
         "id": activity_id,
-        "actor": str(author.id),
-        "published": timezone.now().isoformat(),
-        "summary": f"{author.username} updated their entry",
-        "object": {
-            "type": "post",
-            "id": str(entry.id),
-            "title": entry.title,
-            "content": entry.content,
-            "contentType": entry.contentType,
-            "visibility": entry.visibility,
-            "published": entry.published.isoformat(),
-            "author": str(author.id),
-            "attachments": [
-                {
-                    "type": "Image",
-                    "mediaType": "image/jpeg",
-                    "name": img.name,
-                    "url": img.image.url,
-                    "order": img.order,
-                }
-                for img in entry.images.all()
-            ]
-        }
+        "web" : entry.web,
+        "description" : entry.description,
+        "contentType": entry.contentType,
+        "content": entry.content,
+        "author":{"type":"author",
+            "id":author.id,
+            "host":author.host,
+            "displayName":author.username,
+            "web": author.web,
+            "github": author.github,
+            "profileImage":author.profileImage.url if author.profileImage else None
+            },
+
+        "comments":commentList,
+        "likes": likeList,
+        "published":entry.published,
+        "visibility": entry.visibility,
     }
     
     return activity
 
 def create_delete_entry_activity(author, entry):
     activity_id = make_fqid(author, "posts")
-
+    commentList = get_comment_list_api(entry.id)
+    likeList = get_like_api(entry.id)
+   
     activity = {
-        "type": "Delete",
+        "type": "Entry",
+        "title" : entry.title,
         "id": activity_id,
-        "actor": str(author.id),
-        "published": timezone.now().isoformat(),
-        "summary": f"{author.username} deleted an entry",
-        "object": {
-            "type": "post",
-            "id": str(entry.id),
-        },
-    }
+        "web" : entry.web,
+        "description" : entry.description,
+        "contentType": entry.contentType,
+        "content": entry.content,
+        "author":{"type":"author",
+            "id":author.id,
+            "host":author.host,
+            "displayName":author.username,
+            "web": author.web,
+            "github": author.github,
+            "profileImage":author.profileImage.url if author.profileImage else None
+            },
 
+        "comments":commentList,
+        "likes": likeList,
+        "published":entry.published,
+        "visibility": entry.visibility, # this is possibly where u can delete
+    }
     return activity
 
 def create_comment_activity(author, entry, comment):
@@ -337,3 +351,33 @@ def create_delete_comment_activity(author, comment):
     }
     
     return activity
+
+
+
+'''
+HELPER FUNCTIONS
+'''
+
+def get_comment_list_api(entry_id):
+    base = settings.SITE_URL.rstrip('/') + '/'
+    url = f"{base}api/Entry/{entry_id}/comments/"
+
+    try:
+        res = requests.get(url)
+        res.raise_for_status()
+        return res.json()
+    except Exception as e:
+        print("Error fetching comment list:", e)
+        return None
+    
+def get_like_api(like_id):
+    base = settings.SITE_URL.rstrip('/') + '/'
+    url = f"{base}api/Like/{like_id}/"
+
+    try:
+        res = requests.get(url)
+        res.raise_for_status()
+        return res.json()
+    except Exception as e:
+        print("Error fetching like:", e)
+        return None

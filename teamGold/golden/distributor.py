@@ -938,7 +938,7 @@ def process_inbox(author: Author):
             
             if isinstance(activity.get("entry"), str):
                 entry_id = activity.get("entry")
-                print(f"[DEBUG process_inbox] COMMENT: Processing comment activity with entry={entry}")
+                print(f"[DEBUG process_inbox] COMMENT: Processing comment activity with entry={activity.get("entry")}")
                 comment_content = activity.get("comment", "")
                 comment_content_type = activity.get("contentType", "text/plain")
                 author_data = activity.get("author")

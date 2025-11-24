@@ -418,7 +418,7 @@ def distribute_activity(activity: dict, actor: Author):
 
     # LIKE
     if type_lower == "like":
-        liked_fqid = activity.get("object") or activity.get("object_fqid") if isinstance(activity.get("object"), str) or isinstance(activity.get("object_fqid"), str) else None 
+        liked_fqid = activity.get("object") if isinstance(activity.get("object"), str) else None
         if not liked_fqid:
             print(f"[DEBUG distribute_activity] LIKE: No liked_fqid in activity object")
             return
@@ -1033,11 +1033,8 @@ def process_inbox(author: Author):
                 elif isinstance(author_data, str):
                     comment_author_id = author_data
             elif isinstance(activity, dict):
-                
                 print(f"[DEBUG process_inbox] COMMENT: Processing comment activity with activity object = {activity}")
-                
                 entry_id = activity.get("entry").get("entry") or activity.get("object")
-                
                 print(f"[DEBUG process_inbox] COMMENT: Processing comment activity with activity object = {entry_id}")
                 comment_content = activity.get("entry").get("content", "")
                 comment_content_type = activity.get("entry").get("contentType", "text/plain")

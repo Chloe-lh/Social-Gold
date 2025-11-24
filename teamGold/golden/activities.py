@@ -153,7 +153,7 @@ def create_follow_activity(author, target):
     print(f"[DEBUG create_follow_activity] Creating follow activity: actor={author.username} (id={author.id}), target={target.username} (id={target.id})")
     
     activity = {
-        "@context": "https://www.w3.org/ns/activitystreams",
+        #"@context": "https://www.w3.org/ns/activitystreams",
         "type": "Follow",
         #"id": activity_id,
         "summary": f"{author.username} wants to follow you",

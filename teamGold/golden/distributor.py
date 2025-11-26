@@ -202,6 +202,7 @@ def get_friends(author):
     #following = following_qs.values_list("id", flat=True)
 
     friends = followers_qs.intersection(following_qs)#.values_list("id", flat=True)
+    print(friends)
     """
     # Get followers (people who follow this author) - actor_id is ForeignKey to Author
     # Try both normalized and raw author.id
@@ -305,9 +306,7 @@ def distribute_activity(activity: dict, actor: Author):
 
     # CREATE ENTRY
     if type_lower == "entry" or type_lower == "post":
-        
         visibility = activity.get("visibility", "PUBLIC").upper()
-        
         
         if visibility == "PUBLIC" or visibility == "DELETED":
             recipients = set(get_followers(actor)) | set(get_friends(actor))
@@ -513,6 +512,7 @@ def distribute_activity(activity: dict, actor: Author):
         return
 
     # UNLIKE handle "undo" (ActivityPub) formats
+    '''
     if type_lower == "unlike":
         liked = obj.get("object") if isinstance(obj.get("object"), str) else None
         if not liked:
@@ -644,6 +644,7 @@ def distribute_activity(activity: dict, actor: Author):
         else:
             print(f"[DEBUG distribute_activity] FOLLOW: ERROR - Target is None, cannot send activity")
         return
+    '''
 
     """
     # ACCEPT or REJECT
@@ -961,9 +962,13 @@ def process_inbox(author: Author):
             # Object ID being liked
             obj_id = activity.get("object")
 
+            print(f"[DEBUG] Object_id: {obj_id}")
+            
             # Check if it exists as Entry or Comment
             entry = Entry.objects.filter(id=obj_id).first()
             comment = Comment.objects.filter(id=obj_id).first()
+
+            print(f"[DEBUG] Entry: {entry} and Comment: {comment}")
 
             if not entry and not comment:
                 print(f"[DEBUG] No Entry or Comment found for object: {obj_id}")
@@ -995,6 +1000,7 @@ def process_inbox(author: Author):
                 print(f"[DEBUG] New like created for object={obj_id} by author={author_obj.username}")
 
         # UNLIKE
+        '''
         elif activity_type == "unlike":
             obj_id = obj if isinstance(obj, str) else None
             actor_id = activity.get("actor")
@@ -1012,7 +1018,7 @@ def process_inbox(author: Author):
                 entry = Entry.objects.filter(id=obj_id).first()
                 if entry:
                     entry.likes.remove(like_actor)    
-
+        '''
         
         # COMMENT
         elif activity_type == "comment":

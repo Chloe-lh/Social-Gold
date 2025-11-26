@@ -530,7 +530,7 @@ def new_edit_entry_view(request):
             "editing_entry": None,
             "entries": Entry.objects.exclude(visibility="DELETED").order_by('-is_posted'),
         })
-        return render(request, "new_post.html", context)
+        return render(request, "new_entry.html", context)
 
     # FEATURE: ENTER EDIT MODE 
     if request.method == "POST" and "entry_edit" in request.POST:
@@ -550,11 +550,11 @@ def new_edit_entry_view(request):
             "form": form,
             "entries": Entry.objects.exclude(visibility="DELETED").order_by('-is_posted'),
         })
-        return render(request, "new_post.html", context)
+        return render(request, "new_entry.html", context)
 
    
     # DEFAULT: Show an Empty Form 
-    return render(request, "new_post.html", context)
+    return render(request, "new_entry.html", context)
 
 @login_required
 def entry_detail_view(request, entry_uuid):
@@ -1614,11 +1614,40 @@ def public_profile_view(request, author_id):
         local_fqid = f"{host}/api/authors/{local_uuid}"
         print("local fquid --------> ", local_fqid)
         author = get_object_or_404(Author, id=local_fqid)
+
+        # followers = people who follow THIS profile author
+        followers_qs = Author.objects.filter(following=author)
+
+        # following = people THIS profile author follows
+        following_qs = Author.objects.filter(followers_set=author)
+
+        # friends = mutual follows
+        friends_qs = followers_qs.intersection(following_qs)
+
+        followers_with_urls = [
+            {'author': f, 'url_id': fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')}
+            for f in followers_qs
+        ]
+
+        following_with_urls = [
+            {'author': f, 'url_id': fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')}
+            for f in following_qs
+        ]
+
+        friends_with_urls = [
+            {'author': f, 'url_id': fqid_to_uuid(f.id) if is_local(f.id) else f.id.rstrip('/')}
+            for f in friends_qs
+        ]
+
         entries = Entry.objects.filter(author=author, visibility="PUBLIC").order_by("-published")
+
         context = {
             "is_remote": False,
             "author": author,
-            "entries": entries
+            "entries": entries,
+            "followers_with_urls": followers_with_urls,
+            "following_with_urls": following_with_urls,
+            "friends_with_urls": friends_with_urls,
         }
 
     return render(request, "public_profile.html", context)
@@ -1626,14 +1655,6 @@ def public_profile_view(request, author_id):
 # * ============================================================
 # * Helper View Functions
 # * ============================================================
-
-@login_required
-def index(request):
-    objects = Author.objects.values()
-    print("USERS:")
-    for obj in objects:
-        print(obj['username']) 
-    return render(request, "index.html")
 
 def followers(request):
     actor = Author.from_user(request.user)
@@ -1656,7 +1677,7 @@ def followers(request):
     if query:
         followers_qs = followers_qs.filter(username__icontains=query)
 
-    return render(request, "search.html", {
+    return render(request, "components/search.html", {
             "authors": followers_qs,
             "query": query,
             "page_type": "followers",
@@ -1707,7 +1728,7 @@ def following(request):
     if query:
         following_qs = following_qs.filter(username__icontains=query)  # fixed
 
-    return render(request, "search.html", {
+    return render(request, "components/search.html", {
         "authors": following_qs,
         "query": query,
         "page_type": "following",
@@ -1783,7 +1804,7 @@ def follow_requests(request):
     
     print(f"[DEBUG follow_requests] Found {follow_requests_qs.count()} pending requests for {actor.username}")
 
-    return render(request, "follow_requests.html", {
+    return render(request, "components/follow_requests.html", {
         "follow_requests": follow_requests_qs
     })
 
@@ -1800,7 +1821,7 @@ def friends(request):
     if query:
         friends_qs = friends_qs.filter(username__icontains=query)
 
-    return render(request, "search.html", {
+    return render(request, "components/search.html", {
         "authors": friends_qs,
         "query": query,
         "page_type": "friends",

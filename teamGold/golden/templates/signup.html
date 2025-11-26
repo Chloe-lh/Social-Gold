@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
     <head>
+        {% load static %}
         <title>Golden - Login</title>
         <meta charset="UTF-8">
-        {% load static %}
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <link rel="stylesheet" href="{% static 'golden/css/global.css' %}">
         <link rel="stylesheet" href="{% static 'golden/css/login.css' %}">
@@ -11,7 +11,6 @@
 
     <body>
         <section>
-            <!-- signup -->
             <header>
                 <h2>
                     <span>Make Yours</span><br>GOLDEN
@@ -28,12 +27,13 @@
 
             <form name="signup" method="POST" enctype="application/x-www-form-urlencoded">
                 {% csrf_token %}
-                <input name="username" aria-label="Username" placeholder="username" autocomplete="username">
+                <input name="username" aria-label="username" placeholder="username" autocomplete="username">
+                <input name="email" aria-label="email" placeholder="email" autocomplete="email">
 
                 <p class="medium">Your password must be at least 8 characters long with at least 2 numbers</p>
-                <input name="password1" aria-label="Password" placeholder="password" autocomplete="new-password">
-                <input name="password2" aria-label="Password" placeholder="re-enter password" autocomplete="new-password">
-                <button type="submit">CREATE</button>
+                <input name="password1" aria-label="password" placeholder="password" autocomplete="new-password">
+                <input name="password2" aria-label="password" placeholder="re-enter password" autocomplete="new-password">
+                <button type="submit" aria-label="create account">CREATE</button>
                 <input type="hidden" name="next" value="{{ next }}">
             </form>
 

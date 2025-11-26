@@ -1,11 +1,3 @@
-/* ================================
-   GOLDEN UNIFIED CSS
-   Desktop (default) + Mobile (≤767px)
-================================ */
-
-/* ================================
-   DEFAULT DESKTOP STYLES
-================================ */
 body{
     display: flex;
     margin: 0;
@@ -83,7 +75,7 @@ div.main {
     top: 0;
 }
 
-#one-breadcrumb {
+#one-text {
     color: var(--contrast-background);
     font-family: 'Montserrat-Bold';
     font-size: 40px;
@@ -185,6 +177,7 @@ ul {
     width: 16px;
     height: 16px;
 }
+
 
 /* ================================
    MOBILE RESPONSIVE STYLES
@@ -599,5 +592,277 @@ ul {
     main.content {
         padding: 0.75rem !important;
         padding-top: 3.5rem !important;
+    }
+}
+
+/* new base code? */
+
+.topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 0 20px;
+  background-color: var(--off-background);
+  color: #f3b53b;
+  z-index: 1000;
+}
+
+.topbar-left,
+.topbar-center,
+.topbar-right {
+  display: flex;
+  align-items: center;
+}
+
+.topbar-center {
+  flex: 1;
+  justify-content: center;
+}
+
+.icon-btn {
+  border: none;
+  background: #f3b53b;
+  padding: 4px 8px;
+  margin-left: 8px;
+  cursor: pointer;
+}
+
+/* Prevent content from hiding under the fixed header */
+.page-content {
+  padding-top: 60px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: var(--background-colour);
+    color: var(--contrast-background);
+    min-height: 100vh;
+}
+
+.topbar {
+    background-color: var(--off-background);
+    padding: 15px 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.topbar-title {
+    font-family: 'Black Mango', Arial, sans-serif;
+    font-size: 36px;
+    font-weight: 900;
+    color: var(--primary-colour);
+    letter-spacing: 2px;
+}
+
+.top-nav {
+    display: flex;
+    gap: 15px;
+}
+
+.icon-btn {
+    width: 45px;
+    height: 45px;
+    background: var(--primary-colour);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+    text-decoration: none;
+}
+
+.icon-btn:hover {
+    transform: translateY(-2px);
+}
+
+.icon-btn img {
+    width: 24px;
+    height: 24px;
+}
+
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 30px 20px;
+}
+
+.feed-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 25px;
+}
+
+.feed-title {
+    font-family: 'Black Mango', Arial, sans-serif;
+    font-size: 32px;
+    font-weight: 900;
+    color: var(--primary-colour);
+    letter-spacing: 1px;
+}
+
+.globe-btn {
+    width: 36px;
+    height: 36px;
+    background: var(--contrast-colour-2);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    transition: all 0.3s;
+}
+
+.globe-btn.public {
+    background: var(--contrast-colour-2);
+}
+
+.globe-btn.friends {
+    background: var(--contrast-colour-1);
+}
+
+.globe-btn.private {
+    background: var(--contrast-colour-3);
+}
+
+.globe-btn:hover {
+    transform: scale(1.1);
+}
+
+.post-card {
+    background-color: var(--off-background);
+    border-radius: 12px;
+    padding: 25px;
+    margin-bottom: 25px;
+}
+
+.post-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.post-meta {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.post-user {
+    color: var(--off-contrast-background);
+    font-size: 14px;
+}
+
+.post-date {
+    color: var(--off-contrast-background);
+    font-size: 14px;
+}
+
+.post-privacy {
+    width: 28px;
+    height: 28px;
+    background: var(--contrast-colour-2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+
+.post-privacy.private {
+    background: var(--contrast-colour-3);
+}
+
+.post-content h2 {
+    font-family: Arial, sans-serif;
+    font-size: 40px;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    line-height: 1.3;
+    color: var(--off-contrast-background);
+}
+
+.post-content .highlight {
+    color: var(--primary-colour);
+}
+
+.post-images {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.post-image {
+    width: 100%;
+    height: 250px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.post-text {
+    color: var(--contrast-background);
+    line-height: 1.6;
+    font-size: 14px;
+    margin-bottom: 20px;
+}
+
+.post-actions {
+    display: flex;
+    gap: 25px;
+    align-items: center;
+    padding-top: 15px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1); 
+}
+
+.action-btn {
+    background: none;
+    border: none;
+    color: var(--off-contrast-background);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    transition: color 0.2s;
+}
+
+.action-btn:hover {
+    color: var(--primary-colour);
+}
+
+.action-icon {
+    font-size: 18px;
+}
+
+@media (max-width: 768px) {
+    .post-content h2 {
+        font-size: 28px;
+    }
+    
+    .post-images {
+        gap: 10px;
+    }
+    
+    .post-image {
+        height: 180px;
     }
 }

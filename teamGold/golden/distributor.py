@@ -735,7 +735,7 @@ def process_inbox(author: Author):
                 )
 
         # FOLLOW REQUEST
-        if activity_type == "follow":
+        if activity_type in ["Follow", "follow"]:
             follower = actor
             target_id_raw = obj.get("id")
             target_id = normalize_fqid(target_id_raw)
@@ -1082,6 +1082,6 @@ def process_inbox(author: Author):
 
         # Mark as processed after successful processing
         # Processed variable is only set for ACCEPT, so check activity_type for others
-        if activity_type in ["post", "follow", "accept", "reject", "unlike", "undo", "removefriend", "create", "update", "delete", "comment", "like", "entry"]:
+        if activity_type.lower() in ["post", "follow", "accept", "reject", "unlike", "undo", "removefriend", "create", "update", "delete", "comment", "like", "entry"]:
             item.processed = True
             item.save()

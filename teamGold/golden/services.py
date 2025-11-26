@@ -35,7 +35,6 @@ def get_content_type_from_payload(data, default="text/plain"):
         return default
     return data.get("contentType") or data.get("content_type") or default
 
-
 def get_or_create_author(fqid: str) -> Author:
     """
     Fetch or create a remote or local author.

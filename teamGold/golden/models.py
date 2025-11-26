@@ -92,7 +92,7 @@ class Author(AbstractBaseUser, PermissionsMixin):
     github = models.URLField(blank=True)
     web = models.URLField(blank=True)
     profileImage = models.ImageField(
-        default="profile_pics/default_profile.webp",
+        default="profile_pics/default_profile.png",
         upload_to='profile_pics/')
     username = models.CharField(max_length=50, unique=True, default="goldenuser")
     password = models.CharField(max_length=128, default="goldenpassword")
@@ -146,6 +146,10 @@ class Author(AbstractBaseUser, PermissionsMixin):
             # Set host to SITE_URL automatically
             self.host = settings.SITE_URL.rstrip('/')  # remove trailing slash just in case
         super().save(*args, **kwargs)
+
+    @property
+    def uuid_only(self):
+        return self.id.rstrip("/").split("/")[-1]
     
 class Entry(models.Model):
     """

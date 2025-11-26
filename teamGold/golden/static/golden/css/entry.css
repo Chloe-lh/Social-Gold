@@ -135,3 +135,126 @@ section::after {
   border: 2px solid #f2b43b;
   border-radius: 50%;
 } */
+
+/* Wrap the whole editor */
+.entry-editor {
+    padding: 20px;
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+/* Title ("Edit Entry") */
+.entry-title {
+    font-family: 'Montserrat-Bold';
+    color: var(--primary-colour);
+    font-size: 32px;
+    margin-bottom: 10px;
+}
+
+/* Label + textarea container */
+#entry-editor-field {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+/* The gold tab bar */
+.entry-label {
+    margin: 0;
+    background-color: var(--off-background);
+    color: var(--primary-colour);
+    font-family: 'Montserrat-Bold';
+    padding: 8px 10px;
+    border-radius: 6px 6px 0 0;
+    font-size: 20px;
+    width: fit-content;
+    min-width: 300px;
+    max-width: 500px;
+    border: 1px solid var(--primary-colour);
+    border-bottom: 0;
+}
+
+/* Textarea */
+.entry-textarea {
+    width: 100%;
+    min-height: 160px;
+    background: var(--off-background);
+    border: 1px solid var(--primary-colour);
+    border-radius: 0 6px 6px 6px;
+    padding: 14px;
+    color: var(--text-colour);
+    font-size: 16px;
+    resize: vertical;
+}
+
+/* Tools row */
+.editor-tools {
+    display: flex;
+    gap: 10px;
+    margin: 10px 0;
+}
+
+.tool-btn img {
+    width: 32px;
+    height: 32px;
+}
+
+.tool-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+
+/* Post button */
+.post-btn {
+    background: var(--primary-colour);
+    color: black;
+    font-family: 'Montserrat-Bold';
+    padding: 8px 18px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    float: right;
+    margin-bottom: 20px;
+}
+
+/* IMAGE GRID */
+.image-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 20px;
+    margin-top: 40px;
+}
+
+/* Each image box */
+.image-item {
+    padding: 10px;
+    border: 1px solid var(--primary-colour);
+    border-radius: 8px;
+    background: var(--background);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Preview image */
+.preview-image {
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+}
+
+/* Delete button */
+.image-delete-btn {
+    margin-top: 10px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+
+.image-delete-btn img {
+    width: 32px;
+    height: 32px;
+}

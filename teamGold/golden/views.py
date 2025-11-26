@@ -53,6 +53,7 @@ from golden.activities import ( # Kenneth: If you're adding new activities, plea
 import bleach
 import markdown
 import requests
+import markdownify
 
 # * ============================================================
 # * Direct Security Utility 
@@ -104,6 +105,12 @@ def sanitize_markdown_to_html(markdown_content):
     
     # Sanitize the HTML
     return sanitize_html(html_content)
+
+def html_to_markdown(html_content):
+    """
+    Convert html to markdown
+    """
+    return markdownify.markdownify(html_content)
 
 def validate_url(url):
     if not url:
@@ -418,8 +425,14 @@ def new_edit_entry_view(request):
         if not validate_visibility(user_selected_visibility):
             return redirect("stream")
 
-        markdown_content = request.POST.get("content", "")
-        html_content = sanitize_markdown_to_html(markdown_content)
+        # get the markdown information
+        contentType = request.POST.get("markdown", "text/plain")
+        if contentType == 'text/markdown':
+            markdown_content = request.POST.get("content", "")
+            html_content = sanitize_markdown_to_html(markdown_content)
+        else:
+            html_content = request.POST.get("content", "")
+
         title = escape(request.POST.get("title", ""))
 
         with transaction.atomic():
@@ -428,7 +441,7 @@ def new_edit_entry_view(request):
                 author=request.current_author,
                 title=title,
                 content=html_content,
-                contentType="text/html",
+                contentType=contentType,
                 visibility=user_selected_visibility,
             )
 
@@ -450,6 +463,7 @@ def new_edit_entry_view(request):
     if request.method == "POST" and "entry_update" in request.POST:
         primary_key = request.POST.get("entry_update")
         editing_entry = get_object_or_404(Entry, id=primary_key)
+        contentType = request.POST.get("markdown", editing_entry.contentType)
 
         if editing_entry.author.id != request.current_author.id:
             return HttpResponseForbidden("You don't have permission to edit this entry")
@@ -474,7 +488,10 @@ def new_edit_entry_view(request):
             print(f"[DEBUG entry_update] ERROR: Invalid visibility: {user_selected_visibility}")
             return redirect("stream")
 
-        html_content = sanitize_markdown_to_html(raw_markdown)
+        if contentType == 'text/plain':
+            html_content = raw_markdown
+        else:
+            html_content = sanitize_markdown_to_html(raw_markdown)
         title = bleach.clean(request.POST.get("title", editing_entry.title) or editing_entry.title)
 
         new_images = request.FILES.getlist("images")
@@ -485,7 +502,7 @@ def new_edit_entry_view(request):
             editing_entry.title = title
             editing_entry.content = html_content
             editing_entry.visibility = user_selected_visibility
-            editing_entry.contentType = "text/html"
+            editing_entry.contentType = "text/plain"
             editing_entry.save()
             
             print(f"[DEBUG entry_update] Successfully updated entry {editing_entry.id}")
@@ -523,9 +540,13 @@ def new_edit_entry_view(request):
         if editing_entry.author.id != request.current_author.id:
             return HttpResponseForbidden("You don't have permission to edit this entry")
 
+        content = editing_entry.content
+        if editing_entry.contentType == 'text/markdown':
+            content = html_to_markdown(content)
         form = EntryForm(instance=editing_entry)
         context.update({
             "editing_entry": editing_entry,
+            "content": content,
             "form": form,
             "entries": Entry.objects.exclude(visibility="DELETED").order_by('-is_posted'),
         })

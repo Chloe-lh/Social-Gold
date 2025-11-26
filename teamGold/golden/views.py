@@ -1475,88 +1475,130 @@ def profile_view(request):
 @login_required
 def public_profile_view(request, author_id):
     """
-    View for displaying another author's profile.
-
-    Only shows basic author info (name, github, email, etc.) and list of their entries.
-    Tabs and editing are removed.
-    
-    Handles both UUID format (68e52a5b-b117-44ef-82b8-25800fa9fc9b) and full FQID format.
+    Display another author's public profile.
+    Fetches from remote node if necessary.
+    Shows username, github, bio, email, and public entries.
     """
 
-    author = Author.objects.filter(id=author_id).first()
-    
-    if not author:
-        if '-' in author_id and '/' not in author_id:
-            local_fqid = f"{settings.SITE_URL.rstrip('/')}/api/authors/{author_id}"
-            author = Author.objects.filter(id=local_fqid).first()
-            
-            if not author:
-                author = Author.objects.filter(username=author_id).first()
+    def get_remote_authors(node):
+        """Fetch all authors from a remote node."""
+        # Construct API URL properly s.t the node.id should already be the base URL
+        node_base = node.id.rstrip('/')
+        api_url = f"{node_base}/api/authors/"
+        auth = (node.auth_user, node.auth_pass) if node.auth_user else None
         
-        # If still not found and it's a full URL, try extracting UUID
-        elif author_id.startswith('http'):
-            uuid_part = fqid_to_uuid(author_id)
-            if uuid_part:
-                if is_local(author_id):
-                    local_fqid = f"{settings.SITE_URL.rstrip('/')}/api/authors/{uuid_part}"
-                    author = Author.objects.filter(id=local_fqid).first()
+        "ChatGPT: Credits: 11-22-2025"
+        """
+        This code attempts to fetch all authors from a remote node.
+        It handles both paginated format (with "items") and direct list format.
+        It also handles authentication failures and endpoint not found errors.
+        """
+        try:
+            response = requests.get(
+                api_url,
+                timeout=10,
+                auth=auth,
+                headers={'Content-Type': 'application/json'}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                # Handle both paginated format (with "items") and direct list format
+                if isinstance(data, dict):
+                    if "items" in data:
+                        items = data["items"]
+                        if isinstance(items, list):
+                            return items
+                        else:
+                            print(f"[REMOTE AUTHORS] 'items' is not a list from {node.id}/api/authors/")
+                            return []
+
+                    if "authors" in data and isinstance(data["authors"], list):
+                        return data["authors"]
+
+                    print("[REMOTE AUTHORS] Unexpected dict format:", data)
+                    return []
+                elif isinstance(data, list):
+                    return data
                 else:
-                    author = Author.objects.filter(id=author_id.rstrip('/')).first()
-    
-    if not author:
-        raise Http404("Author not found")
+                    print(f"[REMOTE AUTHORS] Unexpected response format from {node.id}/api/authors/: {type(data)}")
+                    return []
+            elif response.status_code == 401:
+                print(f"[REMOTE AUTHORS] Authentication failed for {node.id}. Check auth_user and auth_pass.")
+                print(f"[REMOTE AUTHORS] Current auth_user: {node.auth_user or 'None'}")
+                return []
+            elif response.status_code == 404:
+                print(f"[REMOTE AUTHORS] Endpoint not found: {api_url}")
+                return []
+            else:
+                print(f"[REMOTE AUTHORS] Error fetching from {node.id}: HTTP {response.status_code}")
+                print(f"[REMOTE AUTHORS] Response: {response.text[:200]}")
+                return []
+        except requests.exceptions.Timeout:
+            print(f"[REMOTE AUTHORS] Timeout connecting to {node.id}")
+            return []
+        except requests.exceptions.ConnectionError as e:
+            print(f"[REMOTE AUTHORS] Connection error to {node.id}: {e}")
+            return []
+        except requests.exceptions.RequestException as e:
+            print(f"[REMOTE AUTHORS] Request error for {node.id}: {e}")
+            return []
+        except Exception as e:
+            print(f"[REMOTE AUTHORS] Unexpected error fetching from {node.id}: {e}")
+            return []
 
-    author.description = sanitize_markdown_to_html(author.description)
+    print("author ------------> ", author_id)
 
-    # Get viewer (who is viewing this profile) - for visibility filtering
-    viewer = None
-    if request.user.is_authenticated:
-        viewer = Author.from_user(request.user)
+    if author_id.startswith("https"):
+        # Remote author
+        author_id = normalize_fqid(author_id) # full fqid https://golden-z2-9f0dc8c050fa.herokuapp.com/api/authors/UUID
+        
+        # Extract host from the FQID
+        parsed = urlparse(author_id)
+        host = f"{parsed.scheme}://{parsed.netloc}"
+        node = Node.objects.filter(id = host).first()
+        print("parsed ----------->", parsed)
+        print("host ----------->", host)
+        print("node ----------->", node)
+        
+        # Find the node that matches this author
+        if not node:
+            return render(request, "404.html", {"message": "Node not found"})
 
-    
-    entries_qs = Entry.objects.filter(author=author).exclude(visibility="DELETED")
-    
-    if viewer == author:
-        # Viewing own profile - show all entries (except deleted)
-        entries = entries_qs.order_by("-published")
+        remote_authors = get_remote_authors(node)
+        ra = next((a for a in remote_authors if str(a.get("id")).rstrip('/') == author_id), None)
+        if not ra:
+            return render(request, "404.html", {"message": "Remote author not found"})
+
+        # Wrap the JSON data in a simple object for template
+        author = type("RemoteAuthor", (), {})()
+        author.username = ra.get("username") or ra.get("displayName") or str(author_id).split("/")[-1]
+        author.github = ra.get("github", "")
+        author.bio = ra.get("description", "") or ra.get("bio", "")
+        author.email = ra.get("email", "")
+        profile_image = ra.get("profileImage", "") or ra.get("icon", {}).get("url", "") if isinstance(ra.get("icon"), dict) else ra.get("icon", "")
+        author.profileImage = type("Image", (), {"url": profile_image})()
+
+        # Fetch remote entries
+        entries = fetch_remote_entries(node)
+
+        context = {
+            "is_remote": True,
+            "author": author,
+            "entries": entries,
+        }
     else:
-        # Viewing someone else's profile - filter by visibility
-        visible_entries = []
-        
-        # Check if viewer follows author (for UNLISTED visibility)
-        followed_by_viewer = False
-        if viewer:
-            followed_by_viewer = Follow.objects.filter(
-                actor=viewer,
-                object=author.id,
-                state="ACCEPTED"
-            ).exists()
-        
-        # Check if viewer is friends with author (mutual follow, for FRIENDS visibility)
-        is_friend_with_viewer = False
-        if viewer and followed_by_viewer:
-            # Check if author also follows viewer (mutual follow = friends)
-            is_friend_with_viewer = Follow.objects.filter(
-                actor=author,
-                object=viewer.id,
-                state="ACCEPTED"
-            ).exists()
-        
-        for entry in entries_qs:
-            if entry.visibility == "PUBLIC":
-                visible_entries.append(entry)
-            elif entry.visibility == "UNLISTED" and followed_by_viewer:
-                visible_entries.append(entry)
-            elif entry.visibility == "FRIENDS" and is_friend_with_viewer:
-                visible_entries.append(entry)
-        
-        entries = sorted(visible_entries, key=lambda x: x.published, reverse=True)
-
-    context = {
-        "author": author,
-        "entries": entries,
-        # We can add sidebar info like GitHub, email, website
-    }
+        # Local author
+        host = settings.SITE_URL.rstrip("/")
+        local_uuid = author_id
+        local_fqid = f"{host}/api/authors/{local_uuid}"
+        print("local fquid --------> ", local_fqid)
+        author = get_object_or_404(Author, id=local_fqid)
+        entries = Entry.objects.filter(author=author, visibility="PUBLIC").order_by("-published")
+        context = {
+            "is_remote": False,
+            "author": author,
+            "entries": entries
+        }
 
     return render(request, "public_profile.html", context)
 

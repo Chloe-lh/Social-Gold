@@ -1,12 +1,12 @@
 from django.contrib import admin
 from .models import Author, Node
-from golden.models import Author, Entry, Comment, Node, EntryImage, Follow, Inbox
+from golden.models import Author, Entry, Comment, Node, EntryImage, Follow, Inbox, Like
 
 """
 This module allows us to manipulate our database using the Django Admin panel.
 """
 
-models_class = [Entry, Comment, EntryImage, Inbox]
+models_class = [Entry, Comment, EntryImage, Inbox, Like]
 for model in models_class:
     admin.site.register(model)
 

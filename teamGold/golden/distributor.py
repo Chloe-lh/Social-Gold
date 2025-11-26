@@ -963,7 +963,7 @@ def process_inbox(author: Author):
             obj_id = activity.get("object")
 
             print(f"[DEBUG] Object_id: {obj_id}")
-            
+
             # Check if it exists as Entry or Comment
             entry = Entry.objects.filter(id=obj_id).first()
             comment = Comment.objects.filter(id=obj_id).first()
@@ -999,27 +999,6 @@ def process_inbox(author: Author):
                     comment.likes.add(author_obj)
                 print(f"[DEBUG] New like created for object={obj_id} by author={author_obj.username}")
 
-        # UNLIKE
-        '''
-        elif activity_type == "unlike":
-            obj_id = obj if isinstance(obj, str) else None
-            actor_id = activity.get("actor")
-            
-            if not obj_id:
-                return
-            
-            like_actor = Author.objects.filter(id=actor_id).first()
-            if not like_actor and actor_id:
-                like_actor = get_or_create_foreign_author(actor_id)
-            
-            if like_actor:
-                Like.objects.filter(author=like_actor, object=obj_id).delete()
-                
-                entry = Entry.objects.filter(id=obj_id).first()
-                if entry:
-                    entry.likes.remove(like_actor)    
-        '''
-        
         # COMMENT
         elif activity_type == "comment":
             comment_id = activity.get("id")  
@@ -1084,6 +1063,29 @@ def process_inbox(author: Author):
                         "published": safe_parse_datetime(activity.get("published")) or timezone.now()
                     }
                 )
+
+        # UNLIKE
+        '''
+        elif activity_type == "unlike":
+            obj_id = obj if isinstance(obj, str) else None
+            actor_id = activity.get("actor")
+            
+            if not obj_id:
+                return
+            
+            like_actor = Author.objects.filter(id=actor_id).first()
+            if not like_actor and actor_id:
+                like_actor = get_or_create_foreign_author(actor_id)
+            
+            if like_actor:
+                Like.objects.filter(author=like_actor, object=obj_id).delete()
+                
+                entry = Entry.objects.filter(id=obj_id).first()
+                if entry:
+                    entry.likes.remove(like_actor)    
+        '''
+        
+       
         
 
         # Mark as processed after successful processing

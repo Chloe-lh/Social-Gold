@@ -1,5 +1,6 @@
 import requests
 import uuid
+from django.core.paginator import Paginator
 
 from django.conf import settings
 from .models import Author, Entry
@@ -80,31 +81,6 @@ def get_remote_node_from_fqid(fqid):
     if node and node.is_active:
         return node
     return None
-
-
-# ! This section of services is old but USED? They are referenced but if possible, needs to be cleaned up
-
-def create_activity(author, activity_type, object_data, suffix="posts"):
-    activity_id = f"{author.id.rstrip('/')}/{suffix}/{uuid.uuid4()}"
-    activity = {
-        "type": activity_type,
-        "id": activity_id,
-        "actor": str(author.id),
-        "published": timezone.now().isoformat(),
-        "summary": f"{author.username} performed a {activity_type} activity",
-        "object": object_data
-    }
-    return activity
-
-def create_follow_activity(author, target):
-    object_data = {
-        "type": "Follow",
-        "actor": str(author.id),
-        "object": str(target.id),
-        "published": timezone.now().isoformat(),
-        "state": "REQUESTED"
-    }
-    return create_activity(author, "Follow", object_data, "follow")
 
 def generate_comment_fqid(author):
     """
@@ -286,27 +262,6 @@ def fetch_and_sync_remote_entry(entry_fqid):
         print(f"[DEBUG fetch_and_sync_remote_entry] Error fetching entry: {e}")
     
     return None
-
-def fetch_or_create_author(author_url):
-    """
-    Fetch or create a remote author by their URL.
-    """
-
-    # Check if author already exists locally
-    author = Author.objects.filter(id=author_url).first()
-
-    if not author:
-        # If the author doesn't exist, fetch their data from the remote node and create a new author entry
-        author_data = fetch_remote_author_data(author_url)
-        if author_data:
-            author = Author.objects.create(
-                id=author_url,
-                username=author_data.get("username"),
-                host=author_data.get("host"),
-                profileImage=author_data.get("profileImage"),
-                # Other fields as needed
-            )
-    return author
 
 def fetch_remote_author_data(author_fqid):
     """
@@ -499,12 +454,6 @@ def get_or_create_foreign_author(remote_id: str, host: str = None, username: str
     is_local_fqid = remote_id.startswith(site_url) if remote_id.startswith("http") else False
     print(f"[DEBUG get_or_create_foreign_author] Checking if local: site_url={site_url}, remote_id={remote_id}, is_local_fqid={is_local_fqid}")
     
-    if is_local_fqid:
-        # This is a local author - if it doesn't exist, that's an error
-        # Local authors should already exist in the database
-        print(f"[DEBUG get_or_create_foreign_author] ERROR: Local author not found: {remote_id}. This may indicate a data issue.")
-        print(f"[DEBUG get_or_create_foreign_author] Returning None for local author that doesn't exist")
-        return None
     
     # Check if remote_id is a full URL or just a UUID
     host_val = host
@@ -578,60 +527,3 @@ def get_or_create_foreign_author(remote_id: str, host: str = None, username: str
         author.save()
     
     return author
-
-'''
-def notify(author, data):
-    """
-    Notify followers of `author` by POSTing `data` to each follower's node inbox.
-
-    - `author` is an `Author` instance (the user whose followers should be notified)
-    - `data` is a JSON-serializable payload to send (e.g. the comment/like/entry/activity object)
-
-    - For each follower, derive the follower's host and look up a matching `Node`.
-    - If a matching `Node` exists and is active, POST `data` to that node's `/inbox` URL
-      using any HTTP auth configured on the `Node`.
-    """
-    results = []
-
-    # Use the reverse relation 'followers_set' to get Authors who follow `author`.
-    try:
-        followers_qs = author.followers_set.all()
-    except Exception:
-        return results
-
-    for follower in followers_qs:
-        try:
-            # follower.id is an author's FQID, e.g. 'http://nodebbbb/api/authors/222/'
-            parsed = urlparse(str(follower.id))
-            if not parsed.scheme or not parsed.netloc:
-                continue
-
-            follower_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
-
-            # Look up a Node whose id starts with the follower's host
-            node = Node.objects.filter(id__startswith=follower_base).first()
-            if not node:
-                continue
-            if not getattr(node, 'is_active', False):
-                continue
-
-            inbox_url = node.id.rstrip('/') + '/inbox'
-            auth = None
-            if getattr(node, 'auth_user', None):
-                auth = (node.auth_user, node.auth_pass)
-
-            resp = requests.post(
-                inbox_url,
-                json=data,
-                auth=auth,
-                headers={'Content-Type': 'application/json'},
-                timeout=5,
-            )
-            results.append((follower.id, resp.status_code))
-            if not (200 <= resp.status_code < 300):
-
-        except Exception as e:
-            results.append((getattr(follower, 'id', None), None))
-
-    return results
-'''

@@ -15,30 +15,12 @@ from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 
 from django.test import TestCase
-from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.utils import timezone
 
 from base64 import b64encode
 from unittest.mock import patch, Mock
-import uuid
-
-from golden.models import Author, Entry, Comment, Like
-from golden.activities import (
-    make_fqid,
-    is_local,
-    create_new_entry_activity,
-    create_update_entry_activity,
-    create_delete_entry_activity,
-    create_comment_activity,
-    create_like_activity,
-    create_unlike_activity,
-    create_follow_activity,
-    create_profile_update_activity,
-    get_comment_list_api,
-    get_like_api
-)
 import uuid
 
 from golden.models import Author, Entry, Comment, Like
@@ -85,7 +67,6 @@ with other nodes, as well as a basic model class.
 '''
 
 # ============================================================
-# Entry Related Activity Tests
 # Entry Related Activity Tests
 # ============================================================
 
@@ -225,6 +206,7 @@ class EntryActivityVisibilityTestCase(TestCase):
         entry = self._create_entry("FRIENDS")
         activity = create_update_entry_activity(self.author, entry)
         self.assertEqual(activity["visibility"], "FRIENDS")
+
 
 # ============================================================
 # Comment / Like / Unlike Activity Tests
@@ -375,6 +357,157 @@ class ProfileUpdateActivityTests(TestCase):
         )
 
         self.assertIn("published", activity)
+
+
+def make_fqid(base="https://node1.com", *parts):
+    """Helper to generate a full qualified ID"""
+    p = "/".join(str(p).strip("/") for p in parts if p is not None)
+    return f"{base}/{p}"
+
+def _basic_token(username, password):
+    """Generate base64 encoded Basic Auth token"""
+    return b64encode(f"{username}:{password}".encode()).decode()
+
+class AuthenticatedAPITestCase(APITestCase):
+    """Provides Basic Authenticated APIClient for tests"""
+    def setUp(self):
+        super().setUp()
+        self.client = APIClient()
+
+        AuthUser = get_user_model()
+        self.apiuser, _ = AuthUser.objects.get_or_create(
+            username="apiuser",
+            defaults={"is_active": True}
+        )
+        if hasattr(self.apiuser, "is_approved"):
+            self.apiuser.is_approved = True
+        self.apiuser.set_password("pass")
+        self.apiuser.save()
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Basic {_basic_token('apiuser', 'pass')}"
+        )
+        self.client.force_authenticate(user=self.apiuser)
+        self.client.force_authenticate(user=self.apiuser)
+# ============================================================
+# API TESTS
+# ============================================================
+
+class CommentAPITests(AuthenticatedAPITestCase):
+    """Small focused tests for the comments API endpoints."""
+    def setUp(self):
+        super().setUp()
+        self.author_serial = str(uuid.uuid4())
+        self.entry_serial = str(uuid.uuid4())
+        # Create an author and entry to comment on
+        self.entry_author = Author.objects.create(
+            id=f"{settings.SITE_URL.rstrip('/')}/api/authors/{self.author_serial}",
+            username="entry_author",
+            email=f"entry_author@example.com",
+            is_approved=True,
+        )
+        self.entry = Entry.objects.create(
+            id=f"{settings.SITE_URL.rstrip('/')}/api/entries/{self.entry_serial}",
+            author=self.entry_author,
+            title="Test Entry",
+            content="Entry content",
+            visibility="PUBLIC",
+        )
+
+    def test_post_comment_success(self):
+        from urllib.parse import quote
+        enc = quote(self.entry_serial)
+        url = f"/api/entries/{enc}/comments/"
+        payload = {"comment": "Hello from test", "contentType": "application/json"}
+        res = self.client.post(url, payload, format="json")
+        self.assertIn(res.status_code, (200, 201))
+        # Confirm comment was created
+        self.assertTrue(Comment.objects.filter(entry=self.entry, content__icontains="Hello from test").exists())
+
+    def test_post_comment_invalid(self):
+        from urllib.parse import quote
+        enc = quote(self.entry.id.rstrip('/'), safe='')
+        url = f"/api/entries/{enc}/comments/"
+        payload = {"content": ""}
+        res = self.client.post(url, payload, format="json")
+        self.assertEqual(res.status_code, 400)
+    
+    def test_entry_not_found(self):
+        # GET on a non-existent entry should return 404
+        fake_entry = f"https://node1.com/api/entries/{uuid.uuid4()}"
+        from urllib.parse import quote
+        enc = quote(fake_entry.rstrip('/'), safe='')
+        url = f"/api/entries/{enc}/comments/"
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 404)
+
+    def test_get_comments_list(self):
+        # create two comments
+        Comment.objects.create(
+            id=f"{settings.SITE_URL.rstrip('/')}/api/comments/{uuid.uuid4()}",
+            author=self.entry_author,
+            entry=self.entry,
+            content="First",
+            published=timezone.now()
+        )
+        Comment.objects.create(
+            id=f"{settings.SITE_URL.rstrip('/')}/api/comments/{uuid.uuid4()}",
+            author=self.entry_author,
+            entry=self.entry,
+            content="Second",
+            published=timezone.now()
+        )
+        from urllib.parse import quote
+        enc = quote(self.entry.id.rstrip('/'), safe='')
+        url = f"/api/entries/{enc}/comments/"
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+        # ensure returned items include our comments
+        items = res.data.get('items') if isinstance(res.data, dict) else res.data
+        self.assertTrue(any('First' in (c.get('comment') or c.get('content') or '') for c in items))
+
+    def test_get_single_comment(self):
+        # create a comment and retrieve it via the author/commented endpoint
+        comment = Comment.objects.create(
+            id=f"{settings.SITE_URL.rstrip('/')}/api/comments/{uuid.uuid4()}",
+            author=self.entry_author,
+            entry=self.entry,
+            content="Single comment",
+            published=timezone.now()
+        )
+        from urllib.parse import quote
+        enc_author = quote(self.entry_author.id.rstrip('/'), safe='')
+        enc_comment = quote(comment.id.rstrip('/'), safe='')
+        url = f"/api/authors/{enc_author}/commented/{enc_comment}"
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+        # response should include our comment content
+        data = res.data if isinstance(res.data, dict) else res.data
+        self.assertTrue("Single comment" in (data.get('comment') or data.get('content') or ''))
+
+    def test_get_comment_by_author(self):
+        # create two comments by the same author and list via author+entry endpoint
+        Comment.objects.create(
+            id=f"{settings.SITE_URL.rstrip('/')}/api/comments/{uuid.uuid4()}",
+            author=self.entry_author,
+            entry=self.entry,
+            content="AuthorFirst",
+            published=timezone.now()
+        )
+        Comment.objects.create(
+            id=f"{settings.SITE_URL.rstrip('/')}/api/comments/{uuid.uuid4()}",
+            author=self.entry_author,
+            entry=self.entry,
+            content="AuthorSecond",
+            published=timezone.now()
+        )
+        from urllib.parse import quote
+        enc_author = quote(self.entry_author.id.rstrip('/'), safe='')
+        enc_entry = quote(self.entry.id.rstrip('/'), safe='')
+        url = f"/api/authors/{enc_author}/entries/{enc_entry}/comments/"
+        res = self.client.get(url)
+        self.assertEqual(res.status_code, 200)
+        items = res.data.get('items') if isinstance(res.data, dict) else res.data
+        self.assertTrue(any('AuthorFirst' in (c.get('comment') or c.get('content') or '') for c in items))
 
 
 
@@ -1301,6 +1434,129 @@ class RemoteTests(AuthenticatedAPITestCase):
         self.assertTrue(mock_post.called, "requests.post should have been called to forward the like")
         called_url = mock_post.call_args[0][0]
         self.assertIn("nodebbbb", called_url)
+
+    @patch("golden.api.likeAPIView.requests.get")
+    def test_remote_like_get(self, mock_get):
+        """Ensure GET /api/Like/<remote_like_id>/ proxies a remote like when not local."""
+        mock_res = Mock()
+        mock_res.status_code = 200
+        mock_res.json.return_value = {
+            "type": "like",
+            "id": "http://nodebbbb/api/likes/12345",
+            "author": {"id": "http://nodebbbb/api/authors/999/"},
+            "object": "http://local.example.com/api/entries/abc",
+        }
+        mock_get.return_value = mock_res
+
+        remote_like_id = f"http://nodebbbb/api/likes/{uuid.uuid4()}"
+        res = self.client.get(f"/api/Like/{remote_like_id}/")
+        self.assertEqual(res.status_code, 200)
+        mock_get.assert_called_once()
+        called_url = mock_get.call_args[0][0]
+        self.assertIn("nodebbbb", called_url)
+
+    @patch("golden.api.likeAPIView.requests.get")
+    def test_get_remote_comment_likes(self, mock_get):
+        """Ensure that when requesting comment likes for a remote comment, we proxy the remote node."""
+        mock_res = Mock()
+        mock_res.status_code = 200
+        mock_res.json.return_value = {
+            "type": "likes",
+            "id": "http://nodebbbb/api/comments/.../likes/",
+            "page_number": 1,
+            "size": 5,
+            "count": 2,
+            "src": [
+                {"id": "http://nodebbbb/api/likes/1", "author": {"id": "http://nodebbbb/api/authors/1/"}, "object": "http://nodebbbb/api/comments/1"},
+                {"id": "http://nodebbbb/api/likes/2", "author": {"id": "http://nodebbbb/api/authors/2/"}, "object": "http://nodebbbb/api/comments/1"}
+            ]
+        }
+        mock_get.return_value = mock_res
+
+        remote_comment = "http://nodebbbb/api/comments/123/"
+        enc = quote(remote_comment.rstrip('/'), safe='')
+        res = self.client.get(f"/api/Comment/{enc}/likes/")
+        self.assertEqual(res.status_code, 200)
+        mock_get.assert_called_once()
+        called_url = mock_get.call_args[0][0]
+        self.assertIn("nodebbbb", called_url)
+
+    @patch("golden.api.likeAPIView.requests.post")
+    def test_remote_comment_like_post(self, mock_post):
+        """Ensure that when a like is posted to a comment whose author is on a remote node,
+        the server forwards the like to that node's inbox via POST.
+        """
+        mock_res = Mock()
+        mock_res.status_code = 201
+        mock_post.return_value = mock_res
+
+        # Create a remote author and entry/comment owned by that remote actor
+        remote_owner = Author.objects.create(
+            id="http://nodebbbb/api/authors/444/",
+            username="remote_comment_owner",
+        )
+
+        entry = Entry.objects.create(
+            id=f"http://local.example.com/api/entries/{uuid.uuid4()}/",
+            author=remote_owner,
+            title="Remote-owned comment entry",
+            content="content",
+            visibility="PUBLIC",
+        )
+
+        comment = Comment.objects.create(
+            id=f"http://local.example.com/api/comments/{uuid.uuid4()}/",
+            author=remote_owner,
+            entry=entry,
+            content="A remote comment",
+            published=timezone.now(),
+        )
+
+        # Create a local liker author
+        liker = Author.objects.create(
+            id=f"http://local.example.com/api/authors/{uuid.uuid4()}/",
+            username="local_comment_liker",
+        )
+
+        enc = quote(comment.id.rstrip('/'), safe='')
+        url = f"/api/Comment/{enc}/likes/"
+
+        payload = {
+            "author": {"id": liker.id},
+            "object": comment.id,
+        }
+
+        res = self.client.post(url, payload, format="json")
+        # view should accept and either create or forward the like
+        self.assertIn(res.status_code, (200, 201, 202))
+
+        # The inbox URL should be the remote node's base + '/inbox'
+        self.assertTrue(mock_post.called, "requests.post should have been called to forward the comment-like")
+        called_url = mock_post.call_args[0][0]
+        self.assertIn("nodebbbb", called_url)
+    
+    
+
+    @patch("golden.api.likeAPIView.requests.get")
+    def test_remote_comment_like_get(self, mock_get):
+        """Ensure GET of a remote like (by FQID) proxies the remote node for comment-likes too."""
+        mock_res = Mock()
+        mock_res.status_code = 200
+        mock_res.json.return_value = {
+            "type": "like",
+            "id": "http://nodebbbb/api/likes/99999",
+            "author": {"id": "http://nodebbbb/api/authors/888/"},
+            "object": "http://local.example.com/api/comments/abc",
+        }
+        mock_get.return_value = mock_res
+
+        remote_like_id = f"http://nodebbbb/api/likes/{uuid.uuid4()}"
+        res = self.client.get(f"/api/Like/{remote_like_id}/")
+        self.assertEqual(res.status_code, 200)
+        mock_get.assert_called_once()
+        called_url = mock_get.call_args[0][0]
+        self.assertIn("nodebbbb", called_url)
+        
 
     @patch("golden.api.likeAPIView.requests.get")
     def test_remote_like_get(self, mock_get):

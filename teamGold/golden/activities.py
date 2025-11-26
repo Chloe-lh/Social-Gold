@@ -207,8 +207,7 @@ def create_follow_activity(author, target):
             # URL of the user's HTML profile page
             "web": author.web
         },
-        #"actor": str(author.id),
-        "object": {
+        "object":{
             "type":"author",
             "id":target.id,
             "host":target.host,

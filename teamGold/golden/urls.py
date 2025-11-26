@@ -3,14 +3,13 @@ from django.contrib.auth import views as auth_views
 from . import views
 
 # API view imports (use the modules under golden.api)
-from .api.profileAPIView import ProfileAPIView
-from .api.nodeAPIView import NodeAPIView
+# Note: `profileAPIView` and `nodeAPIView` were removed in this branch; skip importing them
 from .api.friendsAPIView import AuthorFriendsView, FollowAPIView
-from .api.entryAPIView import EntryAPIView, EntryImageAPIView, ReadingAPIView
-from .api.commentAPIView import EntryCommentAPIView, SingleCommentAPIView
-from .api.likeAPIView import LikeAPIView
-from .api.inbox import InboxView
+from .api.entryAPIView import EntryAPIView, EntryImageAPIView, ReadingAPIView, AuthorEntriesView, AuthorEntryView
+from .api.commentAPIView import EntryCommentAPIView, SingleCommentAPIView, CommentedAPIView
+from .api.likeAPIView import LikeAPIView, LikedAPIView
 from .api.authorsAPIView import AuthorsListView, SingleAuthorAPIView
+from .api.followersAPIView import FollowersView
 
 '''
 These URL Patterns registers all views 
@@ -42,17 +41,22 @@ urlpatterns = [
     path("api/authors/", AuthorsListView.as_view(), name="api-authors-list"), 
     path("api/authors/<str:author_uuid>/", SingleAuthorAPIView.as_view(), name="api-author-detail"),  
     path("api/reading/", ReadingAPIView.as_view(), name="api-reading"), 
-    path("api/Profile/<path:id>/", ProfileAPIView.as_view(), name="get-profile"),
-    path("api/Node/<path:id>/", NodeAPIView.as_view(), name="get-node"),
+    # profile and node endpoints removed in this branch
     path("api/Follow/<path:id>/", FollowAPIView.as_view(), name="get-follow"),
     path("api/Author/<path:author_id>/friends/", AuthorFriendsView.as_view()),
     path("api/Like/<path:id>/", LikeAPIView.as_view(), name="get-like"),
 
     # Entry-related API
-    path("api/Entry/<path:entry_id>/comments/", EntryCommentAPIView.as_view(), name="entry-comments-alias"),
-    path("api/Entry/<path:id>/", EntryAPIView.as_view(), name="get-entry"),
+    path("api/entries/<path:entry_serial>/comments/", EntryCommentAPIView.as_view(), name="entry-comments-alias"),
+    # Backwards-compatible capitalized aliases used by tests
+    path("api/Entry/<path:entry_serial>/comments/", EntryCommentAPIView.as_view(), name="entry-comments-alias-cap"),
+    path("api/entries/<path:id>/", EntryAPIView.as_view(), name="get-entry"),
+    path("api/Entry/<path:id>/", EntryAPIView.as_view(), name="get-entry-cap"),
+    path("api/authors/<str:author_serial>/entries/", AuthorEntriesView.as_view(), name="get-author-entries"),
+    path("api/authors/<str:author_serial>/entries/<str:entry_serial>", AuthorEntryView.as_view(), name="get-author-entry"),
 
     # Follow-related API Endpoints
+    path("api/authors/<str:author_serial>/followers/<str:foreign_author_fqid>", FollowersView.as_view(), name="api-follower"),
     path("api/Follow/<path:author_id>/request/", views.api_follow_requests, name="api-follow-request"),
     path("api/Follow/<path:author_id>/accept/", views.api_accept_follow_action, name="api-accept-follow"),
     path("api/Follow/<path:author_id>/reject/", views.api_reject_follow_action, name="api-reject-follow"),
@@ -60,11 +64,27 @@ urlpatterns = [
 
     # Comments
     path("api/authors/<path:author_serial>/entries/<path:entry_serial>/comments/", EntryCommentAPIView.as_view(), name="author-entry-comments"),
+    path("api/authors/<path:author_serial>/commented", CommentedAPIView.as_view(), name="author-commented"),
+    path("api/authors/<path:author_fqid>/commented", CommentedAPIView.as_view(), name="author-commented-fqid"),
+    path("api/authors/<path:author_serial>/entries/<path:entry_serial>/comment/<path:comment_fqid>", CommentedAPIView.as_view(), name="author-entry-comments2"),
+    path("api/authors/<path:author_serial>/commented/<path:comment_fqid>", CommentedAPIView.as_view(), name="author-comment"),
+
+    # Likes
     path("api/authors/<path:author_serial>/entries/<path:entry_serial>/likes/", LikeAPIView.as_view(), name="author-entry-likes"),
-    path("api/authors/<path:author_serial>/entries/<path:entry_serial>/images/", EntryImageAPIView.as_view(), name="author-entry-images"),
+    path("api/authors/<path:author_serial>/entries/<path:entry_serial>/comments/<path:comment_fqid>/likes/", LikeAPIView.as_view(), name="author-entry-comment-likes"),
+    path("api/entries/<path:entry_fqid>/likes/", LikeAPIView.as_view(), name="entry-likes"),
+    path("api/Entry/<path:entry_fqid>/likes/", LikeAPIView.as_view(), name="entry-likes-cap"),
+    # Liked by author endpoints
+    path("api/authors/<path:author_serial>/liked/", LikedAPIView.as_view(), name="author-liked"),
+    path("api/authors/<path:author_serial>/liked/<path:like_serial>/", LikedAPIView.as_view(), name="author-liked-single"),
+    path("api/authors/<path:author_fqid>/liked/", LikedAPIView.as_view(), name="author-liked-fqid"),
+    path("api/liked/<path:like_fqid>/", LikedAPIView.as_view(), name="liked"),
 
     # Miscellaneous API Endpoints
-    path("api/authors/<path:author_id>/inbox/", views.inbox_view, name="author-inbox"),
+    # path("api/authors/<path:author_serial>/inbox/", views.inbox_view, name="author-inbox"),
+    path("api/authors/<path:author_serial>/entries/<path:entry_serial>/images/", EntryImageAPIView.as_view(), name="author-entry-images"),
+    path("api/Entry/<path:entry_id>/images/", EntryImageAPIView.as_view(), name="author-entry-images-cap"),
+    path("api/EntryImage/<path:id>/", EntryImageAPIView.as_view(), name="get-entry-image-cap"),
 
     path("friends/", views.friends, name="friends"),
     path('add_comment/', views.add_comment, name = "add_comment"),

@@ -60,14 +60,16 @@ class AuthorsListView(APIView):
         
         try:
             page = int(page)
-            size = int(size)
         except (ValueError, TypeError):
             page = 1
+        
+        try:
+            size = int(size)
+        except (ValueError, TypeError):
             size = 50
         
         # Paginate
-        paginator = Paginator(authors, size)
-        page_obj = paginator.get_page(page)
+        page_obj = paginate(request, authors, 50)
         
         # Serialize
         serializer = AuthorSerializer(page_obj.object_list, many=True)
@@ -90,6 +92,15 @@ class SingleAuthorAPIView(APIView):
     authentication_classes = [BasicAuthentication]
     permission_classes = [IsAuthenticated]
 
+
+    @swagger_auto_schema(
+        operation_summary="Get a single author",
+        operation_description="Returns details of a specific author given their UUID or full FQID.",
+        responses={
+            200: openapi.Response(description="Author found"),
+            404: openapi.Response(description="Author not found"),
+        }
+    )
     def get(self, request, author_uuid):
         from golden.services import fqid_to_uuid, is_local
         from django.conf import settings

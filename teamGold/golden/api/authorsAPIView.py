@@ -74,7 +74,6 @@ class AuthorsListView(APIView):
         # Serialize
         serializer = AuthorSerializer(page_obj.object_list, many=True)
         
-        # Return in format matching deepskyblue spec
         return Response({
             "type": "authors",
             "authors": serializer.data,  # Changed from "items" to "authors" to match spec

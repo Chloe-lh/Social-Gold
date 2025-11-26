@@ -107,7 +107,7 @@ pagination for listing comments and likes
     returns: page object that is input for the correct serializer
     (CommentSerializer(page_obj.object_list, many=True).data)
 '''
-def paginate(request, allowed):
+def paginate(self, request, allowed):
     try:
         page_size = int(request.query_params.get('size', 10))
     except Exception:

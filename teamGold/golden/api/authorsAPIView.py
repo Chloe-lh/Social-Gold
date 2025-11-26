@@ -69,17 +69,21 @@ class AuthorsListView(APIView):
             size = 50
         
         # Paginate
-        page_obj = paginate(request, authors, 50)
-        
+        #page_obj = paginate(request, authors, 50)
+        page_obj = paginate(request, authors)
+
         # Serialize
         serializer = AuthorSerializer(page_obj.object_list, many=True)
         
         return Response({
             "type": "authors",
             "authors": serializer.data,  # Changed from "items" to "authors" to match spec
-            "page": page,
-            "size": size,
-            "total": paginator.count
+            #"page": page,
+            "page": page_obj.number,
+            #"size": size,
+            "size": page_obj.paginator.per_page,
+            #"total": paginator.count
+            "total": page_obj.paginator.count,
         }, status=status.HTTP_200_OK)
 
 

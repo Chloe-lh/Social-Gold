@@ -15,12 +15,30 @@ from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 
 from django.test import TestCase
+from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from django.utils import timezone
 
 from base64 import b64encode
 from unittest.mock import patch, Mock
+import uuid
+
+from golden.models import Author, Entry, Comment, Like
+from golden.activities import (
+    make_fqid,
+    is_local,
+    create_new_entry_activity,
+    create_update_entry_activity,
+    create_delete_entry_activity,
+    create_comment_activity,
+    create_like_activity,
+    create_unlike_activity,
+    create_follow_activity,
+    create_profile_update_activity,
+    get_comment_list_api,
+    get_like_api
+)
 import uuid
 
 from golden.models import Author, Entry, Comment, Like
@@ -67,6 +85,7 @@ with other nodes, as well as a basic model class.
 '''
 
 # ============================================================
+# Entry Related Activity Tests
 # Entry Related Activity Tests
 # ============================================================
 

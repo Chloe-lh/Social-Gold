@@ -405,7 +405,7 @@ def new_edit_entry_view(request):
 
     # FEATURE: CREATE A NEW ENTRY
     if request.method == "POST" and "entry_post" in request.POST:
-        entry_id = f"{host}/api/entries/{uuid.uuid4()}"
+        entry_id = f"{host}/api/entry/{uuid.uuid4()}"
 
         user_selected_visibility = request.POST.get("visibility", "PUBLIC")
         

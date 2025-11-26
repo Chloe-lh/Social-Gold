@@ -7,6 +7,8 @@ from django.conf import settings
 from django.utils.dateparse import parse_datetime
 from datetime import datetime as dt
 import uuid
+from golden.services import get_content_type_from_payload
+
 
 import uuid
 import json
@@ -302,7 +304,7 @@ def distribute_activity(activity: dict, actor: Author):
     obj = activity.get("object")
 
     # CREATE ENTRY
-    if type_lower == "entry" :#and isinstance(activity, dict) and obj.get("type") == "post":
+    if type_lower == "entry" or type_lower == "post":
         
         visibility = activity.get("visibility", "PUBLIC").upper()
         
@@ -319,9 +321,9 @@ def distribute_activity(activity: dict, actor: Author):
         for r in recipients:
             send_activity_to_inbox(r, activity)
         return
-    '''
+    
     # UPDATE ENTRY
-    if type_lower == "update" and isinstance(obj, dict) and obj.get("type") == "post":
+    if type_lower == "update":
         print(f"[DEBUG distribute_activity] UPDATE ENTRY: actor={actor.username} (id={actor.id})")
         print(f"[DEBUG distribute_activity] UPDATE ENTRY: entry_id={obj.get('id')}")
         print(f"[DEBUG distribute_activity] UPDATE ENTRY: title={obj.get('title')}")
@@ -356,15 +358,14 @@ def distribute_activity(activity: dict, actor: Author):
         return
     
     # DELETE ENTRY
-    if type_lower == "entry" and isinstance(obj, dict) and obj.get("type") == "post":
+    if type_lower == "delete":
         recipients = set(get_followers(actor)) | set(get_friends(actor))
         for r in recipients:
             send_activity_to_inbox(r, activity)
         return
-    '''
-    # COMMENT 
+
     if type_lower == "comment":
-        entry_id = activity.get("entry")
+        entry_id = activity.get("entry") or activity.get("post")
         
         if not entry_id:
             return
@@ -402,6 +403,7 @@ def distribute_activity(activity: dict, actor: Author):
                 friends = get_friends(entry.author)
                 recipients |= set(friends)
                 print(f"[DEBUG distribute_activity] COMMENT: Adding {len(friends)} friends (FRIENDS)")
+                print(f"[DEBUG distribute_activity] COMMENT: Found {len(recipients)} total recipients") 
             
             print(f"[DEBUG distribute_activity] COMMENT: Sending to {len(recipients)} recipients")
             for r in recipients:
@@ -701,14 +703,23 @@ def process_inbox(author: Author):
         activity_type = activity.get("type", "").lower()
         obj = activity.get("object")
 
-        actor_data = activity.get("actor") or activity.get("author")
+        actor_data = (
+            activity.get("actor") or
+            activity.get("author") or
+            activity.get("author_data") or
+            activity.get("authorData") 
+        )
         actor_id = None
         actor_username = None
         actor_host = None
         
         if isinstance(actor_data, dict):
             actor_id = actor_data.get("id") or actor_data.get("@id")
-            actor_username = actor_data.get("username") or actor_data.get("displayName")
+            actor_username = (
+                actor_data.get("username") or
+                actor_data.get("displayName") or
+                actor_data.get("name")
+            )
             actor_host = actor_data.get("host")
         elif isinstance(actor_data, str):
             actor_id = actor_data
@@ -886,132 +897,50 @@ def process_inbox(author: Author):
                 Follow.objects.filter(actor=target, object=initiator.id).delete()
 
         # CREATE ENTRY
-        elif activity_type == "entry": #and isinstance(obj, dict) and obj.get("type") == "post":
-            entry_id = activity.get("id")
+        elif activity_type == "entry" or activity_type == "post":
+            entry_id = activity.get("id") or activity.get("fqid")
 
             entry, created = Entry.objects.update_or_create(
                 id=entry_id,
                 defaults={
                     "title": activity.get("title", ""),
-                    "description": activity.get("description", ""),
-                    "content": activity.get("content", ""),
-                    "contentType": activity.get("contentType", "text/plain"),
+                    "description": activity.get("description") or "",
+                    "content": activity.get("content") or "",
+                    "contentType": get_content_type_from_payload(activity, default="text/plain"),
                     "author": actor,
                     "visibility": activity.get("visibility", "PUBLIC"),
                     "published": safe_parse_datetime(activity.get("published")) or timezone.now(),
                 }
             )
-            print(f"[DEBUG process_inbox] CREATE ENTRY: {entry}")
-            '''   
+            
         # UPDATE ENTRY
         elif activity_type == "update" and isinstance(obj, dict) and obj.get("type") == "post":
-            entry_id = obj.get("id")
-            print(f"[DEBUG process_inbox] UPDATE ENTRY: Processing update for entry_id={entry_id}")
-            print(f"[DEBUG process_inbox] UPDATE ENTRY: actor={actor.username if actor else 'None'} (id={actor.id if actor else 'None'})")
-            print(f"[DEBUG process_inbox] UPDATE ENTRY: inbox author={author.username} (id={author.id})")
+            entry_id = activity.get("id") or activity.get("fqid")
             
             entry = Entry.objects.filter(id=entry_id).first()
-            print(f"[DEBUG process_inbox] UPDATE ENTRY: Entry lookup result: {'Found' if entry else 'NOT FOUND'}")
 
             if entry:
-                old_title = entry.title
-                old_content = entry.content[:50] if entry.content else ""
                 raw_content = obj.get("content", entry.content) or entry.content
                 base_url = getattr(actor, "host", "") if actor else ""
                 content = absolutize_remote_images(raw_content, base_url)
 
                 entry.title = obj.get("title", entry.title)
                 entry.content = content
-                entry.contentType = obj.get("contentType", entry.contentType)
+                entry.contentType = get_content_type_from_payload(obj, default=entry.contentType)
                 entry.visibility = obj.get("visibility", entry.visibility)
                 entry.save()
-                print(f"[DEBUG process_inbox] UPDATE ENTRY: Updated entry {entry_id}")
-                print(f"[DEBUG process_inbox] UPDATE ENTRY: Title changed from '{old_title}' to '{entry.title}'")
-                print(f"[DEBUG process_inbox] UPDATE ENTRY: Content length: {len(old_content)} -> {len(entry.content)}")
             else:
                 print(f"[DEBUG process_inbox] UPDATE ENTRY: ERROR - Entry {entry_id} not found in database!")
 
         # DELETE ENTRY
-        elif activity_type == "delete" and isinstance(obj, dict) and obj.get("type") == "post":
-            entry_id = obj.get("id")
+        elif activity_type == "delete":
+            entry_id = activity.get("id") or activity.get("fqid")
             entry = Entry.objects.filter(id=entry_id).first()
             if entry:
                 entry.visibility = "DELETED"
                 entry.save()
-        '''
         
-        # COMMENT
-        elif activity_type == "comment":
-            comment_id = activity.get("id")  
-            entry_id = None
-            comment_content = None
-            comment_content_type = None
-            comment_author_id = None
-            
-            if isinstance(activity.get("entry"), str):
-                entry_id = activity.get("entry")
-                print(f"[DEBUG process_inbox] COMMENT: Processing comment activity with entry={activity.get("entry")}")
-                comment_content = activity.get("comment", "")
-                comment_content_type = activity.get("contentType", "text/plain")
-                author_data = activity.get("author")
-                if isinstance(author_data, dict):
-                    comment_author_id = author_data.get("id")
-                elif isinstance(author_data, str):
-                    comment_author_id = author_data
-            elif isinstance(activity, dict):
-                print(f"[DEBUG process_inbox] COMMENT: Processing comment activity with activity object = {activity}")
-                entry_id = activity.get("entry").get("entry")
-                print(f"[DEBUG process_inbox] COMMENT: Processing comment activity with activity object = {entry_id}")
-                comment_content = activity.get("entry").get("content", "")
-                comment_content_type = activity.get("entry").get("contentType", "text/plain")
-                comment_author_id = activity.get("entry").get("author")
-                if not comment_id:
-                    comment_id = activity.get("entry").get("id")
-            
-            if not entry_id:
-                return
-            
-            entry = Entry.objects.filter(id=normalize_fqid(entry_id)).first()
-            if not entry:
-                entry = Entry.objects.filter(id=entry_id).first()
-            
-            if entry:
-                comment_author = None
-                if comment_author_id:
-                    if isinstance(comment_author_id, dict):
-                        comment_author_id = comment_author_id.get("id")
-                    comment_author = Author.objects.filter(id=normalize_fqid(comment_author_id)).first()
-                    if not comment_author:
-                        # Extract username from author object if available
-                        author_obj = activity.get("author") if isinstance(activity.get("author"), dict) else None
-                        username = author_obj.get("username") or author_obj.get("displayName") if author_obj else None
-                        host = author_obj.get("host") if author_obj else None
-                        comment_author = get_or_create_foreign_author(comment_author_id, host=host, username=username)
-                
-                if not comment_author:
-                    comment_author = actor 
-                
-                if not comment_id:
-                    comment_id = generate_comment_fqid(comment_author, entry)
-                
-                comment = Comment.objects.update_or_create(
-                    id=comment_id,
-                    defaults={
-                        "entry": entry,
-                        "author": comment_author,
-                        "content": comment_content or "",
-                        "contentType": comment_content_type or "text/plain",
-                        "published": safe_parse_datetime(activity.get("published")) or timezone.now()
-                    }
-                )
-
-                print(f"[DEBUG process_inbox] COMMENT: Processed comment {comment} for entry {entry.id} by author {comment_author}")
-
-        # DELETE COMMENT
-        elif activity_type == "delete" and isinstance(obj, dict) and obj.get("type") == "comment":
-            Comment.objects.filter(id=obj.get("id")).delete()
-
-        # LIKE
+        # LIKE ENTRY OR COMMENT
         elif activity_type == "like":
             # Get author information
             author_data = activity.get("author", {})
@@ -1065,13 +994,6 @@ def process_inbox(author: Author):
                     comment.likes.add(author_obj)
                 print(f"[DEBUG] New like created for object={obj_id} by author={author_obj.username}")
 
-
-
-
-
-
-
-
         # UNLIKE
         elif activity_type == "unlike":
             obj_id = obj if isinstance(obj, str) else None
@@ -1089,27 +1011,77 @@ def process_inbox(author: Author):
                 
                 entry = Entry.objects.filter(id=obj_id).first()
                 if entry:
-                    entry.likes.remove(like_actor)
-                        
-        # UNLIKE (ActivityPub format - keep for backward compatibility)
-        elif activity_type == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "like":
-            obj_id = obj.get("object")
-            actor_id = obj.get("actor")
+                    entry.likes.remove(like_actor)    
+
+        
+        # COMMENT
+        elif activity_type == "comment":
+            comment_id = activity.get("id")  
+            entry_id = None
+            comment_content = None
+            comment_content_type = None
+            comment_author_id = None
             
-            like_actor = Author.objects.filter(id=actor_id).first()
-            if not like_actor and actor_id:
-                like_actor = get_or_create_foreign_author(actor_id)
+            if isinstance(activity.get("entry"), str):
+                entry_id = activity.get("entry")
+                print(f"[DEBUG process_inbox] COMMENT: Processing comment activity with entry={activity.get("entry")}")
+                comment_content = activity.get("comment", "")
+                comment_content_type = activity.get("contentType", "text/plain")
+                author_data = activity.get("author")
+                if isinstance(author_data, dict):
+                    comment_author_id = author_data.get("id")
+                elif isinstance(author_data, str):
+                    comment_author_id = author_data
+            elif isinstance(activity, dict):
+                print(f"[DEBUG process_inbox] COMMENT: Processing comment activity with activity object = {activity}")
+                entry_id = activity.get("entry").get("entry") or activity.get("object")
+                print(f"[DEBUG process_inbox] COMMENT: Processing comment activity with activity object = {entry_id}")
+                comment_content = activity.get("entry").get("content", "")
+                comment_content_type = activity.get("entry").get("contentType", "text/plain")
+                comment_author_id = activity.get("entry").get("author")
+                if not comment_id:
+                    comment_id = activity.get("entry").get("id")
             
-            if like_actor:
-                Like.objects.filter(author=like_actor, object=obj_id).delete()
+            if not entry_id:
+                return
+            
+            entry = Entry.objects.filter(id=normalize_fqid(entry_id)).first()
+            if not entry:
+                entry = Entry.objects.filter(id=entry_id).first()
+            
+            if entry:
+                comment_author = None
+                if comment_author_id:
+                    if isinstance(comment_author_id, dict):
+                        comment_author_id = comment_author_id.get("id")
+                    comment_author = Author.objects.filter(id=normalize_fqid(comment_author_id)).first()
+                    if not comment_author:
+                        # Extract username from author object if available
+                        author_obj = activity.get("author") if isinstance(activity.get("author"), dict) else None
+                        username = author_obj.get("username") or author_obj.get("displayName") if author_obj else None
+                        host = author_obj.get("host") if author_obj else None
+                        comment_author = get_or_create_foreign_author(comment_author_id, host=host, username=username)
                 
-                entry = Entry.objects.filter(id=obj_id).first()
-                if entry:
-                    entry.likes.remove(like_actor)
+                if not comment_author:
+                    comment_author = actor 
                 
+                if not comment_id:
+                    comment_id = generate_comment_fqid(comment_author, entry)
+                
+                comment = Comment.objects.update_or_create(
+                    id=comment_id,
+                    defaults={
+                        "entry": entry,
+                        "author": comment_author,
+                        "content": comment_content or "",
+                        "contentType": comment_content_type or "text/plain",
+                        "published": safe_parse_datetime(activity.get("published")) or timezone.now()
+                    }
+                )
+        
 
         # Mark as processed after successful processing
         # Processed variable is only set for ACCEPT, so check activity_type for others
-        if activity_type in ["follow", "accept", "reject", "unlike", "undo", "removefriend", "create", "update", "delete", "comment", "like", "entry"]:
+        if activity_type in ["post", "follow", "accept", "reject", "unlike", "undo", "removefriend", "create", "update", "delete", "comment", "like", "entry"]:
             item.processed = True
             item.save()

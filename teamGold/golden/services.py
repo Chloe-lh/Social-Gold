@@ -84,6 +84,7 @@ def get_remote_node_from_fqid(fqid):
 
 # ! This section of services is old but USED? They are referenced but if possible, needs to be cleaned up
 
+#This should not be used
 def create_activity(author, activity_type, object_data, suffix="posts"):
     activity_id = f"{author.id.rstrip('/')}/{suffix}/{uuid.uuid4()}"
     activity = {
@@ -96,6 +97,7 @@ def create_activity(author, activity_type, object_data, suffix="posts"):
     }
     return activity
 
+#This should not be used
 def create_follow_activity(author, target):
     object_data = {
         "type": "Follow",

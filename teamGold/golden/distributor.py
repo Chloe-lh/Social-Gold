@@ -960,7 +960,8 @@ def process_inbox(author: Author):
                 return
 
             # Object ID being liked
-            obj_id = activity.get("object")
+            obj_id = activity.get("object") or activity.get("object_fqid")
+            # obj_id = activity.get("object")
 
             print(f"[DEBUG] Object_id: {obj_id}")
 

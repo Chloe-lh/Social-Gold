@@ -1836,7 +1836,7 @@ def toggle_like(request):
     with transaction.atomic():
         existing = Like.objects.filter(author=author, object=target.id).first()
         if existing:
-            activity = create_like_activity(author, target)
+            activity = create_like_activity(author, existing)
             existing.delete()
             if entry_obj:
                 entry_obj.likes.remove(author)
@@ -1845,7 +1845,7 @@ def toggle_like(request):
                 like_id = (
                     f"{settings.SITE_URL.rstrip('/')}/api/likes/{uuid.uuid4()}"
                 )
-                Like.objects.create(
+                like = Like.objects.create(
                     id=like_id,
                     author=author,
                     object=target.id,
@@ -1853,7 +1853,7 @@ def toggle_like(request):
                 )
                 if entry_obj:
                     entry_obj.likes.add(author)
-            activity = create_like_activity(author, target.id)
+            activity = create_like_activity(author, like)
 
     distribute_activity(activity, actor=author)
     return redirect(request.META.get("HTTP_REFERER", "stream"))

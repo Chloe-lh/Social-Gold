@@ -362,6 +362,34 @@ def distribute_activity(activity: dict, actor: Author):
         for r in recipients:
             send_activity_to_inbox(r, activity)
         return
+    
+    # FOLLOW SEND OUT
+    if type_lower == "follow":
+        target_id = obj.get("id")
+        target_id = obj.get("id")
+        print(f"[DEBUG distribute_activity] FOLLOW: Processing follow activity")
+        print(f"[DEBUG distribute_activity] FOLLOW: actor={actor.username} (id={actor.id})")
+        print(f"[DEBUG distribute_activity] FOLLOW: target_id (raw)={target_id}")
+        
+        target_id_normalized = normalize_fqid(target_id)
+        print(f"[DEBUG distribute_activity] FOLLOW: target_id (normalized)={target_id_normalized}")
+        
+        target = Author.objects.filter(id=target_id_normalized).first()
+        print(f"[DEBUG distribute_activity] FOLLOW: Lookup by normalized FQID: target={target.username if target else 'None'} (id={target.id if target else 'None'})")
+
+        # If target doesn't exist locally by FQID, try to get/create
+        if not target:
+            print(f"[DEBUG distribute_activity] FOLLOW: Target not found, calling get_or_create_foreign_author")
+            target = get_or_create_foreign_author(target_id)
+            print(f"[DEBUG distribute_activity] FOLLOW: get_or_create_foreign_author returned: target={target.username if target else 'None'} (id={target.id if target else 'None'})")
+        
+        if target:
+            print(f"[DEBUG distribute_activity] FOLLOW: Sending activity to target inbox: target={target.username} (id={target.id}, host={target.host})")
+            send_activity_to_inbox(target, activity)
+            print(f"[DEBUG distribute_activity] FOLLOW: Activity sent successfully")
+        else:
+            print(f"[DEBUG distribute_activity] FOLLOW: ERROR - Target is None, cannot send activity")
+        return
 
     if type_lower == "comment":
         entry_id = activity.get("entry") or activity.get("post")
@@ -987,13 +1015,6 @@ def process_inbox(author: Author):
                     comment.likes.remove(author_obj)
                 print(f"[DEBUG] Existing like removed for object={obj_id} by author={author_obj.username}")
             else:
-                # Like does not exist → create new Like
-                like = Like.objects.create(
-                    id=activity.get("id"),
-                    author=author_obj,
-                    object=obj_id,  # FQID string, NOT Entry/Comment object
-                    published=safe_parse_datetime(activity.get("published")) or timezone.now()
-                )
                 if entry:
                     entry.likes.add(author_obj)
                 if comment:

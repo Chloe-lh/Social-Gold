@@ -260,6 +260,7 @@ def create_profile_update_activity(actor_author):
 
     return activity
 
+'''
 def create_unlike_activity(author, liked_object):
     activity_id = make_fqid(author, "unlike")
 
@@ -295,7 +296,7 @@ def create_unlike_activity(author, liked_object):
     }
     
     return activity
-
+'''
 
 '''
 HELPER FUNCTIONS

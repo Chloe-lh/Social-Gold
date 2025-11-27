@@ -44,9 +44,7 @@ from golden.activities import ( # Kenneth: If you're adding new activities, plea
     create_follow_activity,
     create_like_activity,
     create_new_entry_activity,
-
     create_update_entry_activity,
-    create_unlike_activity,
     create_profile_update_activity,
 )
 

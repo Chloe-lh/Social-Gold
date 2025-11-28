@@ -228,38 +228,6 @@ def create_follow_activity(author, target):
     
     return activity
 
-# def create_unfollow_activity(actor_author, target_id):
-#     activity_id = make_fqid(actor_author, "undo-follow")
-
-#     activity = {
-#         "type": "Undo",
-#         "id": activity_id,
-#         "summary": f"{actor_author.username} stopped following you",
-#         "actor": str(actor_author.id),
-#         "object": {
-#             "type": "Follow",
-#             "actor": str(actor_author.id),
-#             "object": str(target_id)
-#         },
-#         "published": timezone.now().isoformat(),
-#     }
-    
-#     return activity
-
-# def create_unfriend_activity(actor_author, target_id):
-#     activity_id = make_fqid(actor_author, "unfriend")
-
-#     activity = {
-#         "type": "RemoveFriend",
-#         "id": activity_id,
-#         "summary": f"{actor_author.username} removed you as a friend",
-#         "actor": str(actor_author.id),
-#         "object": str(target_id),
-#         "published": timezone.now().isoformat(),
-#     }
-    
-#     return activity
-
 def create_profile_update_activity(actor_author):
     activity_id = make_fqid(actor_author, "profile-update")
 

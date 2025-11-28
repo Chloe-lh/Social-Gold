@@ -71,59 +71,54 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
     print("[DEBUG] recipient.host =", recipient.host)
 
     def ensure_datetime_strings(obj):
-            """
-            Recursively convert datetime objects to ISO strings
-            and ensure all nested values are JSON-serializable.
-            """
-            # Handle datetime
-            if isinstance(obj, dt):
-                return obj.isoformat()
-
-            # Handle primitives
-            if isinstance(obj, (str, int, float, bool)) or obj is None:
-                return obj
-
-            # Handle dicts
-            if isinstance(obj, dict):
-                return {k: ensure_datetime_strings(v) for k, v in obj.items()}
-
-            # Handle lists/tuples
-            if isinstance(obj, (list, tuple)):
-                return [ensure_datetime_strings(item) for item in obj]
-
-            # Handle model objects or other custom objects
-            # Use string representation to avoid recursion issues
-            try:
-                return str(obj)
-            except Exception:
-                return repr(obj)
-            
+        """
+        Recursively convert datetime objects to ISO strings
+        and ensure all nested values are JSON-serializable.
+        """
+        if isinstance(obj, dt):
+            return obj.isoformat()
+        if isinstance(obj, (str, int, float, bool)) or obj is None:
+            return obj
+        if isinstance(obj, dict):
+            return {k: ensure_datetime_strings(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple)):
+            return [ensure_datetime_strings(item) for item in obj]
+        try:
+            return str(obj)
+        except Exception:
+            return repr(obj)
+    
     activity_clean = ensure_datetime_strings(activity)
+    
+    # LOCAL DELIVERY: Check if recipient is on this node
+    if recipient.host.rstrip("/") == settings.SITE_URL.rstrip("/"):
+        print(f"[DEBUG send_activity_to_inbox] LOCAL delivery: Creating inbox item for {recipient.username}")
+        Inbox.objects.create(author=recipient, data=activity_clean)
+        print(f"[DEBUG send_activity_to_inbox] LOCAL delivery: Inbox item created successfully")
+        return True  # Return True to indicate success
+    
+    # SKIP if activity originated from this node and recipient is remote
+    # (prevents echo/loops)
     if activity.get("id", "").startswith(settings.SITE_URL):
-        return
+        print(f"[DEBUG send_activity_to_inbox] Skipping remote delivery - activity originated locally")
+        return True
 
-    # For remote inbox, construct the URL properly
-    # The inbox endpoint expects: /api/authors/<author_id>/inbox/
-    # Extract the UUID or author ID part from the full FQID
+    # REMOTE DELIVERY
     recipient_id = str(recipient.id).rstrip('/')
     
-    # Extract the author ID part (UUID) from the FQID
-    # FQID format: https://node.com/api/authors/{uuid}
     if '/api/authors/' in recipient_id:
         author_id_part = recipient_id.split('/api/authors/')[-1]
     else:
-        # Fallback: use the last part of the URL
         author_id_part = recipient_id.split('/')[-1]
     
     base_host = recipient.host.rstrip('/')
 
-    # If host already ends with /api, do NOT append another `/api`
     if base_host.endswith('/api'):
         inbox_url = f"{base_host}/authors/{author_id_part}/inbox/"
     else:
         inbox_url = f"{base_host}/api/authors/{author_id_part}/inbox/"
 
-    # Get node authentication if available
+    # Get node authentication
     parsed = urlparse(recipient.host)
     node_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
     node = Node.objects.filter(id__startswith=node_base).first()
@@ -143,6 +138,7 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         if response.status_code >= 400:
             print(f"[WARN send_activity_to_inbox] Remote node returned error {response.status_code}: {response.text}")
             return False
+        return True
 
     except requests.exceptions.RequestException as e:
         print(f"[ERROR send_activity_to_inbox] Failed delivering to inbox {inbox_url}: {e}")

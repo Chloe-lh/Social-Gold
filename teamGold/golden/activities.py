@@ -147,7 +147,6 @@ def create_like_activity(author, like_obj):
 
     activity = {
         "type": "like",
-        "id":activity_id,
         "author":{
             "type":"author",
             "id":author.id,

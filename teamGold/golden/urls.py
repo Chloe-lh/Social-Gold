@@ -81,7 +81,7 @@ urlpatterns = [
     path("api/liked/<path:like_fqid>/", LikedAPIView.as_view(), name="liked"),
 
     # Miscellaneous API Endpoints
-    # path("api/authors/<path:author_serial>/inbox/", views.inbox_view, name="author-inbox"),
+    path("api/authors/<path:author_serial>/inbox/", views.inbox_view, name="author-inbox"),
     path("api/authors/<path:author_serial>/entries/<path:entry_serial>/images/", EntryImageAPIView.as_view(), name="author-entry-images"),
     path("api/Entry/<path:entry_id>/images/", EntryImageAPIView.as_view(), name="author-entry-images-cap"),
     path("api/EntryImage/<path:id>/", EntryImageAPIView.as_view(), name="get-entry-image-cap"),

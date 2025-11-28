@@ -32,7 +32,6 @@ from golden.activities import (
     create_delete_entry_activity,
     create_comment_activity,
     create_like_activity,
-    create_unlike_activity,
     create_follow_activity,
     create_profile_update_activity,
     get_comment_list_api,
@@ -208,7 +207,7 @@ class EntryActivityVisibilityTestCase(TestCase):
         self.assertEqual(activity["visibility"], "FRIENDS")
 
 # ============================================================
-# Comment / Like / Unlike Activity Tests
+# Comment & Like Activity Tests
 # ============================================================
 
 class CreateCommentActivityTestCase(TestCase):

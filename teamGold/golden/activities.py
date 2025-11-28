@@ -8,6 +8,7 @@ from django.conf import settings
 
 node_url = settings.SITE_URL
 
+# this function needs to be moved to services
 def make_fqid(author, suffix: str):
     """
     Example:
@@ -16,6 +17,7 @@ def make_fqid(author, suffix: str):
     """
     return f"{author.id.rstrip('/')}/{suffix}/{uuid.uuid4()}"
 
+# this function needs to be moved to services
 def is_local(author_id):
     """
     Determines if the given author_id belongs to a local author or a remote one.
@@ -90,14 +92,14 @@ def create_update_entry_activity(author, entry):
     return activity
 
 def create_delete_entry_activity(author, entry):
-    activity_id = make_fqid(author, "posts")
+    #activity_id = make_fqid(author, "posts")
     commentList = get_comment_list_api(entry.id)
     likeList = get_like_api(entry.id)
    
     activity = {
         "type": "Entry",
         "title" : entry.title,
-        "id": activity_id,
+        "id": entry.id,
         "web" : entry.web,
         "description" : entry.description,
         "contentType": entry.contentType,
@@ -119,7 +121,7 @@ def create_delete_entry_activity(author, entry):
     return activity
 
 def create_comment_activity(author, entry, comment):
-    activity_id = make_fqid(author, "comments")
+    #activity_id = make_fqid(author, "comments")
     activity = {
         "type": "comment",
         "author":{
@@ -127,21 +129,21 @@ def create_comment_activity(author, entry, comment):
             "id":author.id,
             "web":author.web,
             "host":author.host,
-            "displayName":author.name,
+            "displayName":author.username,
             "github":author.github,
             "profileImage":author.profileImage.url if author.profileImage else None,
         },
         "comment":comment.content,
         "contentType":comment.contentType,
         "published":comment.published,
-        "id":activity_id,
+        "id":comment.id,
         "entry":entry.id,
         "likes":{},
     }
     return activity
 
-def create_like_activity(author, liked_object_fqid):
-    activity_id = make_fqid(author, "likes")
+def create_like_activity(author, like_obj):
+    #activity_id = make_fqid(author, "likes")
 
     activity = {
         "type": "like",
@@ -151,12 +153,13 @@ def create_like_activity(author, liked_object_fqid):
             "id":author.id,
             "web":author.web,
             "host":author.host,
-            "displayName":author.name,
+            "displayName":author.username,
             "github":author.github,
             "profileImage":author.profileImage.url if author.profileImage else None
         },
         "published":timezone.now().isoformat(),
-        "object":liked_object_fqid,
+        "id":like_obj.id,
+        "object":like_obj.object,
     }
     return activity
 
@@ -196,7 +199,7 @@ def create_follow_activity(author, target):
     
     activity = {
         "type":"follow",
-        "summary":f"{author.name} wants to follow {target.name}",
+        "summary":f"{author.username} wants to follow {target.username}",
         "actor":{
             "type":"author",
             "id":author.id,

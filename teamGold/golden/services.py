@@ -1,6 +1,5 @@
 import requests
 import uuid
-from django.core.paginator import Paginator
 
 from django.conf import settings
 from .models import Author, Entry
@@ -34,6 +33,7 @@ def get_content_type_from_payload(data, default="text/plain"):
     if not isinstance(data, dict):
         return default
     return data.get("contentType") or data.get("content_type") or default
+
 
 def get_or_create_author(fqid: str) -> Author:
     """
@@ -81,12 +81,41 @@ def get_remote_node_from_fqid(fqid):
         return node
     return None
 
+
+# ! This section of services is old but USED? They are referenced but if possible, needs to be cleaned up
+
+#This should not be used
+def create_activity(author, activity_type, object_data, suffix="posts"):
+    activity_id = f"{author.id.rstrip('/')}/{suffix}/{uuid.uuid4()}"
+    activity = {
+        "type": activity_type,
+        "id": activity_id,
+        "actor": str(author.id),
+        "published": timezone.now().isoformat(),
+        "summary": f"{author.username} performed a {activity_type} activity",
+        "object": object_data
+    }
+    return activity
+
+#This should not be used
+def create_follow_activity(author, target):
+    object_data = {
+        "type": "Follow",
+        "actor": str(author.id),
+        "object": str(target.id),
+        "published": timezone.now().isoformat(),
+        "state": "REQUESTED"
+    }
+    return create_activity(author, "Follow", object_data, "follow")
+
+
 def generate_comment_fqid(author):
     """
     Create FQID for a comment related to the author.
     """
     comment_uuid = uuid.uuid4()
     return f"{author.id}/commented/{comment_uuid}"
+
 
 def generate_like_fqid(author):
     """
@@ -261,6 +290,27 @@ def fetch_and_sync_remote_entry(entry_fqid):
         print(f"[DEBUG fetch_and_sync_remote_entry] Error fetching entry: {e}")
     
     return None
+
+def fetch_or_create_author(author_url):
+    """
+    Fetch or create a remote author by their URL.
+    """
+
+    # Check if author already exists locally
+    author = Author.objects.filter(id=author_url).first()
+
+    if not author:
+        # If the author doesn't exist, fetch their data from the remote node and create a new author entry
+        author_data = fetch_remote_author_data(author_url)
+        if author_data:
+            author = Author.objects.create(
+                id=author_url,
+                username=author_data.get("username"),
+                host=author_data.get("host"),
+                profileImage=author_data.get("profileImage"),
+                # Other fields as needed
+            )
+    return author
 
 def fetch_remote_author_data(author_fqid):
     """
@@ -453,6 +503,12 @@ def get_or_create_foreign_author(remote_id: str, host: str = None, username: str
     is_local_fqid = remote_id.startswith(site_url) if remote_id.startswith("http") else False
     print(f"[DEBUG get_or_create_foreign_author] Checking if local: site_url={site_url}, remote_id={remote_id}, is_local_fqid={is_local_fqid}")
     
+    if is_local_fqid:
+        # This is a local author - if it doesn't exist, that's an error
+        # Local authors should already exist in the database
+        print(f"[DEBUG get_or_create_foreign_author] ERROR: Local author not found: {remote_id}. This may indicate a data issue.")
+        print(f"[DEBUG get_or_create_foreign_author] Returning None for local author that doesn't exist")
+        return None
     
     # Check if remote_id is a full URL or just a UUID
     host_val = host
@@ -526,3 +582,4 @@ def get_or_create_foreign_author(remote_id: str, host: str = None, username: str
         author.save()
     
     return author
+

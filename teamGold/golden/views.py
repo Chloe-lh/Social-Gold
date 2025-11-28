@@ -45,7 +45,6 @@ from golden.activities import (
     create_like_activity,
     create_new_entry_activity,
     create_update_entry_activity,
-    create_unlike_activity,
     create_profile_update_activity,
 )
 
@@ -1907,28 +1906,26 @@ def toggle_like(request):
     target_id = (entry_obj.id if entry_obj else (comment_obj.id if comment_obj else object_fqid))
 
     with transaction.atomic():
-        existing = Like.objects.filter(author=author, object=target_id).first()
-
-        if existing: # UNLIKING LOGIC 
+        existing = Like.objects.filter(author=author, object=target.id).first()
+        if existing:
+            activity = create_like_activity(author, existing)
             existing.delete()
             if entry_obj:
                 entry_obj.likes.remove(author)
-
-            activity = create_unlike_activity(author, existing.object)
-        else: # LIKING LOGIC 
-            like_id = f"{settings.SITE_URL.rstrip('/')}/api/likes/{uuid.uuid4()}"
-            Like.objects.create(
-                id=like_id,
-                author=author,    
-                object=target_id,  
-                published=dj_timezone.now(),
-            )
-
-            # If the target is an Entry, add to its many-to-many likes
-            if entry_obj:
-                entry_obj.likes.add(author)
-
-            activity = create_like_activity(author, target_id) 
+        else:
+            if not Like.objects.filter(author=author, object=target.id).exists():
+                like_id = (
+                    f"{settings.SITE_URL.rstrip('/')}/api/likes/{uuid.uuid4()}"
+                )
+                like = Like.objects.create(
+                    id=like_id,
+                    author=author,
+                    object=target.id,
+                    published=dj_timezone.now(),
+                )
+                if entry_obj:
+                    entry_obj.likes.add(author)
+            activity = create_like_activity(author, like)
 
     distribute_activity(activity, actor=author)
     return redirect(request.META.get("HTTP_REFERER", "stream"))

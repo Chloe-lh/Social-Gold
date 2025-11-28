@@ -1,0 +1,100 @@
+{% extends "components/base.html" %}
+{% load static %}
+
+<!DOCTYPE HTML> 
+<html lang="en">
+  <head>
+    {% block head %}
+    <title>Golden - Entry-Details</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="{% static 'golden/css/global.css' %}">
+    <link rel="stylesheet" href="{% static 'golden/css/entry.css' %}">
+    {% endblock %}
+  </head>
+  <body>
+    {% block content %}
+    <br><br>
+
+    <!-- New Entry Section Form -->
+     
+      <!-- Comment Field -->
+    <form id="entryForm" method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <p>Reply</p>
+      <input type="hidden" name="entry_id" value="{{ entry.id }}">
+      <textarea name="content" type="input" aria-label="Comment Input" placeholder="Begin comment here..." autocomplete="off" required id="id_content"></textarea>
+      <button type="submit" class="btn">Reply</button>
+    </form>
+
+        <section class="entry-text-box">
+        {% if form %}
+            <form method="POST" action="{% url 'new_edit_entry_view' %}" enctype="multipart/form-data"> 
+                {% csrf_token %} 
+                {% if editing_entry %}
+                    <!-- EDITING MODE -->
+                    <textarea name="content" rows="10" cols="50" placeholder="Enter your text here...">{{ content|striptags }}</textarea><br><br>
+
+                    <!-- Existing Images -->
+                    {% if editing_entry.images.all %}
+                        <p><strong>Current Images:</strong></p>
+                        {% for image in editing_entry.images.all %}
+                            <div style="display: inline-block; margin: 10px;">
+                                <img src="{{ image.image.url }}" alt="Current image" style="max-width: 200px; height: auto;"><br>
+                                <label>
+                                    <input type="checkbox" name="remove_images" value="{{ image.id }}"> Remove
+                                </label>
+                            </div>
+                        {% endfor %}
+                        <br><br>
+                    {% endif %}
+                    
+                    <!-- Upload New Images -->
+                    <label>Upload New Image(s):</label>
+                    <input type="file" name="images" accept="image/*" multiple><br><br>
+                    
+                    <!-- Visibility -->
+                    <label for="visibility">Visibility:</label>
+                    <select id="visibility" name="visibility">
+                        <option value="PUBLIC" {% if editing_entry.visibility == "PUBLIC" %}selected{% endif %}>Public</option>
+                        <option value="UNLISTED" {% if editing_entry.visibility == "UNLISTED" %}selected{% endif %}>Unlisted</option>
+                        <option value="FRIENDS" {% if editing_entry.visibility == "FRIENDS" %}selected{% endif %}>Friends-Only</option>
+                    </select><br><br>
+
+                    <!-- markdown -->
+                    <!-- TODO: add label here -->
+                    <select id="markdown" name="markdown">
+                        <option value="Plain" {% if editing_entry.contentType == "text/plain" %}selected{% endif %}>Plain Text</option>
+                        <option value="Markdown"{% if editing_entry.contentType == "text/markdown" %}selected{% endif %}>Markdown</option>
+                    </select><br><br>
+
+                    <button type="submit" name="entry_update" value="{{ editing_entry.id }}">Save Changes</button>
+                    <a href="{% url 'entry_detail' editing_entry.get_uuid %}" class="btn">Cancel</a>
+                {% else %}
+                    <textarea name="content" rows="10" cols="50" placeholder="Enter your text here" required></textarea><br><br>
+                    
+                    <!-- Image -->
+                    <label>Upload Image(s):</label>
+                    <input type="file" name="images" accept="image/*" multiple><br><br>
+                    
+                    <!-- Visibility -->
+                    <label for="visibility">Visibility:</label>
+                    <select id="visibility" name="visibility">
+                        <option value="PUBLIC" selected>Public</option>
+                        <option value="UNLISTED">Unlisted</option>
+                        <option value="FRIENDS">Friends-Only</option>
+                    </select><br><br>
+                    
+                    <!-- markdown -->
+                    <!-- TODO: add label here -->
+                    <select id="markdown" name="markdown">
+                        <option value="text/plain" selected>Plain Text</option>
+                        <option value="text/markdown">Markdown</option>
+                    </select><br><br>
+                    
+                    <button type="submit" name="entry_post">Post</button>
+                {% endif %}
+            </form>
+        {% endif %}
+        </section>
+    </section>
+{% endblock %}

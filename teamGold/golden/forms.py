@@ -5,6 +5,7 @@ from django import forms
 
 class CustomUserForm(UserCreationForm):
     username = forms.CharField(max_length=100, required=True)
+    email = forms.CharField(max_length=100, required=True)
     password1 = forms.CharField(max_length=20, required=True)
     password2 = forms.CharField(max_length=20, required=True)
 
@@ -15,9 +16,10 @@ class CustomUserForm(UserCreationForm):
 class ProfileForm(forms.ModelForm):
     class Meta:
         model = Author
-        fields = ['name', 'profileImage', 'github', 'web', 'description']
+        fields = ['name', 'email', 'profileImage', 'github', 'web', 'description']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-input'}),
+            'email': forms.TextInput(attrs={'class': 'form-input'}),
             'github': forms.URLInput(attrs={'class': 'form-input'}),
             'web': forms.URLInput(attrs={'class': 'form-input'}),
             'description': forms.Textarea(attrs={'class': 'form-input', 'rows': 4, 'cols': 50}),
@@ -32,7 +34,7 @@ class CommentForm(forms.ModelForm):
             'content': forms.Textarea(),
         }
 
-class EntryList(forms.ModelForm):
+class EntryForm(forms.ModelForm):
     class Meta:
         model = Entry
         fields = ['content', 'author', 'is_posted', 'visibility']

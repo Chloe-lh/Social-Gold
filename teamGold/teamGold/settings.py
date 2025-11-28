@@ -32,9 +32,6 @@ DEBUG = True
 
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver","*"]
 
-
-# Application definition
-
 INSTALLED_APPS = [
     'golden',
     'django.contrib.admin',
@@ -44,7 +41,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'drf_yasg'
+    'drf_yasg',
+    'csp',
+    'storages'
 ]
 
 MIDDLEWARE = [
@@ -56,6 +55,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "csp.middleware.CSPMiddleware"
 ]
 
 ROOT_URLCONF = 'teamGold.urls'
@@ -169,3 +169,25 @@ LOCAL_NODE_URL = SITE_URL
 
 STATIC_ROOT = BASE_DIR / "staticfiles" 
 STATIC_URL = "/static/"
+
+# Logging added 
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'golden': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
+}

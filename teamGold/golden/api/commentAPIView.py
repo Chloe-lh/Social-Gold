@@ -1,4 +1,295 @@
 
+''''
+from rest_framework import status
+from rest_framework.views import APIView
+from rest_framework.authentication import BasicAuthentication
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+# DJANGO IMPORTS
+from django.shortcuts import get_object_or_404
+from django.conf import settings
+from django.utils import timezone
+from django.core.paginator import Paginator
+import uuid
+import requests
+import json
+from urllib.parse import unquote
+
+# PYTHON IMPORTS
+from rest_framework import status
+from rest_framework.views import APIView
+from rest_framework.authentication import BasicAuthentication
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+# LOCAL IMPORTS
+from golden.models import Author, Entry, Comment
+from golden.services import generate_comment_fqid, paginate, fqid_to_uuid, get_remote_node_from_fqid
+from golden.distributor import distribute_activity
+from golden.activities import create_comment_activity
+
+# SWAGGER
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+
+# SERIALIZERS IMPORTS
+from golden.serializers import CommentSerializer, MinimalAuthorSerializer
+
+
+class EntryCommentAPIView(APIView):
+    """
+    API view for handling comments on a specific entry.
+
+    URL patterns supported:
+    - GET /api/entries/<ENTRY_FQID>/comments/ - list comments for an entry
+    - GET /api/authors/<AUTHOR_SERIAL>/entries/<ENTRY_SERIAL>/comments - list comments by author and entry
+    - POST /api/authors/<AUTHOR_SERIAL>/entries/<ENTRY_SERIAL>/comments - create a new comment on an entry
+    """
+    authentication_classes = [BasicAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_summary='List all comments for an entry',
+        operation_description=(
+            "Returns a paginated list of Comment objects for a given entry. "
+            "Each comment includes nested author information. "
+            "Optional query parameters:\n"
+            "- `page`: page number (default 1)\n"
+            "- `size`: page size (default 10)"
+        ),
+        responses={
+            200: openapi.Response(description="Comments retrieved successfully"),
+            404: openapi.Response(description="Entry not found"),
+            400: openapi.Response(description="Bad request"),
+        }
+    )
+    def get(self, request, author_serial=None, entry_serial=None, *args, **kwargs):
+        if not entry_serial:
+            return Response({'detail': 'entry id required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            entry = Entry.objects.get(id__contains=entry_serial)
+        except Entry.DoesNotExist:
+            return Response({'detail': 'entry not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if author_serial and author_serial not in entry.author.id:
+            return Response({'detail': 'entry not found by specified author'}, status=status.HTTP_404_NOT_FOUND)
+
+        qs = Comment.objects.filter(entry_id=entry.id).order_by('-published')
+        page_obj = paginate(request, qs)
+        items = CommentSerializer(page_obj.object_list, many=True).data
+
+        collection = {
+            "type": "comments",
+            "id": request.build_absolute_uri(),
+            "size": qs.count(),
+            "items": items,
+        }
+
+        if page_obj.has_next():
+            next_page = page_obj.next_page_number()
+            collection['next'] = f"{request.build_absolute_uri('?page=' + str(next_page))}"
+        if page_obj.has_previous():
+            prev_page = page_obj.previous_page_number()
+            collection['prev'] = f"{request.build_absolute_uri('?page=' + str(prev_page))}"
+
+        return Response(collection, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        operation_summary='Create a new comment for an entry',
+        operation_description='Posts a comment to a specified entry. Server automatically sets author, ID, and timestamp.',
+        request_body=CommentSerializer,
+        responses={
+            201: openapi.Response(description="Comment created successfully"),
+            400: openapi.Response(description="Invalid request or serializer errors"),
+            404: openapi.Response(description="Entry or Author not found"),
+        }
+    )
+    def post(self, request, author_serial=None, entry_serial=None, *args, **kwargs):
+        print("ENTER: EntryCommentAPIView.post")
+        raw_serial = unquote(entry_serial or '').rstrip("/")
+
+        # Resolve entry whether the URL passed a full FQID or just a UUID/serial
+        entry = None
+        if raw_serial.startswith('http'):
+            entry = Entry.objects.filter(id=raw_serial).first() or Entry.objects.filter(id=raw_serial + '/').first()
+        else:
+            # treat as a short serial (uuid) - try contains/endswith matches
+            entry = Entry.objects.filter(id__contains=raw_serial).first()
+            if not entry:
+                entry = Entry.objects.filter(id__endswith=raw_serial).first()
+
+        if not entry:
+            return Response({'detail': 'Entry not found'}, status=status.HTTP_404_NOT_FOUND)
+        print("Entry found", flush=True)
+        if not request.content_type or 'application/json' not in request.content_type:
+            return Response({'detail': 'Content-Type must be application/json'}, status=status.HTTP_400_BAD_REQUEST)
+
+        author = get_object_or_404(Author, id=request.user.id)
+        print("Entry found", flush=True)
+        data = request.data.copy()
+        # prefer 'content' then 'comment' from the incoming payload
+        comment_text = data.get('content') or data.get('comment')
+        if comment_text is None or (isinstance(comment_text, str) and not comment_text.strip()):
+            return Response({'detail': "'content' or 'comment' is required"}, status=status.HTTP_400_BAD_REQUEST)
+        data['content'] = comment_text
+        data['entry'] = entry.id
+        data['type'] = 'comment'
+        data['id'] = generate_comment_fqid(author)
+        data['published'] = timezone.now().isoformat()
+
+        print(data, flush=True)
+        serializer = CommentSerializer(data=data)
+        if not serializer.is_valid():
+            print("serializer failed")
+            print(serializer.errors)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        comment = serializer.save(entry=entry, author=author)
+        activity = create_comment_activity(author, entry, comment)
+        distribute_activity(activity, actor=author)
+
+        return Response(CommentSerializer(comment).data, status=status.HTTP_201_CREATED)
+
+
+class SingleCommentAPIView(APIView):
+    """
+    API view to retrieve a single comment by FQID.
+
+    URL pattern:
+    - GET /api/authors/<AUTHOR_SERIAL>/entries/<ENTRY_SERIAL>/comments/<COMMENT_FQID>
+    """
+    authentication_classes = [BasicAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_summary="Retrieve a single comment",
+        operation_description=(
+            "Fetches a single comment using the provided author, entry, and comment FQID. "
+            "If the comment is remote, it fetches from the remote node."
+        ),
+        responses={
+            200: openapi.Response(description="Comment found"),
+            404: openapi.Response(description="Comment not found or remote fetch failed"),
+        }
+    )
+    def get(self, request):
+        comment_fqid = unquote(request.build_absolute_uri())
+        comment_uid = fqid_to_uuid(comment_fqid)
+        remote_node = get_remote_node_from_fqid(comment_fqid)
+
+        if not remote_node:
+            comment = get_object_or_404(Comment, id=comment_uid)
+            serializer = CommentSerializer(comment)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        else:
+            try:
+                res = requests.get(
+                    comment_fqid,
+                    auth=(remote_node.auth_user, remote_node.auth_pass),
+                    headers={'Accept':'application/json'}
+                )
+                if res.status_code == 200:
+                    return Response(res.json(), status=status.HTTP_200_OK)
+            except Exception:
+                return Response({"detail": f"Failed to fetch remote comment: {comment_fqid}"}, status=status.HTTP_404_NOT_FOUND)
+
+
+class CommentedAPIView(APIView):
+    """
+    API view to manage and retrieve comments authored by a user.
+
+    URL patterns supported:
+    - GET /api/authors/{AUTHOR_SERIAL}/commented - list comments by author
+    - POST /api/authors/{AUTHOR_SERIAL}/commented - post a new comment
+    - GET /api/commented/{COMMENT_FQID} - retrieve a specific comment
+    """
+    authentication_classes = [BasicAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_summary="Create a comment on behalf of the user",
+        operation_description="Posts a new comment for the authenticated user to a specified entry.",
+        request_body=CommentSerializer,
+        responses={
+            201: openapi.Response(description="Comment created successfully"),
+            400: openapi.Response(description="Invalid request or serializer errors"),
+            404: openapi.Response(description="Entry or Author not found"),
+        }
+    )
+    def post(self, request, author_serial):
+        print("ENTER: CommentedAPI.post")
+        entry_id = request.data.get("entry")
+        if not entry_id:
+            return Response({'detail': "'entry' field is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        entry = Entry.objects.filter(id=entry_id).first() or Entry.objects.filter(id=entry_id + '/').first()
+        if not entry:
+            return Response({'detail': 'Entry not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        author = get_object_or_404(Author, id=request.user.id)
+        data = request.data.copy()
+        data['entry'] = entry.id
+        data['type'] = 'comment'
+        data['id'] = generate_comment_fqid(author)
+        data['published'] = timezone.now().isoformat()
+        data.pop('author', None)
+
+        serializer = CommentSerializer(data=data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        comment = serializer.save(entry=entry, author=author)
+        activity = create_comment_activity(author, entry, comment)
+        distribute_activity(activity, actor=author)
+
+        return Response(CommentSerializer(comment).data, status=status.HTTP_201_CREATED)
+
+    @swagger_auto_schema(
+        operation_summary="List all comments by a user",
+        operation_description="Returns a paginated list of comments created by the specified author.",
+        responses={
+            200: openapi.Response(description="Comments retrieved successfully"),
+            404: openapi.Response(description="Author not found"),
+        }
+    )
+    def get(self, request, author_serial=None, comment_fqid=None):
+        if comment_fqid:
+            # Retrieve a specific comment
+            comment = Comment.objects.filter(id=comment_fqid).first() or Comment.objects.filter(id=comment_fqid.rstrip('/') + '/').first()
+            if not comment:
+                return Response({'detail': 'comment not found'}, status=status.HTTP_404_NOT_FOUND)
+            if author_serial and author_serial not in comment.author.id:
+                return Response({'detail': 'comment not found for this author'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(CommentSerializer(comment).data, status=status.HTTP_200_OK)
+        else:
+            # Retrieve all comments by author
+            author = Author.objects.filter(id__contains=author_serial).first()
+            if not author:
+                return Response({'detail':'Author not found'}, status=status.HTTP_404_NOT_FOUND)
+
+            qs = Comment.objects.filter(author_id=author.id).order_by('-published')
+            page_obj = paginate(request, qs)
+            items = CommentSerializer(page_obj.object_list, many=True).data
+
+            collection = {
+                "type": "comments",
+                "id": request.build_absolute_uri(),
+                "size": qs.count(),
+                "items": items,
+            }
+            if page_obj.has_next():
+                next_page = page_obj.next_page_number()
+                collection['next'] = f"{request.build_absolute_uri('?page=' + str(next_page))}"
+            if page_obj.has_previous():
+                prev_page = page_obj.previous_page_number()
+                collection['prev'] = f"{request.build_absolute_uri('?page=' + str(prev_page))}"
+
+            return Response(collection, status=status.HTTP_200_OK)
+'''
+
+
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.authentication import BasicAuthentication
@@ -25,7 +316,9 @@ import logging
 
 # LOCAL IMPORTS
 from golden.models import Author, Entry, Comment, Like, Follow, Node
-from golden.services import generate_comment_fqid, paginate, fqid_to_uuid, get_remote_node_from_fqid, notify
+from golden.services import generate_comment_fqid, paginate, fqid_to_uuid, get_remote_node_from_fqid
+from golden.distributor import distribute_activity
+from golden.activities import create_comment_activity
 
 # SWAGGER
 from drf_yasg.utils import swagger_auto_schema
@@ -57,12 +350,16 @@ class EntryCommentAPIView(APIView):
             404: openapi.Response(description="Comment Not found"),
         }
     )
-    def get(self, request, entry_id=None, entry_fqid=None, *args, **kwargs):
+    def get(self, request, author_serial=None, entry_serial=None, *args, **kwargs):
         """Return a comments collection for an entry.
 
         Accepts either:
         - path param named `entry_id` or `entry_fqid` (URL-encoded FQID), or
         - kwargs keys like `entry_serial` (author+entry alias).
+
+        Queries (optional):
+        - page param denotes the page number; default 1
+        - size denotes the page size; default 10
 
         Behavior:
         - If the entry exists locally, return stored comments (paginated).
@@ -73,64 +370,40 @@ class EntryCommentAPIView(APIView):
         """
         print("ENTER EntryCommentAPIView.get", flush=True)
   
-        raw = entry_id or entry_fqid or kwargs.get('entry_serial') or kwargs.get('entry_fqid')
-        if not raw:
+        if not entry_serial:
             return Response({'detail': 'entry id required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        entry_fqid = unquote(raw).rstrip('/')
-        print("DEBUG entry_fqid: %s ", entry_fqid, flush=True)
-
-        # Try local lookup first
         try:
-            entry = Entry.objects.get(id=entry_fqid)
+            entry = Entry.objects.get(id__contains=entry_serial)
         except Entry.DoesNotExist:
-            entry = None
+            return Response({'detail': 'entry not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        # If local, return paginated local comments
-        if entry:
-            qs = Comment.objects.filter(entry_id=entry.id).order_by('-published')
-            page_obj = paginate(request, qs)
-            items = CommentSerializer(page_obj.object_list, many=True).data
+        # Make sure the author of the entry is the author specifed if author serial is provided
+        if author_serial and author_serial not in entry.author.id:
+            return Response({'detail': 'entry not found by specified author'}, status=status.HTTP_404_NOT_FOUND)
 
-            collection = {
-                "type": "comments",
-                "id": request.build_absolute_uri(),
-                "size": qs.count(),
-                "items": items,
-            }
+        # return paginated local comments
+        qs = Comment.objects.filter(entry_id=entry.id).order_by('-published')
+        page_obj = paginate(request, qs)
+        items = CommentSerializer(page_obj.object_list, many=True).data
 
-            # add simple pagination links if applicable
-            if page_obj.has_next():
-                next_page = page_obj.next_page_number()
-                collection['next'] = f"{request.build_absolute_uri('?page=' + str(next_page))}"
-            if page_obj.has_previous():
-                prev_page = page_obj.previous_page_number()
-                collection['prev'] = f"{request.build_absolute_uri('?page=' + str(prev_page))}"
+        collection = {
+            "type": "comments",
+            "id": request.build_absolute_uri(),
+            "size": qs.count(),
+            "items": items,
+        }
 
-            return Response(collection, status=status.HTTP_200_OK)
+        # add simple pagination links if applicable
+        if page_obj.has_next():
+            next_page = page_obj.next_page_number()
+            collection['next'] = f"{request.build_absolute_uri('?page=' + str(next_page))}"
+        if page_obj.has_previous():
+            prev_page = page_obj.previous_page_number()
+            collection['prev'] = f"{request.build_absolute_uri('?page=' + str(prev_page))}"
 
-        # attempt to find a remote node and find its comments endpoint
-        remote_node = get_remote_node_from_fqid(entry_fqid)
-        if remote_node and remote_node.id.rstrip('/') != settings.LOCAL_NODE_URL.rstrip('/'):
-            try:
-                remote_comments_url = remote_node.id.rstrip('/') + '/api/entries/' + quote(entry_fqid, safe='') + '/comments/'
-                resp = requests.get(
-                    remote_comments_url,
-                    auth=(remote_node.auth_user, remote_node.auth_pass) if getattr(remote_node, 'auth_user', None) else None,
-                    headers={'Accept': 'application/json'},
-                    timeout=5,
-                )
-                if resp.status_code == 200:
-                    return Response(resp.json(), status=status.HTTP_200_OK)
-                elif resp.status_code == 404:
-                    return Response({'detail': 'Remote entry not found'}, status=status.HTTP_404_NOT_FOUND)
-                else:
-                    return Response({'detail': 'Failed to fetch remote comments'}, status=status.HTTP_502_BAD_GATEWAY)
-            except Exception as e:
-                return Response({'detail': f'Failed to fetch remote comments: {e}'}, status=status.HTTP_502_BAD_GATEWAY)
-
-        return Response({'detail': 'Entry not found'}, status=status.HTTP_404_NOT_FOUND)
-
+        return Response(collection, status=status.HTTP_200_OK)
+        
     '''
     steps:
         1. create serializer data
@@ -192,52 +465,12 @@ class EntryCommentAPIView(APIView):
         comment = serializer.save(entry=entry, author=author)
         print("DEBUG comment saved id=", getattr(comment, 'id', None), flush=True)
 
-        # Build a JSON-friendly comment payload for forwarding/notification.
-        comment_data = {
-            "type": "comment",
-            "author": MinimalAuthorSerializer(author).data, # just stores the id, can be changed later
-            "content": getattr(comment, 'content', ''),
-            "contentType": getattr(comment, 'contentType', ''),
-            "published": comment.published.isoformat() if getattr(comment, 'published', None) else None,
-            "id": getattr(comment, 'id', None),
-            "entry": entry.id,
-        }
+        # Use distribute_activity to handle both local and remote delivery
+        # This automatically routes to the correct inbox (local DB or remote API)
+        activity = create_comment_activity(author, entry, comment)
+        distribute_activity(activity, actor=author)
         
-        print("DEBUG: Comment object: ", comment_data)
-
-        # if the entry author is remote, attempt to POST the comment
-        # to that node's inbox. Determine the parent node by matching the author's host.
-        try:
-            # parse host from the entry's author's id (FQID)
-            actor_id = getattr(entry.author, 'id', None)
-            if actor_id:
-                parsed = urlparse(actor_id)
-                actor_host = f"{parsed.scheme}://{parsed.netloc}"
-                parent_node = Node.objects.filter(id__startswith=actor_host).first()
-            else:
-                parent_node = None
-
-            if parent_node and parent_node.id.rstrip('/') != settings.LOCAL_NODE_URL.rstrip('/'): # REMOTE NODE
-                inbox_url = parent_node.id.rstrip('/') + '/inbox'
-                auth = None
-                if getattr(parent_node, 'auth_user', None):
-                    auth = (parent_node.auth_user, parent_node.auth_pass)
-
-                resp = requests.post(
-                    inbox_url,
-                    json=comment_data,
-                    auth=auth,
-                    headers={'Content-Type': 'application/json'},
-                    timeout=5,
-                )
-                if not (200 <= resp.status_code < 300):
-                    print("Failed to send comment to parent node %s: %s", inbox_url, resp.status_code)
-            else: #LOCAL NODE
-                notify(author, comment_data)
-
-        except Exception as e:
-            # never fail the API call because of network issues; comment was saved locally
-            return Response(data, status.HTTP_404_NOT_FOUND)
+        print("DEBUG: Comment activity distributed", flush=True)
 
         # Return the newly created comment as nested JSON (includes nested author)
         serialized = CommentSerializer(comment)
@@ -285,3 +518,5 @@ class SingleCommentAPIView(APIView):
                 return Response(
                     {"detail":f"Failed to fetch remote comment: {comment_fqid}"}
                 )
+
+        

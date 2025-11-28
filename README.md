@@ -32,6 +32,7 @@ Make a distributed social network!
 | **Base URL** | `http://localhost:8000/` |
 | **URL Prefix** | `/api/` |
 
+
 ### Golden's Available Endpoints
 - GET  /api/Profile/<path:id>/
 - GET  /api/Node/<path:id>/

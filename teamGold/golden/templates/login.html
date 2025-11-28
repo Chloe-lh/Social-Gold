@@ -11,18 +11,16 @@
 
     <body>
         <section>
-            <!-- login -->
             <header>
-                <h2>GOLDEN</h2>
+                <h2>
+                    <span>Make Yours</span><br>GOLDEN
+                </h2>
             </header>
             
-            <!-- TODO: if user is cached, use the corresponding pfp -->
-            <img src="{% static 'golden/icons/profile-picture.png' %}"alt="Default Profile">
-
             <form name="login" method="POST" enctype="application/x-www-form-urlencoded">
                 {% csrf_token %}
                 <input name="username" aria-label="Username" placeholder="username" autocomplete="username">
-                <input name="password" type="password" aria-label="Password" placeholder="password" autocomplete="off">
+                <input name="password" type="password" aria-label="password" placeholder="password" autocomplete="off">
                 <button type="submit">LOG IN</button>
                 <input type="hidden" name="next" value="{{ next }}">
             </form>
@@ -35,7 +33,7 @@
             {% endif %}
 
             <div>
-                <!-- will provide correct error when log in is pushed-->
+                <!-- Will provide a correct error when log in is clicked -->
                 {% if form.errors and request.method == "POST" %}
                     <p class="large" role="alert">Invalid credentials</p>
                 {% endif %}

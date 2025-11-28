@@ -2,22 +2,52 @@ from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import PermissionsMixin
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
+from django.contrib.postgres.fields import JSONField 
 from django.conf import settings
 import uuid
 
-'''
-Relationship Summary
-Author 1 ────> * Entry
-Author 1 ────> * Comment
-Entry  1  ────> * Comment
-Entry  *  ────< * Author (Likes)
-Comment *  ────< * Author (Likes)
-Author *  ────< * Author (Followers/Following)
-Node   1  ────> * Author
+"""
+Relationship Summary 
 
-Note: When building a federated social platform, each object must
-have a fully qualified URL (FQID) that includes the nodes domain
-'''
+AUTHOR
+Author 1 ────> * Entries (Entry.author FK -> Author)
+Author 1 ────> * Comments (Comment.author FK -> Author)
+Author 1 ────> * LikesCreated (Like.author FK -> Author)
+Author 1 ────> * FollowsSent (Follow.actor FK -> Author)
+Author 1 ────> * InboxItems (Inbox.author FK -> Author)
+Author <────> Author (Asymmetrical M2M -> following; mutual = friends)
+Authors * <────> * Nodes (Node.admins M2M -> Author)
+
+ENTRY
+Entry * <──── 1 Author (Entry.author FK -> Author)
+Entry 1 ────> * Comments (Comment.entry FK -> Entry)
+Entry 1 ────> * Images (EntryImage.entry FK -> Entry)
+Entry * <────> * Authors (Entry.likes M2M -> Author)
+
+COMMENT
+Comment * <──── 1 Author(Comment.author FK -> Author)
+Comment * <──── 1 Entry (Comment.entry FK -> Entry)
+Comment 1 ────> * Replies (Comment.reply_to self-FK)
+Comment * <────> * Authors (Comment.likes M2M -> Author)
+
+LIKE
+Like * <──── 1 Author (Like.author FK -> Author)
+Like → Object (Stored as URL, not FK) (For entries and comments)
+
+FOLLOW
+Follow * <──── 1 Author (Follow.actor FK -> Author)
+Follow -> TargetAuthor (Stored as URL, not FK)
+
+INBOX
+Inbox * <──── 1 Author (Inbox.author FK -> Author)
+
+NODE
+Node * <────> * Authors (Node.admins M2M -> Author)
+Node 1 ────> * KnownNodes (KnownNode.parent FK -> Node)
+
+KNOWNNODE
+KnownNode * <──── 1 Node (KnownNode.parent FK -> Node)
+""" 
 
 VISIBILITY_CHOICES = [
     ("PUBLIC", "Public"),
@@ -62,11 +92,11 @@ class Author(AbstractBaseUser, PermissionsMixin):
     github = models.URLField(blank=True)
     web = models.URLField(blank=True)
     profileImage = models.ImageField(
-        default="profile_pics/default_profile.webp",
+        default="profile_pics/default_profile.png",
         upload_to='profile_pics/')
     username = models.CharField(max_length=50, unique=True, default="goldenuser")
     password = models.CharField(max_length=128, default="goldenpassword")
-    name = models.CharField(max_length=100, blank=True) # Kenneth: I added this because the user story says NAME not username. 
+    name = models.CharField(max_length=100, blank=True) # is this going to stay as name or will be displayName? 
     email = models.CharField(blank=True)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
@@ -80,9 +110,10 @@ class Author(AbstractBaseUser, PermissionsMixin):
     friends = property(lambda self: self.following.filter(id__in=self.followers_set.values_list("id", flat=True)))
     objects = MyUserManager()
     description = models.TextField(blank=True)
-    is_shadow = models.BooleanField(default=False)
+    #is_shadow = models.BooleanField(default=False)
+    #is_local = models.BooleanField(default=True)
 
-    # Authentication
+    # Authentication Requirements 
     USERNAME_FIELD = "username"
     REQUIRED_FIELDS = ["email"]
 
@@ -115,6 +146,10 @@ class Author(AbstractBaseUser, PermissionsMixin):
             # Set host to SITE_URL automatically
             self.host = settings.SITE_URL.rstrip('/')  # remove trailing slash just in case
         super().save(*args, **kwargs)
+
+    @property
+    def uuid_only(self):
+        return self.id.rstrip("/").split("/")[-1]
     
 class Entry(models.Model):
     """
@@ -122,14 +157,12 @@ class Entry(models.Model):
     This decision ensures entries can be uniquely identified across multiple nodes. 
     Example: https://node1.com/api/entries/123
     """
-
     id = models.URLField(primary_key=True, unique=True) # FQID
     type = models.CharField(max_length=20, default="entry", editable=False)
     title = models.CharField(max_length=300, blank=True)
     web = models.URLField(blank=True)
     description = models.TextField(blank=True)
     contentType = models.CharField(max_length=100, default="text/plain")
-    # image = models.ImageField(upload_to='entry_images/', blank=True, null=True) # pip install pillow is required so yes, download new
     # Author is linked using their FULL URL (id field on Author).
     # to_field='id' ensures Django joins based on the author's URL and not a numeric key.
     # db_column='author_id' sets the actual column name in the database.
@@ -181,12 +214,54 @@ class Entry(models.Model):
             return str(self.id).rstrip('/').split('/')[-1]
         except Exception:
             return ""
+    
+    def get_all_images(self):
+        """
+        Get all images for this entry, including:
+        1. Local EntryImage objects (for local entries)
+        2. Images extracted from HTML content (for remote entries)
+        Returns a list of image URLs.
+        """
+        image_urls = []
+        
+        # First, add images from EntryImage objects (local entries)
+        for img in self.images.all():
+            image_url = img.image.url
+            # Make absolute URL if relative
+            if image_url.startswith('/'):
+                from django.conf import settings
+                image_url = f"{settings.SITE_URL.rstrip('/')}{image_url}"
+            image_urls.append(image_url)
+        
+        # If no EntryImage objects, extract images from HTML content (remote entries)
+        if not image_urls and self.content:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(self.content, 'html.parser')
+            img_tags = soup.find_all('img')
+            for img_tag in img_tags:
+                img_src = img_tag.get('src')
+                if img_src:
+                    # Skip data URLs
+                    if img_src.startswith('data:'):
+                        continue
+                    # Make absolute if relative
+                    if img_src.startswith('/'):
+                        from django.conf import settings
+                        img_src = f"{settings.SITE_URL.rstrip('/')}{img_src}"
+                    elif not img_src.startswith('http'):
+                        # Relative URL without leading slash
+                        from django.conf import settings
+                        img_src = f"{settings.SITE_URL.rstrip('/')}/{img_src}"
+                    image_urls.append(img_src)
+        
+        return image_urls
 
 class EntryImage(models.Model):
     """
     Multiple images can be associated with a single Entry.
     Access via: entry.images.all()
     """
+    id = models.URLField(primary_key=True, unique=True)
     entry = models.ForeignKey(
         Entry,
         on_delete=models.CASCADE,
@@ -207,6 +282,10 @@ class EntryImage(models.Model):
         if self.entry:
             return f"Image for entry {self.entry.id}"
         return f"Standalone Image {self.id}"  # or just "Standalone Image"
+    
+    @property
+    def url(self):
+        return self.image.url
     
 class Comment(models.Model):
     """
@@ -332,3 +411,21 @@ class Follow(models.Model):
 
     def __str__(self):
         return f"Follow {self.id} {self.actor} -> {self.object} ({self.state})"
+
+class Inbox(models.Model):
+    """
+    Represents an ActivityPub inbox for a given author.
+    Stores activities received by that author.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    author = models.ForeignKey(
+        Author,
+        on_delete=models.CASCADE,
+        related_name="inbox_items"
+    )
+    data = models.JSONField()  # Raw activity JSON
+    received_at = models.DateTimeField(auto_now_add=True)
+    processed = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-received_at']

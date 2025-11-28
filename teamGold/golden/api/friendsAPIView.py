@@ -19,33 +19,29 @@ from django.core.paginator import Paginator
 
 # LOCAL IMPORTS
 from golden.models import Author, Entry, Comment, Like, Follow, Node, EntryImage
-from golden.services import generate_comment_fqid, paginate
 
 # SWAGGER
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 
 # SERIALIZERS IMPORTS
-from golden.serializers import NodeSerializer
+from golden.serializers import NodeSerializer, AuthorSerializer
 
 
 class AuthorFriendsView(APIView):
     """
     This API view handles GET requests to retrieve an author's friends (mutual followers).
     - GET /api/Author/<author_id>/friends/ will then retrieve a list of friends
+    Works for both local and remote authors.
     """
     def get(self, request, author_id):
         author = get_object_or_404(Author, id=author_id)
 
-        # Get all accepted follow relationships
-        outgoing = Follow.objects.filter(actor=author, state="ACCEPTED").values_list("object", flat=True)
-        incoming = Follow.objects.filter(object=author.id, state="ACCEPTED").values_list("actor__id", flat=True)
+        # Use get_friends from distributor which works with Follow objects for both local and remote
+        from golden.distributor import get_friends
+        friends_qs = get_friends(author)
 
-        # Mutual follows = both in outgoing and incoming
-        mutual_ids = set(outgoing).intersection(incoming)
-        mutuals = Author.objects.filter(id__in=mutual_ids)
-
-        serializer = AuthorSerializer(mutuals, many=True)
+        serializer = AuthorSerializer(friends_qs, many=True)
         return Response(serializer.data)
     
 class FollowAPIView(APIView):

@@ -1,0 +1,94 @@
+<!--
+Base.html is the standardized template for GOLDEN. 
+If you are adding another html file, ensure that 
+{% extends 'components/base.html'} is the top of that file
+to inherit these properties 
+-->
+
+<!DOCTYPE HTML> 
+<html lang="en">
+    <head> 
+        {% load static %}
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="{% static 'golden/css/global.css' %}">
+        <link rel="stylesheet" href="{% static 'golden/css/base.css' %}">
+        {% block head %}{% endblock %}
+    </head> 
+
+    <body>
+
+        <!-- Primary Navigation Top Bar -->
+        <header class="topbar">
+            <span class="topbar-title">GOLDEN</span>
+
+            <nav class="top-nav" aria-label="Primary Navigation">
+                <a href="#" id="themeToggle" class="icon-btn" aria-label="Toggle light/dark mode">
+                    <img src="{% static 'golden/icons/mode-light-icon.png' %}"
+                        alt="Light mode"
+                        class="theme-icon icon-light">
+                    <img src="{% static 'golden/icons/mode-dark-icon.png' %}"
+                        alt="Dark mode"
+                        class="theme-icon icon-dark">
+                </a>
+
+                <a href="{% url 'new_edit_entry_view' %}" class="icon-btn" aria-label="Create New Post">
+                    <img src="{% static 'golden/icons/entry-add-icon.png' %}" alt="Add Post">
+                </a>
+
+                <a href="{% url 'stream' %}" class="icon-btn" aria-label="Check Stream">
+                    <img src="{% static 'golden/icons/home-icon.png' %}" alt="Home">
+                </a>
+
+                <a href="{% url 'profile' %}" class="icon-btn" aria-label="Profile">
+                    <img src="{% static 'golden/icons/user-icon.png' %}" alt="Profile">
+                </a>
+            </nav>
+        </header>
+
+        <!-- Child templates will over ride to display page content-->
+        <main class="page-content">{% block content %}{% endblock %}</main>
+    </body>
+
+    <script>
+        function toggleSidebar(){
+            document.querySelector('.side-nav').classList.toggle('open');
+        }
+
+        // Close sidebar when clicking outside (on the overlay)
+        document.addEventListener('DOMContentLoaded', function() {
+            document.body.addEventListener('click', function(e) {
+                const sideNav = document.querySelector('.side-nav');
+                const toggle = document.querySelector('.side-toggle');
+                
+                // When someone clicks an opened sidebar, toggle to switch modes
+                if (sideNav.classList.contains('open') && !sideNav.contains(e.target) && !toggle.contains(e.target)) {
+                    sideNav.classList.remove('open');
+                }
+            });
+        });
+
+        document.addEventListener("DOMContentLoaded", function() {
+            const toggleBtn = document.getElementById("themeToggle");
+            if (!toggleBtn) return;
+
+            const root = document.documentElement;
+
+            const savedTheme = localStorage.getItem("theme");
+            if (savedTheme) {
+                root.setAttribute("data-theme", savedTheme);
+            }
+
+            toggleBtn.addEventListener("click", function(e) {
+                e.preventDefault();
+
+                const current = root.getAttribute("data-theme") || "dark";
+                const next = current === "light" ? "dark" : "light";
+
+                root.setAttribute("data-theme", next);
+                localStorage.setItem("theme", next);
+            });
+        });
+    </script>
+</html>
+

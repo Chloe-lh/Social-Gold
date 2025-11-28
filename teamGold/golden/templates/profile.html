@@ -1,254 +1,390 @@
-{% extends "base.html" %}
-
+{% extends "components/base.html" %}
 {% load static %}
-{% block head %}
-<link rel="stylesheet" href="{% static 'golden/css/global.css' %}">
-<link rel="stylesheet" href="{% static 'golden/css/profile.css' %}">
-<link rel="stylesheet" href="{% static 'golden/css/mobile-profile.css' %}">
-{% endblock %}
+{% load author_filters %}
 
-{% block content %}
+<head>
+  {% block head %}
+  <title>Golden - Profile</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="{% static 'golden/css/global.css' %}">
+  <link rel="stylesheet" href="{% static 'golden/css/profile.css' %}">
+  <link rel="stylesheet" href="{% static 'golden/css/mobile-profile.css' %}">
+  <link rel="stylesheet" href="{% static 'golden/css/stream.css' %}">
+  {% endblock %}
+</head>
+
 <body>
-  <!-- Profile Header -->
-  <section class="edit-profile-button">
-    <button id="edit-profile-button" class="nav" type="button" aria-label="Edit profile button">
-      <img src="{% static 'golden/icons/edit-profile-icon.png' %}" alt="" aria-hidden="true"/>
-    </button>
-  </section>
+  {% block content %}
+    
+    <!-- Profile Container -->
+    <section class="profile-container">
 
-  <!-- Editing Profile Form -->
-  <section id="edit-profile-form" style="display:none; margin-top: 1rem;">
-    <form method="POST" enctype="multipart/form-data">
-      {% csrf_token %}
-        
-      {{ form.name.label }}<br>
-      {{ form.name }}<br><br>
+      <!-- Profile Picture Section -->
+      <section class="profile-left">
+        {% if request.user.is_authenticated and request.user.profileImage %}
+          <img class="profile-pic" src="{{ request.user.profileImage.url }}" alt="Profile">
+        {% else %}
+          <img class="profile-pic" src="{% static 'golden/icons/default_profile.png' %}" alt="Default Profile">
+        {% endif %}
+        <h2 class="profile-username">{{ author.name|default:author.username }}</h2>
+      </section>
 
-      <label for="profileImage">Profile Picture:</label><br>
-      <input type="file" name="profileImage" accept="image/*"><br><br>
-
-      <label for="description">Bio / About Me:</label><br>
-      <textarea name="description" rows="4" cols="50">
-        {{ user.description }}
-      </textarea>
-      <br><br>
-
-      {{ form.github.label }}<br>
-      {{ form.github }}<br><br>
-
-      {{ form.web.label }}<br>
-      {{ form.web }}<br><br>
-
-      <button type="submit" name="edit_profile">Save Profile</button>
-    </form>
-  </section>
-
-  <!-- Profile Description -->
-  <section class="description">
-    <p class="bio-description">{{ author.description|default:"This user does not have a bio."|safe }}</p>
-  </section>
-
-  <!-- Tab Sections -->
-  <section class="tabs-section"> 
-    <nav class="tabs">
-      <button class="tab-btn active" data-tab="entries">entries</button> 
-      <button class="tab-btn" data-tab="followers">followers</button>
-      <button class="tab-btn" data-tab="following">following</button>
-      <button class="tab-btn" data-tab="requests">requests</button>
-      <button class="tab-btn" data-tab="search">search</button>
-    </nav>
-
-    <!-- Entries Tab Section -->
-    <section class="tab-panel active" data-tab-panel="entries">
-      {% if entries %}
-        {% for entry in entries %}
-          <article class="entry">
-            <p><strong>@{{ author.username }}</strong> {{ entry.published|date:"H:i T l M d, Y" }}</p>
-            {% for img in entry.images.all %} 
-              <img src="{{ img.image.url }}" alt="entry image" class="entry-img">
-            {% endfor %}
-            {{ entry.content|safe }}
-          </article>
-        {% endfor %}
-      {% else %}
-        <p>You have no entries, consider posting your first one!</p>
-      {% endif %}
-    </section>
-
-    <!-- Followers Tab Section -->
-    <section class="tab-panel" data-tab-panel="followers">
-      {% if followers %}
-        {% for f in followers %}
-          <section class="author-list-item follower-row">
-            <a href="{% url 'public-profile' f.id %}" class="follower-username">{{ f.username }}</a>
-            {% if f in friends %}
-              <img class="friend-icon" src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
-            {% endif %}
-          </section>
-          <hr class="follower-divider">
-        {% endfor %}
-      {% else %}
-        <p>You have no followers.</p>
-      {% endif %}
-    </section>
-
-    <!-- Following Tab Section -->
-    <section class="tab-panel" data-tab-panel="following">
-      {% if following %}
-        {% for f in following %}
-          <section class="author-list-item follower-row">
-            <a href="{% url 'public-profile' f.id %}" class="follower-username">{{ f.username }}</a>
-            {% if f in friends %}
-              <img class="friend-icon" src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
-            {% endif %}
-
-            <form method="POST" class="unfollow-form">
-              {% csrf_token %}
-              <button type="submit" name="unfollow" value="{{ f.id }}" class="unfollow-btn">
-                <img src="{% static 'golden/icons/user-remove-icon.png' %}" alt="unfollow this person">
+      <!-- Profile Information -->
+      <section class="profile-right">
+          <section class="profile-name-row">
+              <h1 class="profile-title">{{ author.username }}</h1>
+              
+              <!-- Profile URL Copy 
+              <button id="copyProfileBtn" class="icon-btn" type="button">
+                <img src="{% static 'golden/icons/share-icon.png' %}" class="icon">
               </button>
-            </form>
-          </section>
-          <hr class="follower-divider">
-        {% endfor %}
-      {% else %}
-        <p>You are not following anyone.</p>
-      {% endif %}
-    </section>
+              -->
 
-    <!-- Request Tab Section -->
-    <section class="tab-panel" data-tab-panel="requests">
-    {% if follow_requests %}
-      <ul style="list-style: none; padding: 0;">
-        {% for req in follow_requests %}
-        <li class="request-row">
-          <a href="{% url 'public-profile' req.actor.id %}">{{ req.actor.username }} wants to follow you</span>
-            <form method="POST" style="display:inline;">
-              {% csrf_token %}
-              <input type="hidden" name="follow_id" value="{{ req.id }}">
-              <input type="hidden" name="action" value="approve">
-              <button class="action-btn approve-request-button" type="submit">
-                  <img src="{% static 'golden/icons/user-add-icon.png' %}" alt="approve">
-              </button>
-            </form>
-        
-            <form method="POST" style="display:inline;">
+              <section class="profile-icons">
+                  {% if author.github %}
+                  <a href="{{ author.github }}" target="_blank">
+                      <img src="{% static 'golden/icons/github-icon.png' %}" class="icon">
+                  </a>
+                  {% endif %}
+
+                  {% if author.web %}
+                  <a href="{{ author.web }}" target="_blank">
+                      <img src="{% static 'golden/icons/link-icon.png' %}" class="icon">
+                  </a>
+                  {% endif %}
+
+                  <button id="edit-profile-button" class="icon-btn">
+                      <img src="{% static 'golden/icons/edit-profile-icon.png' %}">
+                  </button>
+              </section>
+          </section>
+
+          <!-- Email -->
+          <section class="profile-email">
+              <p>{{ author.email }}</p>
+          </section>
+
+          <!-- Description -->
+          <section class="profile-bio">
+            <p>{{ author.description|default:"This user does not have a bio."|safe }}</p>
+          </section>
+          
+          <!-- Logout -->
+          <a href="#" id="logout-link">Logout
+            <img src="{% static 'golden/icons/logout-icon.png' %}" alt="Log Out" class="icon"> 
+          </a>
+          <form id="logout-form" method="POST" action="{% url 'login' %}" style="display:none;">
             {% csrf_token %}
-              <input type="hidden" name="follow_id" value="{{ req.id }}">
-              <input type="hidden" name="action" value="reject">
-              <button class="action-btn reject-request-button" type="submit">
-                  <img src="{% static 'golden/icons/user-remove-icon.png' %}" alt="reject">
-              </button>
-            </form>
-        </li>
-        {% endfor %}
-        <hr class="follower-divider">
-      </ul>
-    {% else %}
-      <p>You have no outgoing following requests.</p>
-    {% endif %}
+          </form>
+
+      </section>
     </section>
 
-    <!-- Search Tab Section -->
-    <section class="tab-panel" data-tab-panel="search">
+    <!-- Editing Profile Form -->
+    <section id="edit-profile-form" style="display:none; margin-top: 1rem;">
+      <form method="POST" enctype="multipart/form-data">
+        {% csrf_token %}
+          
+        {{ form.name.label }}<br>
+        {{ form.name }}<br><br>
 
-      <!-- Search Bar Feature -->
-      <form method="GET" action="">
-        <input type="text" name="q" placeholder="Search users..." ="{{ query }}" class="search-bar">
-        <button type="submit"> Search for User </button>
+        {{ form.email.label }}<br>
+        {{ form.email }}<br><br>
+
+        <label for="profileImage">Profile Picture:</label><br>
+        <input type="file" name="profileImage" accept="image/*"><br><br>
+        <label for="description">Bio / About Me:</label><br>
+        <textarea name="description" rows="4" cols="50">
+          {{ user.description }}
+        </textarea>
+        <br><br>
+
+        {{ form.github.label }}<br>
+        {{ form.github }}<br><br>
+
+        {{ form.web.label }}<br>
+        {{ form.web }}<br><br>
+
+        <button type="submit" name="edit_profile">Save Profile</button>
       </form>
+    </section>
 
-      <!-- Author List Feature -->
-      {% if authors %}
-      <ul>
-      {% for a in authors %}
-        <li style="padding: 10px; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center;">
-          <a href="{% url 'public-profile' a.id %}">{{ a.username }}</a>
+    <!-- Tab Sections -->
+    <section class="tabs-section"> 
+      <nav class="tabs">
+        <button class="tab-btn active" data-tab="entries">entries</button> 
+        <button class="tab-btn" data-tab="followers">followers</button>
+        <button class="tab-btn" data-tab="following">following</button>
+        <button class="tab-btn" data-tab="friends">friends</button>
+        <button class="tab-btn" data-tab="requests">requests</button>
+        <button class="tab-btn" data-tab="search">search</button>
+      </nav>
 
-          {% if a.is_friend %}
-            <button class="follow-btn" disabled>
-              <img src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
-            </button>
+      <!-- Entries Tab Section -->
+      <section class="tab-panel active" data-tab-panel="entries">
+        {% if entries %}
+          {% for entry in entries %}
+            {% include "components/entry_component.html" with entry=entry %}
+          {% empty %}
+            <p>No posts to show.</p>
+          {% endfor %}
+        {% endif %}
+      </section>
 
-          {% elif a.follow_state == "REQUESTED" %}
-            <button class="follow-btn" disabled>
-              <img src="{% static 'golden/icons/user-loading-icon.png' %}" alt="pending" title="Author needs to accept you silly."> 
-            </button>
+      <!-- Followers Tab Section -->
+      <section class="tab-panel" data-tab-panel="followers">
+        {% if followers_with_urls %}
+          {% for f_data in followers_with_urls %}
+            <section class="author-list-item follower-row">
+              <a href="{% url 'public-profile' f_data.url_id %}" class="follower-username">{{ f_data.author.username }}</a>
+              {% if f_data.author in friends %}
+                <img class="friend-icon" src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
+              {% endif %}
+              <form method="POST" class="remove-follower-form">
+                {% csrf_token %}
+                <button type="submit" name="remove-follower" value="{{ f_data.author.id }}" class="remove-follower-btn">
+                  <img src="{% static 'golden/icons/user-remove-icon.png' %}" alt="remove this person">
+                </button>
+              </form>
+            </section>
+            <hr class="follower-divider">
+          {% endfor %}
+        {% else %}
+          <p>You have no followers.</p>
+        {% endif %}
+      </section>
 
-          {% elif a.follow_state == "ACCEPTED" %}
-            <button class="follow-btn" disabled>
-              <img src="{% static 'golden/icons/user-following-icon.png' %}" alt="following" title="You follow this author">
-            </button>
+      <!-- Following Tab Section -->
+      <section class="tab-panel" data-tab-panel="following">
+        {% if following_with_urls %}
+          {% for f_data in following_with_urls %}
+            <section class="author-list-item follower-row">
+              <a href="{% url 'public-profile' f_data.url_id %}" class="follower-username">{{ f_data.author.username }}</a>
+              {% if f_data.author in friends %}
+                <img class="friend-icon" src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
+              {% endif %}
 
-          {% else %}
-            <form method="POST">
+              <form method="POST" class="unfollow-form">
+                {% csrf_token %}
+                <button type="submit" name="unfollow" value="{{ f_data.author.id }}" class="unfollow-btn">
+                  <img src="{% static 'golden/icons/user-remove-icon.png' %}" alt="unfollow this person">
+                </button>
+              </form>
+            </section>
+            <hr class="follower-divider">
+          {% endfor %}
+        {% else %}
+          <p>You are not following anyone.</p>
+        {% endif %}
+      </section>
+
+      <!-- Friends Tab Section -->
+      <section class="tab-panel" data-tab-panel="friends">
+        {% if friends_with_urls %}
+          {% for f_data in friends_with_urls %}
+            <section class="author-list-item follower-row">
+              <a href="{% url 'public-profile' f_data.url_id %}" class="follower-username">
+                {{ f_data.author.displayName|default:f_data.author.name|default:f_data.author.username }}
+              </a>
+              <img class="friend-icon" src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
+            </section>
+            <hr class="follower-divider">
+          {% endfor %}
+        {% else %}
+          <p>You have no friends yet. Friends are people who follow each other mutually.</p>
+        {% endif %}
+      </section>
+
+      <!-- Request Tab Section -->
+      <section class="tab-panel" data-tab-panel="requests">
+        {% if incoming_follow_requests_with_urls %}
+          <ul style="list-style: none; padding: 0;">
+            {% for req_data in incoming_follow_requests_with_urls %}
+            <li class="request-row">
+              <a href="{% url 'public-profile' req_data.actor_url_id %}">
+                {% if req_data.actor %}{{ req_data.actor.displayName|default:req_data.actor.name|default:req_data.actor.username }}{% else %}{{ req_data.request.actor.displayName|default:req_data.request.actor.name|default:req_data.request.actor.username|default:req_data.request.actor.id }}{% endif %} wants to follow you
+              </a>
+              <form method="POST" style="display:inline;">
+                {% csrf_token %}
+                <input type="hidden" name="follow_id" value="{{ req_data.request.id }}">
+                <input type="hidden" name="action" value="approve">
+                <button class="action-btn approve-request-button" type="submit">
+                    <img src="{% static 'golden/icons/user-add-icon.png' %}" alt="approve">
+                </button>
+              </form>
+          
+              <form method="POST" style="display:inline;">
               {% csrf_token %}
-              <input type="hidden" name="action" value="follow">
-              <input type="hidden" name="author_id" value="{{ a.id }}">
-              <button class="follow-btn" type="submit">
-                <img src="{% static 'golden/icons/user-add-icon.png' %}" alt="follow">
+                <input type="hidden" name="follow_id" value="{{ req_data.request.id }}">
+                <input type="hidden" name="action" value="reject">
+                <button class="action-btn reject-request-button" type="submit">
+                    <img src="{% static 'golden/icons/user-remove-icon.png' %}" alt="reject">
+                </button>
+              </form>
+            </li>
+            <hr class="follower-divider">
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p>You have no pending follow requests.</p>
+        {% endif %}
+      </section>
+
+      <!-- Search Tab Section -->
+      <section class="tab-panel" data-tab-panel="search">
+
+        <!-- Search Bar Feature -->
+        <form method="GET" action="{% url 'profile' %}" id="search-form">
+          <input type="text" name="q" placeholder="Search users..." value="{{ query }}" class="search-bar" id="search-query">
+          <button type="submit"> Search User </button>
+        </form>
+
+        <!-- Author Search Result Feature -->
+        {% if authors %}
+          <ul>
+          {% for a in authors %}
+          <li style="padding: 10px; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center;">
+            {% if a.url_id %}
+              <a href="{% url 'public-profile' a.url_id %}">{{ a.username|default:a.displayName|default:a.id }}</a>
+            {% else %}
+              <a href="{% url 'public-profile' a.id|author_url_id %}">{{ a.username | default:a.displayName|default:a.id }}</a>
+            {% endif %}
+            {% if a.is_friend %}
+              <button class="follow-btn" disabled>
+                <img src="{% static 'golden/icons/friends-icon.png' %}" alt="you are friends" title="You are friends!">
               </button>
-            </form>
-          {% endif %}
-        </li>
-      {% endfor %}
-      </ul>
-    {% else %}
-      <p>No authors found.</p>
-    {% endif %} 
+
+            {% elif a.follow_state == "REQUESTED" %}
+              <button class="follow-btn" disabled>
+                <img src="{% static 'golden/icons/user-loading-icon.png' %}" alt="pending" title="Author needs to accept you silly."> 
+              </button>
+
+            {% elif a.is_following %}
+              <button class="follow-btn" disabled>
+                <img src="{% static 'golden/icons/user-following-icon.png' %}" alt="following" title="You follow this author">
+              </button>
+
+            {% else %}
+              <form method="POST">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="follow">
+                <input type="hidden" name="author_id" value="{{ a.id }}">
+                <input type="hidden" name="author_is_local" value="{{ a.is_local }}">
+                <input type="hidden" name="username" value="{{ a.username }}">
+                <input type="hidden" name="displayName" value="{{ a.displayName|default:a.username }}">
+                <input type="hidden" name="profileImage" value="{{ a.profileImage }}">
+                <input type="hidden" name="github" value="{{ a.github }}">
+                <input type="hidden" name="web" value="{{ a.web }}">
+                <input type="hidden" name="host" value="{{ a.host }}">
+                <input type="hidden" name="email" value="{{ a.email }}">
+                
+                <button class="follow-btn" type="submit">
+                  <img src="{% static 'golden/icons/user-add-icon.png' %}" alt="follow">
+                </button>
+              </form>
+            {% endif %}
+          </li>
+          {% endfor %}
+          </ul>
+        {% else %}
+          {% if query %}
+            <p>No authors found matching "{{ query }}".</p>
+          {% else %}
+            <p>No authors found.</p>
+        {% endif %}
+      {% endif %} 
+    </section>
   </section>
 </body>
 
 <script>
-// Edit Profile Form Toggle 
-document.getElementById('edit-profile-button').addEventListener('click', function() {
-    const form = document.getElementById('edit-profile-form');
-    form.style.display = form.style.display === 'none' ? 'block' : 'none';
-});
-
-// Store active tab in sessionStorage when tab is clicked
 document.addEventListener("DOMContentLoaded", () => {
-  document.querySelectorAll(".tab-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      sessionStorage.setItem("activeTab", btn.dataset.tab);
+
+  // Edit Profile 
+  const editBtn = document.getElementById('edit-profile-button');
+  const editForm = document.getElementById('edit-profile-form');
+
+  if (editBtn && editForm) {
+    editBtn.addEventListener('click', () => {
+      editForm.style.display = editForm.style.display === 'none' ? 'block' : 'none';
     });
-  });
-
-  // Apply active tab from sessionStorage
-  const saved = sessionStorage.getItem("activeTab");
-  if (saved) {
-    const btn = document.querySelector(`[data-tab="${saved}"]`);
-    const panel = document.querySelector(`[data-tab-panel="${saved}"]`);
-
-    if (btn && panel) {
-      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-      document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
-
-      btn.classList.add("active");
-      panel.classList.add("active");
-    }
   }
-});
 
-// Tab Switching
-document.addEventListener("DOMContentLoaded", () => {
+  // Logout Feature
+  const logoutLink = document.getElementById('logout-link');
+  const logoutForm = document.getElementById('logout-form');
+
+  if (logoutLink && logoutForm) {
+    logoutLink.addEventListener('click', e => {
+      e.preventDefault();
+      logoutForm.submit();
+    });
+  }
+
+  // Tab Switching 
   const tabButtons = document.querySelectorAll(".tab-btn");
   const tabPanels = document.querySelectorAll(".tab-panel");
 
-  tabButtons.forEach(button => {
-    button.addEventListener("click", () => {
-      const target = button.dataset.tab;
-      const targetPanel = document.querySelector(`[data-tab-panel="${target}"]`);
+  function activateTab(tabName) {
+    const btn = document.querySelector(`[data-tab="${tabName}"]`);
+    const panel = document.querySelector(`[data-tab-panel="${tabName}"]`);
 
-      tabButtons.forEach(button => button.classList.remove("active"));
-      tabPanels.forEach(panel => panel.classList.remove("active"));
+    if (!btn || !panel) return;
 
-      button.classList.add("active");
-      if (targetPanel) {
-        targetPanel.classList.add("active");
-      }
+    tabButtons.forEach(b => b.classList.remove("active"));
+    tabPanels.forEach(p => p.classList.remove("active"));
+
+    btn.classList.add("active");
+    panel.classList.add("active");
+  }
+
+  // Logic for actual button 
+  tabButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.tab;
+      activateTab(tab);
+      sessionStorage.setItem("activeTab", tab);
     });
   });
+
+  // Restore saved tab on reload
+  const savedTab = sessionStorage.getItem("activeTab");
+  if (savedTab) {
+    activateTab(savedTab);
+  }
+
+  // Search Feature with all showing immediately 
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("q")) {
+    activateTab("search");
+  }
+
+  const searchForm = document.getElementById("search-form");
+  if (searchForm) {
+    searchForm.addEventListener("submit", () => {
+      sessionStorage.setItem("activeTab", "search");
+    });
+  }
+
+  // Copy Profile URL 
+  const copyBtn = document.getElementById("copyProfileBtn");
+
+  if (copyBtn) {
+    copyBtn.addEventListener("click", e => {
+      e.preventDefault();
+      const url = window.location.href;
+
+      navigator.clipboard.writeText(url)
+        .then(() => alert("Profile link copied to clipboard!"))
+        .catch(err => {
+          console.error("Failed to copy profile link:", err);
+          alert("Could not copy link. Copy manually from the address bar.");
+        });
+    });
+  }
+
 });
 </script>
+
 {% endblock %}

@@ -65,7 +65,7 @@ def safe_parse_datetime(value):
 
 def send_activity_to_inbox(recipient: Author, activity: dict):
     print("RUNNING UPDATED CODE")
-    print(f"[DEBUG send_activity_to_inbox] Called: recipient id={recipient.id} ( host={recipient.host})")
+    print(f"[DEBUG send_activity_to_inbox] Called: recipient= recipient={username} (id={recepient.id} host={recipient.host})")
     print(f"[DEBUG send_activity_to_inbox] Activity type: {activity.get('type')}")
     print("[DEBUG] type(recipient.host) =", type(recipient.host))
     print("[DEBUG] recipient.host =", recipient.host)
@@ -398,43 +398,51 @@ def distribute_activity(activity: dict, actor: Author):
     # LIKE
     elif type_lower == "like":
 
-        actor_id = None
-
-        # Trying to find who liked to accommodate three API stylyes. 
-        if isinstance(activity.get("author"), dict):
-            actor_id = activity.get("author").get("id")
-        elif isinstance(activity.get("actor"), dict):
-            actor_id = activity.get("actor").get("id")
-        elif isinstance(activity.get("actor"), str):
-            actor_id = activity.get("actor")
-        else:
-            print("[DEBUG distrbute_activity] LIKE: No actor found in Like activity")
-            #actor_id = activity.get("id") 
-
-        # Skips actor if local to prevent double processing
-        #if actor_id and actor_id.startswith(settings.SITE_URL):
-            #print("[DEBUG process_inbox] LIKE: Skipping local-origin like")
-            #return
-
-        if actor_id:
-            actor_obj = Author.objects.filter(id=normalize_fqid(actor_id)).first()
-            if not actor_obj:
-                actor_obj = get_or_create_foreign_author(actor_id)
-        else:
-            print("[DEBUG distrbute_activity] LIKE: No actor found in Like activity")
+        like_id = activity.get("id")
+        
+        if not like_id:
+            print(f"[DEBUG distribute_activity] COMMENT: can't find like id={like_id}")
+            print(f"[DEBUG distribute_activity] COMMENT: object status {obj}")
             return
+        
+        like = Like.objects.filter(id=normalize_fqid(like_id)).first()
 
-        liked_fqid = activity.get("id")
-        if not isinstance(liked_fqid, str):
-            print("[DEBUG distrbute_activity] LIKE: Invalid liked_fqid, skipping")
-            return
+        if not like:
+            like = Like.objects.filter(id=like).first()
+        
+        if like:
+            # Distribute comment to like author AND their followers/friends (like entry updates)
+            print(f"[DEBUG distribute_activity] LIKE: Found like, author={like.author.username} (id={like.author.id})")
 
-        target = activity.get("author")
-        if not isinstance(target, dict):
-            print("[DEBUG distrbute_activity] LIKE: Invalid target, skipping")
-            return
+            obj_id = like.object
 
-        send_activity_to_inbox(target, activity)
+            liked_entry = Entry.object.filter(id=normalize_fqid(obj_id)).first()
+            liked_comment = Comment.object.filter(id=normalize_fqid(obj_id)).first()
+
+            if liked_entry:
+                entry = liked_entry
+            elif liked_comment:
+                entry_id = liked_comment.entry.id
+                entry = Entry.object.filter(id=normalize_fqid(entry_id)).first()
+            else:
+                print("[DEBUG distribute_activty] ENTRY DOES NOT EXIST")
+
+
+            visibility = entry.visibility.upper() if hasattr(entry, 'visibility') else "PUBLIC"
+            recipients = {entry.author}
+
+            if visibility == "PUBLIC":
+                recipients |= set(get_followers(entry.author)) 
+            elif visibility == "UNLISTED":
+                recipients |= set(get_followers(entry.author))
+            elif visibility == "FRIENDS":
+                recipients |= set(get_friends(entry.author))
+
+            for r in recipients:
+                print(f"[DEBUG distribute_activity] LIKE: Sending to {r.username} (id={r.id}, host={r.host})")
+                send_activity_to_inbox(r, activity)
+        
+        return
 
         #print(f"[DEBUG process_inbox] LIKE: Processing LIKE toggle for object={liked_fqid}, actor={actor_obj}")
 

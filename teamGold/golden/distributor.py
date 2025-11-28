@@ -99,9 +99,9 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
     
     # SKIP if activity originated from this node and recipient is remote
     # (prevents echo/loops)
-    if activity.get("id", "").startswith(settings.SITE_URL):
-        print(f"[DEBUG send_activity_to_inbox] Skipping remote delivery - activity originated locally")
-        return True
+    #if activity.get("id", "").startswith(settings.SITE_URL):
+        #print(f"[DEBUG send_activity_to_inbox] Skipping remote delivery - activity originated locally")
+        #return True
 
     # REMOTE DELIVERY
     recipient_id = str(recipient.id).rstrip('/')

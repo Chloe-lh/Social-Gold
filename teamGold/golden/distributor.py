@@ -138,10 +138,11 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         print(f"[DEBUG send_activity_to_inbox] Inbox URL: {inbox_url}")
         print(f"[DEBUG send_activity_to_inbox] Activity type: {activity.get('type')}")
         print(f"[DEBUG send_activity_to_inbox] Activity: {json.dumps(activity, indent=2, default=str)}")
-                
+
         try:
             response = requests.post(
                 inbox_url,
+                data=json.dumps(activity_clean, default=str), 
                 json=activity_clean,
                 headers={"Content-Type": "application/json"},
                 auth=auth,

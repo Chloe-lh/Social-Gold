@@ -64,8 +64,10 @@ def safe_parse_datetime(value):
     return None
 
 def send_activity_to_inbox(recipient: Author, activity: dict):
+    """Send activity to local or remote inbox."""
     print(f"[DEBUG send_activity_to_inbox] Called: recipient={recipient.username} (id={recipient.id}, host={recipient.host})")
     print(f"[DEBUG send_activity_to_inbox] Activity type: {activity.get('type')}")
+    print(f"[DEBUG send_activity_to_inbox] SITE_URL: {settings.SITE_URL}")
     print("[DEBUG] type(recipient.host) =", type(recipient.host))
     print("[DEBUG] recipient.host =", recipient.host)
 
@@ -98,7 +100,11 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
                 return repr(obj)
             
     activity_clean = ensure_datetime_strings(activity)
-    if activity.get("id", "").startswith(settings.SITE_URL):
+    if recipient.host.rstrip("/") == settings.SITE_URL.rstrip("/"):
+        # Local delivery to the inbox
+        print(f"[DEBUG send_activity_to_inbox] LOCAL delivery: Creating inbox item for {recipient.username}")
+        Inbox.objects.create(author=recipient, data=activity_clean)
+        print(f"[DEBUG send_activity_to_inbox] LOCAL delivery: Inbox item created successfully")
         return
 
     # For remote inbox, construct the URL properly
@@ -123,6 +129,8 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         inbox_url = f"{base_host}/api/authors/{author_id_part}/inbox/"
 
     # Get node authentication if available
+    from .models import Node
+    from urllib.parse import urlparse
     parsed = urlparse(recipient.host)
     node_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
     node = Node.objects.filter(id__startswith=node_base).first()
@@ -137,6 +145,8 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         print(f"[DEBUG send_activity_to_inbox] Activity: {json.dumps(activity, indent=2, default=str)}")
         
         # Ensure all datetime values are strings before JSON serialization
+        
+            
         activity_clean = ensure_datetime_strings(activity)
         
         response = requests.post(

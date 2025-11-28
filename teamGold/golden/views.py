@@ -1909,6 +1909,7 @@ def toggle_like(request):
         existing = Like.objects.filter(author=author, object=target_id).first()
         if existing:
             activity = create_like_activity(author, existing)
+            print(f"[DEBUG toggle_like] Unliking object: {existing.id} by author: {existing.author.username}")
             existing.delete()
             if entry_obj:
                 entry_obj.likes.remove(author)
@@ -1923,6 +1924,7 @@ def toggle_like(request):
                     object=target_id,
                     published=dj_timezone.now(),
                 )
+                print(f"[DEBUG toggle_like] Liking object: {like.id} by author: {like.author.username}")
                 if entry_obj:
                     entry_obj.likes.add(author)
             activity = create_like_activity(author, like)

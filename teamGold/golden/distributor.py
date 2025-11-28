@@ -427,7 +427,7 @@ def distribute_activity(activity: dict, actor: Author):
             print("[DEBUG process_inbox] LIKE: Invalid liked_fqid, skipping")
             return
 
-        target = activity.get("object")
+        target = activity.get("author")
         if not isinstance(target, str):
             print("[DEBUG process_inbox] LIKE: Invalid target, skipping")
             return

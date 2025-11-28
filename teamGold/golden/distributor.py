@@ -64,14 +64,14 @@ def safe_parse_datetime(value):
     return None
 
 def send_activity_to_inbox(recipient: Author, activity: dict):
-    """Send activity to local or remote inbox."""
+    
     print(f"[DEBUG send_activity_to_inbox] Called: recipient={recipient.username} (id={recipient.id}, host={recipient.host})")
     print(f"[DEBUG send_activity_to_inbox] Activity type: {activity.get('type')}")
     print(f"[DEBUG send_activity_to_inbox] SITE_URL: {settings.SITE_URL}")
     print("[DEBUG] type(recipient.host) =", type(recipient.host))
     print("[DEBUG] recipient.host =", recipient.host)
 
-    def ensure_datetime_strings(obj):
+    def activity_strip(obj):
             """
             Recursively convert datetime objects to ISO strings
             and ensure all nested values are JSON-serializable.
@@ -86,11 +86,11 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
 
             # Handle dicts
             if isinstance(obj, dict):
-                return {k: ensure_datetime_strings(v) for k, v in obj.items()}
+                return {k: activity_strip(v) for k, v in obj.items()}
 
             # Handle lists/tuples
             if isinstance(obj, (list, tuple)):
-                return [ensure_datetime_strings(item) for item in obj]
+                return [activity_strip(item) for item in obj]
 
             # Handle model objects or other custom objects
             # Use string representation to avoid recursion issues
@@ -99,25 +99,23 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
             except Exception:
                 return repr(obj)
             
-    activity_clean = ensure_datetime_strings(activity)
+    activity_clean = activity_strip(activity)
+
+    # Local Processing Logic
     if recipient.host.rstrip("/") == settings.SITE_URL.rstrip("/"):
-        # Local delivery to the inbox
         print(f"[DEBUG send_activity_to_inbox] LOCAL delivery: Creating inbox item for {recipient.username}")
         Inbox.objects.create(author=recipient, data=activity_clean)
         print(f"[DEBUG send_activity_to_inbox] LOCAL delivery: Inbox item created successfully")
         return
-
-    # For remote inbox, construct the URL properly
-    # The inbox endpoint expects: /api/authors/<author_id>/inbox/
-    # Extract the UUID or author ID part from the full FQID
-    recipient_id = str(recipient.id).rstrip('/')
     
-    # Extract the author ID part (UUID) from the FQID
+    # Remote Processing Logic
+    recipient_id = str(recipient.id).rstrip('/') # The inbox endpoint expects: /api/authors/<author_id>/inbox/ so extract the UUID or author ID part from the full FQID
+
     # FQID format: https://node.com/api/authors/{uuid}
     if '/api/authors/' in recipient_id:
         author_id_part = recipient_id.split('/api/authors/')[-1]
     else:
-        # Fallback: use the last part of the URL
+        # Use the last part of the URL if it fails
         author_id_part = recipient_id.split('/')[-1]
     
     base_host = recipient.host.rstrip('/')
@@ -129,12 +127,9 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         inbox_url = f"{base_host}/api/authors/{author_id_part}/inbox/"
 
     # Get node authentication if available
-    from .models import Node
-    from urllib.parse import urlparse
     parsed = urlparse(recipient.host)
     node_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
     node = Node.objects.filter(id__startswith=node_base).first()
-    auth = None
     if node and node.auth_user:
         auth = (node.auth_user, node.auth_pass)
     
@@ -143,27 +138,27 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         print(f"[DEBUG send_activity_to_inbox] Inbox URL: {inbox_url}")
         print(f"[DEBUG send_activity_to_inbox] Activity type: {activity.get('type')}")
         print(f"[DEBUG send_activity_to_inbox] Activity: {json.dumps(activity, indent=2, default=str)}")
-        
-        # Ensure all datetime values are strings before JSON serialization
-        
-            
-        activity_clean = ensure_datetime_strings(activity)
-        
-        response = requests.post(
-            inbox_url,
-            data=json.dumps(activity_clean, default=str),
-            headers={"Content-Type": "application/json"},
-            auth=auth,
-            timeout=10,
-        )
-        print(f"[DEBUG send_activity_to_inbox] Response status: {response.status_code}")
+                
+        try:
+            response = requests.post(
+                inbox_url,
+                json=activity_clean,
+                headers={"Content-Type": "application/json"},
+                auth=auth,
+                timeout=10
+            )
+            response.raise_for_status()
+        except Exception as e:
+            print("[DEBUG send_activity_to_inbox] EXCEPTION:", repr(e))
+            return
+
         if response.status_code >= 400:
             print(f"[WARN send_activity_to_inbox] Remote node returned error {response.status_code}: {response.text}")
-            return False  # Do NOT crash — federated nodes commonly fail
-        print(f"[DEBUG send_activity_to_inbox] Successfully sent activity")
+            return False 
     except requests.exceptions.RequestException as e:
         print(f"[DEBUG send_activity_to_inbox] EXCEPTION: {e}")
         raise
+
 
 def get_followers(author: Author):
     """Return all authors who follow this author (FOLLOW.state=ACCEPTED)."""
@@ -954,10 +949,6 @@ def process_inbox(author: Author):
                 
                 if not comment_id:
                     comment_id = generate_comment_fqid(comment_author, entry)
-
-                if comment_id and Comment.objects.filter(id=comment_id).exists():
-                    print(f"[DEBUG process_inbox] COMMENT: Comment {comment_id} already exists, skipping")
-                    return
                 
                 comment = Comment.objects.update_or_create(
                     id=comment_id,
@@ -970,32 +961,7 @@ def process_inbox(author: Author):
                     }
                 )
 
-        # UNLIKE
-        '''
-        elif activity_type == "unlike":
-            obj_id = obj if isinstance(obj, str) else None
-            actor_id = activity.get("actor")
-            
-            if not obj_id:
-                return
-            
-            like_actor = Author.objects.filter(id=actor_id).first()
-            if not like_actor and actor_id:
-                like_actor = get_or_create_foreign_author(actor_id)
-            
-            if like_actor:
-                Like.objects.filter(author=like_actor, object=obj_id).delete()
-                
-                entry = Entry.objects.filter(id=obj_id).first()
-                if entry:
-                    entry.likes.remove(like_actor)    
-        '''
-        
-       
-        
-
-        # Mark as processed after successful processing
         # Processed variable is only set for ACCEPT, so check activity_type for others
-        if activity_type in ["post", "follow", "accept", "reject", "undo", "create", "update", "delete", "comment", "like", "entry"]:
+        if activity_type in ["post", "follow", "accept", "reject", "unlike", "undo", "removefriend", "create", "update", "delete", "comment", "like", "entry"]:
             item.processed = True
             item.save()

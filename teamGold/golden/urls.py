@@ -14,33 +14,29 @@ from .api.followersAPIView import FollowersView
 '''
 These URL Patterns registers all views 
 '''
-urlpatterns = [
+urlpatterns =  [
+
+    # Website Views
     path("", views.stream_view, name="stream"),
-    path("new_edit_entry/", views.new_edit_entry_view, name="new_edit_entry_view"),
     path("login/", views.CustomLoginView.as_view(template_name="login.html"), name="login"),
     path("signup/", views.signup, name="signup"),
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
-    path('profile/', views.profile_view, name='profile'),
+    path('stream/', views.stream_view, name="stream-link"),
+    path("new_edit_entry/", views.new_edit_entry_view, name="new_edit_entry_view"),
+    path('entry/<str:entry_uuid>/', views.entry_detail_view, name='entry_detail'),
     path("authors/<path:author_id>/", views.public_profile_view, name="public-profile"),
+    path('profile/', views.profile_view, name='profile'),
     path('profile/followers/', views.followers, name='followers'),
     path('profile/following/', views.following, name='following'),
     path("profile/follow_requests/", views.follow_requests, name="follow_requests"),
-    path('entry/<str:entry_uuid>/', views.entry_detail_view, name='entry_detail'),
-    path('stream/', views.stream_view, name="stream-link"),
 
-    # Follow-related actions for views
-    path('profile/follow/', views.api_follow_action, name="follow-action"),
+    # Follow Feature Actions
+    path('profile/follow/', views.api_follow_action, name="follow-action"), 
     path('profile/accept_follow/', views.api_accept_follow_action, name="accept-follow-action"), 
     path('profile/reject_follow/', views.api_reject_follow_action, name="reject-follow-action"), 
-    path('profile/unfollow/', views.api_unfollow_action, name="unfollow-action"), 
-    path('profile/accept_follow/', views.api_accept_follow_action, name="accept-follow-action"), 
-    path('profile/reject_follow/', views.api_reject_follow_action, name="reject-follow-action"), 
-    path('profile/unfollow/', views.api_unfollow_action, name="unfollow-action"), 
+    path('profile/unfollow/', views.api_unfollow_action, name="unfollow-action"),     
+    path("api/reading/", ReadingAPIView.as_view(), name="api-reading"),
 
-    # API Endpoints
-    path("api/authors/", AuthorsListView.as_view(), name="api-authors-list"), 
-    path("api/authors/<str:author_uuid>/", SingleAuthorAPIView.as_view(), name="api-author-detail"),  
-    path("api/reading/", ReadingAPIView.as_view(), name="api-reading"), 
     # profile and node endpoints removed in this branch
     path("api/Follow/<path:id>/", FollowAPIView.as_view(), name="get-follow"),
     path("api/Author/<path:author_id>/friends/", AuthorFriendsView.as_view()),
@@ -48,6 +44,7 @@ urlpatterns = [
 
     # Entry-related API
     path("api/entries/<path:entry_serial>/comments/", EntryCommentAPIView.as_view(), name="entry-comments-alias"),
+
     # Backwards-compatible capitalized aliases used by tests
     path("api/Entry/<path:entry_serial>/comments/", EntryCommentAPIView.as_view(), name="entry-comments-alias-cap"),
     path("api/entries/<path:id>/", EntryAPIView.as_view(), name="get-entry"),
@@ -74,14 +71,17 @@ urlpatterns = [
     path("api/authors/<path:author_serial>/entries/<path:entry_serial>/comments/<path:comment_fqid>/likes/", LikeAPIView.as_view(), name="author-entry-comment-likes"),
     path("api/entries/<path:entry_fqid>/likes/", LikeAPIView.as_view(), name="entry-likes"),
     path("api/Entry/<path:entry_fqid>/likes/", LikeAPIView.as_view(), name="entry-likes-cap"),
+
     # Liked by author endpoints
     path("api/authors/<path:author_serial>/liked/", LikedAPIView.as_view(), name="author-liked"),
     path("api/authors/<path:author_serial>/liked/<path:like_serial>/", LikedAPIView.as_view(), name="author-liked-single"),
     path("api/authors/<path:author_fqid>/liked/", LikedAPIView.as_view(), name="author-liked-fqid"),
     path("api/liked/<path:like_fqid>/", LikedAPIView.as_view(), name="liked"),
 
-    # Miscellaneous API Endpoints
+    # Authors API Endpoints
     path("api/authors/<path:author_serial>/inbox/", views.inbox_view, name="author-inbox"),
+    path("api/authors/<str:author_uuid>/", SingleAuthorAPIView.as_view(), name="api-author-detail"),  
+    path("api/authors/", AuthorsListView.as_view(), name="api-authors-list"), 
     path("api/authors/<path:author_serial>/entries/<path:entry_serial>/images/", EntryImageAPIView.as_view(), name="author-entry-images"),
     path("api/Entry/<path:entry_id>/images/", EntryImageAPIView.as_view(), name="author-entry-images-cap"),
     path("api/EntryImage/<path:id>/", EntryImageAPIView.as_view(), name="get-entry-image-cap"),

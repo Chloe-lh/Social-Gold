@@ -2,12 +2,13 @@ import requests
 from django.utils import timezone
 from golden.models import Entry, EntryImage, Author, Comment, Like, Follow, Node, Inbox
 from golden.services import get_or_create_foreign_author, normalize_fqid, generate_comment_fqid, fetch_and_sync_remote_entry, is_local
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
 from datetime import datetime as dt
 import uuid
 from golden.services import get_content_type_from_payload
+
 
 import uuid
 import json
@@ -64,14 +65,14 @@ def safe_parse_datetime(value):
     return None
 
 def send_activity_to_inbox(recipient: Author, activity: dict):
-    
+    """Send activity to local or remote inbox."""
     print(f"[DEBUG send_activity_to_inbox] Called: recipient={recipient.username} (id={recipient.id}, host={recipient.host})")
     print(f"[DEBUG send_activity_to_inbox] Activity type: {activity.get('type')}")
     print(f"[DEBUG send_activity_to_inbox] SITE_URL: {settings.SITE_URL}")
     print("[DEBUG] type(recipient.host) =", type(recipient.host))
     print("[DEBUG] recipient.host =", recipient.host)
 
-    def activity_strip(obj):
+    def ensure_datetime_strings(obj):
             """
             Recursively convert datetime objects to ISO strings
             and ensure all nested values are JSON-serializable.
@@ -86,11 +87,11 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
 
             # Handle dicts
             if isinstance(obj, dict):
-                return {k: activity_strip(v) for k, v in obj.items()}
+                return {k: ensure_datetime_strings(v) for k, v in obj.items()}
 
             # Handle lists/tuples
             if isinstance(obj, (list, tuple)):
-                return [activity_strip(item) for item in obj]
+                return [ensure_datetime_strings(item) for item in obj]
 
             # Handle model objects or other custom objects
             # Use string representation to avoid recursion issues
@@ -99,23 +100,25 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
             except Exception:
                 return repr(obj)
             
-    activity_clean = activity_strip(activity)
-
-    # Local Processing Logic
+    activity_clean = ensure_datetime_strings(activity)
     if recipient.host.rstrip("/") == settings.SITE_URL.rstrip("/"):
+        # Local delivery to the inbox
         print(f"[DEBUG send_activity_to_inbox] LOCAL delivery: Creating inbox item for {recipient.username}")
         Inbox.objects.create(author=recipient, data=activity_clean)
         print(f"[DEBUG send_activity_to_inbox] LOCAL delivery: Inbox item created successfully")
         return
-    
-    # Remote Processing Logic
-    recipient_id = str(recipient.id).rstrip('/') # The inbox endpoint expects: /api/authors/<author_id>/inbox/ so extract the UUID or author ID part from the full FQID
 
+    # For remote inbox, construct the URL properly
+    # The inbox endpoint expects: /api/authors/<author_id>/inbox/
+    # Extract the UUID or author ID part from the full FQID
+    recipient_id = str(recipient.id).rstrip('/')
+    
+    # Extract the author ID part (UUID) from the FQID
     # FQID format: https://node.com/api/authors/{uuid}
     if '/api/authors/' in recipient_id:
         author_id_part = recipient_id.split('/api/authors/')[-1]
     else:
-        # Use the last part of the URL if it fails
+        # Fallback: use the last part of the URL
         author_id_part = recipient_id.split('/')[-1]
     
     base_host = recipient.host.rstrip('/')
@@ -127,9 +130,12 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         inbox_url = f"{base_host}/api/authors/{author_id_part}/inbox/"
 
     # Get node authentication if available
+    from .models import Node
+    from urllib.parse import urlparse
     parsed = urlparse(recipient.host)
     node_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
     node = Node.objects.filter(id__startswith=node_base).first()
+    auth = None
     if node and node.auth_user:
         auth = (node.auth_user, node.auth_pass)
     
@@ -138,28 +144,27 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         print(f"[DEBUG send_activity_to_inbox] Inbox URL: {inbox_url}")
         print(f"[DEBUG send_activity_to_inbox] Activity type: {activity.get('type')}")
         print(f"[DEBUG send_activity_to_inbox] Activity: {json.dumps(activity, indent=2, default=str)}")
-
-        try:
-            response = requests.post(
-                inbox_url,
-                data=json.dumps(activity_clean, default=str), 
-                json=activity_clean,
-                headers={"Content-Type": "application/json"},
-                auth=auth,
-                timeout=10
-            )
-            response.raise_for_status()
-        except Exception as e:
-            print("[DEBUG send_activity_to_inbox] EXCEPTION:", repr(e))
-            return
-
+        
+        # Ensure all datetime values are strings before JSON serialization
+        
+            
+        activity_clean = ensure_datetime_strings(activity)
+        
+        response = requests.post(
+            inbox_url,
+            data=json.dumps(activity_clean, default=str),
+            headers={"Content-Type": "application/json"},
+            auth=auth,
+            timeout=10,
+        )
+        print(f"[DEBUG send_activity_to_inbox] Response status: {response.status_code}")
         if response.status_code >= 400:
             print(f"[WARN send_activity_to_inbox] Remote node returned error {response.status_code}: {response.text}")
-            return False 
+            return False  # Do NOT crash — federated nodes commonly fail
+        print(f"[DEBUG send_activity_to_inbox] Successfully sent activity")
     except requests.exceptions.RequestException as e:
         print(f"[DEBUG send_activity_to_inbox] EXCEPTION: {e}")
         raise
-
 
 def get_followers(author: Author):
     """Return all authors who follow this author (FOLLOW.state=ACCEPTED)."""
@@ -197,6 +202,7 @@ def get_friends(author):
     #following = following_qs.values_list("id", flat=True)
 
     friends = followers_qs.intersection(following_qs)#.values_list("id", flat=True)
+    print(friends)
     """
     # Get followers (people who follow this author) - actor_id is ForeignKey to Author
     # Try both normalized and raw author.id
@@ -297,23 +303,19 @@ def distribute_activity(activity: dict, actor: Author):
 
     type_lower = activity.get("type", "").lower()
     obj = activity.get("object")
-    print(obj)
-
-    # ============================================================
-    # ENTTRIES RELATED
-    # ============================================================
 
     # CREATE ENTRY
     if type_lower == "entry" or type_lower == "post":
-        
         visibility = activity.get("visibility", "PUBLIC").upper()
         
-        if visibility == "PUBLIC":
+        if visibility == "PUBLIC" or visibility == "DELETED":
             recipients = set(get_followers(actor)) | set(get_friends(actor))
         elif visibility == "UNLISTED":
             recipients = set(get_followers(actor))
         elif visibility == "FRIENDS":
             recipients = set(get_friends(actor))
+        else:
+            recipients = set()
 
         for r in recipients:
             send_activity_to_inbox(r, activity)
@@ -321,20 +323,36 @@ def distribute_activity(activity: dict, actor: Author):
     
     # UPDATE ENTRY
     if type_lower == "update":
-
+        print(f"[DEBUG distribute_activity] UPDATE ENTRY: actor={actor.username} (id={actor.id})")
+        print(f"[DEBUG distribute_activity] UPDATE ENTRY: entry_id={obj.get('id')}")
+        print(f"[DEBUG distribute_activity] UPDATE ENTRY: title={obj.get('title')}")
+        print(f"[DEBUG distribute_activity] UPDATE ENTRY: visibility={obj.get('visibility')}")
+        
         visibility = obj.get("visibility", "PUBLIC").upper()
+        recipients = set()
 
-        if visibility in ("PUBLIC",):
-            recipients = get_followers(actor) | get_friends(actor)
+        if visibility == "PUBLIC":
+            followers = get_followers(actor)
+            friends = get_friends(actor)
+            recipients |= set(followers)
+            recipients |= set(friends)
+            print(f"[DEBUG distribute_activity] UPDATE ENTRY: Found {len(followers)} followers, {len(friends)} friends")
         elif visibility == "UNLISTED":
-            recipients = set(get_followers(actor))
+            followers = get_followers(actor)
+            recipients |= set(followers)
+            print(f"[DEBUG distribute_activity] UPDATE ENTRY: Found {len(followers)} followers (UNLISTED)")
         elif visibility == "FRIENDS":
-            recipients = set(get_friends(actor))
+            friends = get_friends(actor)
+            recipients |= set(friends)
+            print(f"[DEBUG distribute_activity] UPDATE ENTRY: Found {len(friends)} friends (FRIENDS)")
 
-        # Always process the update locally
-        send_activity_to_inbox(actor, activity)
-
+        # Also send to local inbox for immediate processing on the same node
+        # This ensures the update is reflected immediately on the node where it was made
+        print(f"[DEBUG distribute_activity] UPDATE ENTRY: Sending to {len(recipients)} recipients + local inbox")
+        send_activity_to_inbox(actor, activity)  # Send to actor's own inbox for local processing
+        
         for r in recipients:
+            print(f"[DEBUG distribute_activity] UPDATE ENTRY: Sending to recipient {r.username} (id={r.id}, host={r.host})")
             send_activity_to_inbox(r, activity)
         return
     
@@ -344,124 +362,90 @@ def distribute_activity(activity: dict, actor: Author):
         for r in recipients:
             send_activity_to_inbox(r, activity)
         return
+    
+    # FOLLOW SEND OUT
+    if type_lower == "follow":
+        target_id = obj.get("id")
+        target_id = obj.get("id")
+        print(f"[DEBUG distribute_activity] FOLLOW: Processing follow activity")
+        print(f"[DEBUG distribute_activity] FOLLOW: actor={actor.username} (id={actor.id})")
+        print(f"[DEBUG distribute_activity] FOLLOW: target_id (raw)={target_id}")
+        
+        target_id_normalized = normalize_fqid(target_id)
+        print(f"[DEBUG distribute_activity] FOLLOW: target_id (normalized)={target_id_normalized}")
+        
+        target = Author.objects.filter(id=target_id_normalized).first()
+        print(f"[DEBUG distribute_activity] FOLLOW: Lookup by normalized FQID: target={target.username if target else 'None'} (id={target.id if target else 'None'})")
 
-    # MAKE A COMMENT 
+        # If target doesn't exist locally by FQID, try to get/create
+        if not target:
+            print(f"[DEBUG distribute_activity] FOLLOW: Target not found, calling get_or_create_foreign_author")
+            target = get_or_create_foreign_author(target_id)
+            print(f"[DEBUG distribute_activity] FOLLOW: get_or_create_foreign_author returned: target={target.username if target else 'None'} (id={target.id if target else 'None'})")
+        
+        if target:
+            print(f"[DEBUG distribute_activity] FOLLOW: Sending activity to target inbox: target={target.username} (id={target.id}, host={target.host})")
+            send_activity_to_inbox(target, activity)
+            print(f"[DEBUG distribute_activity] FOLLOW: Activity sent successfully")
+        else:
+            print(f"[DEBUG distribute_activity] FOLLOW: ERROR - Target is None, cannot send activity")
+        return
+
     if type_lower == "comment":
         entry_id = activity.get("entry") or activity.get("post")
         
         if not entry_id:
-            print(f"[DEBUG distribute_activity] COMMENT: can't find entry id={entry_id}")
-            print(f"[DEBUG distribute_activity] COMMENT: object status {obj}")
             return
         
         entry = Entry.objects.filter(id=normalize_fqid(entry_id)).first()
-
         if not entry:
             entry = Entry.objects.filter(id=entry_id).first()
         
-        # Tries to look for the entry locally, then if it fails, fetch author FQID 
+        # If entry not found locally, try to extract author FQID from entry FQID or fetch entry
         if not entry:
             print(f"[DEBUG distribute_activity] COMMENT: Entry not found locally, attempting to fetch and sync: entry_id={entry_id}")
+            # Try to sync the entry from remote node
             entry = fetch_and_sync_remote_entry(entry_id)
         
         if entry:
             # Distribute comment to entry author AND their followers/friends (like entry updates)
+            # This ensures all nodes viewing the entry see the new comment
             print(f"[DEBUG distribute_activity] COMMENT: Found entry, author={entry.author.username} (id={entry.author.id})")
-
-            visibility = entry.visibility.upper() if hasattr(entry, 'visibility') else "PUBLIC"
             recipients = {entry.author}
-
+            
+            # Also send to followers/friends of the entry author (like entry updates do)
+            # This ensures all nodes that can see the entry also see the comment
+            visibility = entry.visibility.upper() if hasattr(entry, 'visibility') else "PUBLIC"
             if visibility == "PUBLIC":
-                recipients |= set(get_followers(entry.author)) 
+                followers = get_followers(entry.author)
+                friends = get_friends(entry.author)
+                recipients |= set(followers)
+                recipients |= set(friends)
+                print(f"[DEBUG distribute_activity] COMMENT: Adding {len(followers)} followers and {len(friends)} friends")
             elif visibility == "UNLISTED":
-                recipients |= set(get_followers(entry.author))
+                followers = get_followers(entry.author)
+                recipients |= set(followers)
+                print(f"[DEBUG distribute_activity] COMMENT: Adding {len(followers)} followers (UNLISTED)")
             elif visibility == "FRIENDS":
-                recipients |= set(get_friends(entry.author))
-
+                friends = get_friends(entry.author)
+                recipients |= set(friends)
+                print(f"[DEBUG distribute_activity] COMMENT: Adding {len(friends)} friends (FRIENDS)")
+                print(f"[DEBUG distribute_activity] COMMENT: Found {len(recipients)} total recipients") 
+            
+            print(f"[DEBUG distribute_activity] COMMENT: Sending to {len(recipients)} recipients")
             for r in recipients:
                 print(f"[DEBUG distribute_activity] COMMENT: Sending to {r.username} (id={r.id}, host={r.host})")
                 send_activity_to_inbox(r, activity)
-        
-        return
-    
-    # LIKE
-    elif type_lower == "like":
-
-        actor_id = None
-
-        # Trying to find who liked to accommodate three API stylyes. 
-        if isinstance(activity.get("author"), dict):
-            actor_id = activity.get("author").get("id")
-        elif isinstance(activity.get("actor"), dict):
-            actor_id = activity.get("actor").get("id")
-        elif isinstance(activity.get("actor"), str):
-            actor_id = activity.get("actor")
         else:
-            actor_id = activity.get("id") 
-
-        # Skips actor if local to prevent double processing
-        if actor_id and actor_id.startswith(settings.SITE_URL):
-            print("[DEBUG process_inbox] LIKE: Skipping local-origin like")
-            return
-
-        if actor_id:
-            actor_obj = Author.objects.filter(id=normalize_fqid(actor_id)).first()
-            if not actor_obj:
-                actor_obj = get_or_create_foreign_author(actor_id)
-        else:
-            print("[DEBUG process_inbox] LIKE: No actor found in Like activity")
-            return
-
-        liked_fqid = activity.get("object")
-        if not isinstance(liked_fqid, str):
-            print("[DEBUG process_inbox] LIKE: Invalid liked_fqid, skipping")
-            return
-
-        print(f"[DEBUG process_inbox] LIKE: Processing LIKE toggle for object={liked_fqid}, actor={actor_obj}")
-
-        entry = Entry.objects.filter(id=normalize_fqid(liked_fqid)).first()
-        if not entry:
-            entry = Entry.objects.filter(id=liked_fqid).first()
-
-        comment = Comment.objects.filter(id=normalize_fqid(liked_fqid)).first()
-        if not comment:
-            comment = Comment.objects.filter(id=liked_fqid).first()
-
-        existing = Like.objects.filter(author=actor_obj, object=liked_fqid).first()
-
-        if existing:
-            # Treat repeated LIKE as UNLIKE
-            print("[DEBUG process_inbox] LIKE: Remote LIKE already exists, so UNLIKE")
-            existing.delete()
-
-            if entry:
-                entry.likes.remove(actor_obj)
-
-            return
-
-        # Otherwise CREATE a new LIKE
-        like_id = f"{settings.SITE_URL}/api/likes/{uuid.uuid4()}"
-
-        Like.objects.create(
-            id=like_id,
-            author=actor_obj,
-            object=liked_fqid,
-            published=safe_parse_datetime(activity.get("published")) or timezone.now(),
-        )
-
-        print(f"[DEBUG process_inbox] LIKE: Created new LIKE {like_id}")
-
-        if entry:
-            entry.likes.add(actor_obj)
-
+            # Last resort: try to extract author from entry FQID pattern
+            # Entry FQID format: https://node.com/api/authors/{author_uuid}/entries/{entry_uuid}
+            # Or: https://node.com/api/entries/{entry_uuid} (need to fetch to get author)
+            print(f"[DEBUG distribute_activity] COMMENT: ERROR - Could not find entry or extract author: entry_id={entry_id}")
         return
 
-    '''
     # LIKE
     if type_lower == "like":
-
         liked_fqid = activity.get("object") if isinstance(activity.get("object"), str) else None
-
         if not liked_fqid:
             print(f"[DEBUG distribute_activity] LIKE: No liked_fqid in activity object")
             return
@@ -554,14 +538,116 @@ def distribute_activity(activity: dict, actor: Author):
             print(f"[DEBUG distribute_activity] LIKE: Sending like activity to {r.username} (id={r.id}, host={r.host})")
             send_activity_to_inbox(r, activity)
         return
-        '''
+
+    # UNLIKE handle "undo" (ActivityPub) formats
+    '''
+    if type_lower == "unlike":
+        liked = obj.get("object") if isinstance(obj.get("object"), str) else None
+        if not liked:
+            return
+
+        liked_fqid = liked
+        # Try to find entry locally (with normalization)
+        entry = Entry.objects.filter(id=normalize_fqid(liked_fqid)).first()
+        if not entry:
+            entry = Entry.objects.filter(id=liked_fqid).first()
+        
+        # Try to find comment locally
+        comment = Comment.objects.filter(id=normalize_fqid(liked_fqid)).first()
+        if not comment:
+            comment = Comment.objects.filter(id=liked_fqid).first()
+
+        recipients = set()
+        
+        if entry:
+            print(f"[DEBUG distribute_activity] UNLIKE: Found entry locally, author={entry.author.username} (id={entry.author.id}, host={entry.author.host})")
+            recipients.add(entry.author)
+            # Also send to followers/friends of the entry author
+            visibility = entry.visibility.upper() if hasattr(entry, 'visibility') else "PUBLIC"
+            if visibility == "PUBLIC":
+                followers = get_followers(entry.author)
+                friends = get_friends(entry.author)
+                recipients |= set(followers)
+                recipients |= set(friends)
+                print(f"[DEBUG distribute_activity] UNLIKE: Adding {len(followers)} followers and {len(friends)} friends")
+            elif visibility == "UNLISTED":
+                followers = get_followers(entry.author)
+                recipients |= set(followers)
+                print(f"[DEBUG distribute_activity] UNLIKE: Adding {len(followers)} followers (UNLISTED)")
+            elif visibility == "FRIENDS":
+                friends = get_friends(entry.author)
+                recipients |= set(friends)
+                print(f"[DEBUG distribute_activity] UNLIKE: Adding {len(friends)} friends (FRIENDS)")
+        elif comment:
+            print(f"[DEBUG distribute_activity] UNLIKE: Found comment locally, author={comment.author.username} (id={comment.author.id}, host={comment.author.host})")
+            recipients.add(comment.author)
+            # Also send to followers/friends of the comment author
+            followers = get_followers(comment.author)
+            friends = get_friends(comment.author)
+            recipients |= set(followers)
+            recipients |= set(friends)
+            print(f"[DEBUG distribute_activity] UNLIKE: Adding {len(followers)} followers and {len(friends)} friends for comment")
+        else:
+            # Entry/comment not found locally - try to sync from remote
+            print(f"[DEBUG distribute_activity] UNLIKE: Entry/comment not found locally, attempting to fetch and sync: liked_fqid={liked_fqid}")
+            entry = fetch_and_sync_remote_entry(liked_fqid)
+            if entry:
+                print(f"[DEBUG distribute_activity] UNLIKE: Successfully synced entry, author={entry.author.username} (id={entry.author.id}, host={entry.author.host})")
+                recipients.add(entry.author)
+                # Also send to followers/friends
+                visibility = entry.visibility.upper() if hasattr(entry, 'visibility') else "PUBLIC"
+                if visibility == "PUBLIC":
+                    followers = get_followers(entry.author)
+                    friends = get_friends(entry.author)
+                    recipients |= set(followers)
+                    recipients |= set(friends)
+                    print(f"[DEBUG distribute_activity] UNLIKE: Adding {len(followers)} followers and {len(friends)} friends")
+                elif visibility == "UNLISTED":
+                    followers = get_followers(entry.author)
+                    recipients |= set(followers)
+                    print(f"[DEBUG distribute_activity] UNLIKE: Adding {len(followers)} followers (UNLISTED)")
+                elif visibility == "FRIENDS":
+                    friends = get_friends(entry.author)
+                    recipients |= set(friends)
+                    print(f"[DEBUG distribute_activity] UNLIKE: Adding {len(friends)} friends (FRIENDS)")
+            else:
+                # Try to extract author from FQID pattern
+                if '/api/authors/' in liked_fqid and '/entries/' in liked_fqid:
+                    author_fqid = '/api/authors/'.join(liked_fqid.split('/api/authors/')[:2]).split('/entries/')[0]
+                    print(f"[DEBUG distribute_activity] UNLIKE: Extracting author from FQID: {author_fqid}")
+                    author = get_or_create_foreign_author(author_fqid)
+                    if author:
+                        print(f"[DEBUG distribute_activity] UNLIKE: Extracted author={author.username} (id={author.id}, host={author.host})")
+                        recipients.add(author)
+                else:
+                    print(f"[DEBUG distribute_activity] UNLIKE: ERROR - Could not find entry/comment or extract author: liked_fqid={liked_fqid}")
+
+        print(f"[DEBUG distribute_activity] UNLIKE: Sending to {len(recipients)} recipients")
+        for r in recipients:
+            print(f"[DEBUG distribute_activity] UNLIKE: Sending unlike activity to {r.username} (id={r.id}, host={r.host})")
+            send_activity_to_inbox(r, activity)
+        return
     
-    # ============================================================
-    # AUTHOR RELATED
-    # ============================================================
-    
-    # SEND FOLLOW (REQUEST OR AUTOMATIC)
+    # UNLIKE (ActivityPub format - keep for backward compatibility)
+    if type_lower == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "like":
+        liked_fqid = obj.get("object")
+        entry = Entry.objects.filter(id=liked_fqid).first()
+        comment = Comment.objects.filter(id=liked_fqid).first()
+
+        if entry:
+            recipients = {entry.author}
+        elif comment:
+            recipients = {comment.author}
+        else:
+            return
+
+        for r in recipients:
+            send_activity_to_inbox(r, activity)
+        return
+
+    # FOLLOW
     if type_lower == "follow":
+        target_id = obj.get("id")
         target_id = obj.get("id")
         print(f"[DEBUG distribute_activity] FOLLOW: Processing follow activity")
         print(f"[DEBUG distribute_activity] FOLLOW: actor={actor.username} (id={actor.id})")
@@ -586,9 +672,47 @@ def distribute_activity(activity: dict, actor: Author):
         else:
             print(f"[DEBUG distribute_activity] FOLLOW: ERROR - Target is None, cannot send activity")
         return
-    
+    '''
+
+    """
+    # ACCEPT or REJECT
+    if type_lower == "accept" or type_lower == "reject":
+        follow_obj = obj or {}
+
+        if isinstance(follow_obj, dict):
+            follower_id = follow_obj.get("actor") # Who made the follow request
+            target = Author.objects.filter(id=normalize_fqid(follow_obj.get("object"))).first()
+
+            if not target and follower_id:
+                target = get_or_create_foreign_author(follower_id)
+        elif isinstance(follow_obj, str):
+            # If it's a Follow ID string, look it up
+            follow = Follow.objects.filter(id=follow_obj).first()
+            if follow:
+                target = follow.actor
+                # If actor doesn't exist (shouldn't happen, but be safe)
+                if not target:
+                    target = get_or_create_foreign_author(follow.actor.username if hasattr(follow, 'actor') else follow.actor_id)
+            else:
+                target = None
+        
+        if target:
+            send_activity_to_inbox(target, activity)
+       
+        return
+        """
+
     # UNFOLLOW
     if type_lower == "undo" and isinstance(obj, dict) and obj.get("type", "").lower() == "follow":
+        target_id = obj.get("id")
+        target = Author.objects.filter(id=normalize_fqid(target_id)).first()
+
+        if target:
+            send_activity_to_inbox(target, activity)
+        return
+
+    # REMOVE FRIEND
+    if type_lower == "removefriend":
         target_id = obj.get("id")
         target = Author.objects.filter(id=normalize_fqid(target_id)).first()
 
@@ -962,6 +1086,31 @@ def process_inbox(author: Author):
                     }
                 )
 
+        # UNLIKE
+        '''
+        elif activity_type == "unlike":
+            obj_id = obj if isinstance(obj, str) else None
+            actor_id = activity.get("actor")
+            
+            if not obj_id:
+                return
+            
+            like_actor = Author.objects.filter(id=actor_id).first()
+            if not like_actor and actor_id:
+                like_actor = get_or_create_foreign_author(actor_id)
+            
+            if like_actor:
+                Like.objects.filter(author=like_actor, object=obj_id).delete()
+                
+                entry = Entry.objects.filter(id=obj_id).first()
+                if entry:
+                    entry.likes.remove(like_actor)    
+        '''
+        
+       
+        
+
+        # Mark as processed after successful processing
         # Processed variable is only set for ACCEPT, so check activity_type for others
         if activity_type in ["post", "follow", "accept", "reject", "unlike", "undo", "removefriend", "create", "update", "delete", "comment", "like", "entry"]:
             item.processed = True

@@ -406,7 +406,8 @@ def distribute_activity(activity: dict, actor: Author):
         elif isinstance(activity.get("actor"), str):
             actor_id = activity.get("actor")
         else:
-            actor_id = activity.get("id") 
+            print("[DEBUG process_inbox] LIKE: No actor found in Like activity")
+            #actor_id = activity.get("id") 
 
         # Skips actor if local to prevent double processing
         #if actor_id and actor_id.startswith(settings.SITE_URL):
@@ -421,47 +422,54 @@ def distribute_activity(activity: dict, actor: Author):
             print("[DEBUG process_inbox] LIKE: No actor found in Like activity")
             return
 
-        liked_fqid = activity.get("object")
+        liked_fqid = activity.get("id")
         if not isinstance(liked_fqid, str):
             print("[DEBUG process_inbox] LIKE: Invalid liked_fqid, skipping")
             return
 
-        print(f"[DEBUG process_inbox] LIKE: Processing LIKE toggle for object={liked_fqid}, actor={actor_obj}")
-
-        entry = Entry.objects.filter(id=normalize_fqid(liked_fqid)).first()
-        if not entry:
-            entry = Entry.objects.filter(id=liked_fqid).first()
-
-        comment = Comment.objects.filter(id=normalize_fqid(liked_fqid)).first()
-        if not comment:
-            comment = Comment.objects.filter(id=liked_fqid).first()
-
-        existing = Like.objects.filter(author=actor_obj, object=liked_fqid).first()
-
-        if existing:
-            # Treat repeated LIKE as UNLIKE
-            print("[DEBUG process_inbox] LIKE: Remote LIKE already exists, so UNLIKE")
-            existing.delete()
-
-            if entry:
-                entry.likes.remove(actor_obj)
-
+        target = activity.get("object")
+        if not isinstance(target, str):
+            print("[DEBUG process_inbox] LIKE: Invalid target, skipping")
             return
 
+        send_activity_to_inbox(target, activity)
+
+        #print(f"[DEBUG process_inbox] LIKE: Processing LIKE toggle for object={liked_fqid}, actor={actor_obj}")
+
+        #entry = Entry.objects.filter(id=normalize_fqid(liked_fqid)).first()
+        #if not entry:
+            #entry = Entry.objects.filter(id=liked_fqid).first()
+
+        #comment = Comment.objects.filter(id=normalize_fqid(liked_fqid)).first()
+        #if not comment:
+            #comment = Comment.objects.filter(id=liked_fqid).first()
+
+        #existing = Like.objects.filter(author=actor_obj, object=liked_fqid).first()
+
+        #if existing:
+            # Treat repeated LIKE as UNLIKE
+            #print("[DEBUG process_inbox] LIKE: Remote LIKE already exists, so UNLIKE")
+            #existing.delete()
+
+            #if entry:
+                #entry.likes.remove(actor_obj)
+
+            #return
+
         # Otherwise CREATE a new LIKE
-        like_id = f"{settings.SITE_URL}/api/likes/{uuid.uuid4()}"
+        #like_id = f"{settings.SITE_URL}/api/likes/{uuid.uuid4()}"
 
-        Like.objects.create(
-            id=like_id,
-            author=actor_obj,
-            object=liked_fqid,
-            published=safe_parse_datetime(activity.get("published")) or timezone.now(),
-        )
+        #Like.objects.create(
+            #id=like_id,
+            #author=actor_obj,
+            #object=liked_fqid,
+            #published=safe_parse_datetime(activity.get("published")) or timezone.now(),
+        #)
 
-        print(f"[DEBUG process_inbox] LIKE: Created new LIKE {like_id}")
+        #print(f"[DEBUG process_inbox] LIKE: Created new LIKE {like_id}")
 
-        if entry:
-            entry.likes.add(actor_obj)
+        #if entry:
+            #entry.likes.add(actor_obj)
 
         return
 

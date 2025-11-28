@@ -416,8 +416,8 @@ def distribute_activity(activity: dict, actor: Author):
 
             obj_id = like.object
 
-            liked_entry = Entry.object.filter(id=normalize_fqid(obj_id)).first()
-            liked_comment = Comment.object.filter(id=normalize_fqid(obj_id)).first()
+            liked_entry = Entry.objects.filter(id=normalize_fqid(obj_id)).first()
+            liked_comment = Comment.objects.filter(id=normalize_fqid(obj_id)).first()
 
             if liked_entry:
                 entry = liked_entry

@@ -423,7 +423,7 @@ def distribute_activity(activity: dict, actor: Author):
                 entry = liked_entry
             elif liked_comment:
                 entry_id = liked_comment.entry.id
-                entry = Entry.object.filter(id=normalize_fqid(entry_id)).first()
+                entry = Entry.objects.filter(id=normalize_fqid(entry_id)).first()
             else:
                 print("[DEBUG distribute_activty] ENTRY DOES NOT EXIST")
 

@@ -262,6 +262,7 @@ def create_profile_update_activity(actor_author):
 # * Helper Functions
 # * ============================================================
 
+'''
 def get_comment_list_api(entry_id):
     base = settings.SITE_URL.rstrip('/') + '/'
     url = f"{base}api/Entry/{entry_id}/comments/"
@@ -273,7 +274,81 @@ def get_comment_list_api(entry_id):
     except Exception as e:
         print("Error fetching comment list:", e)
         return None
+'''  
+def get_comment_list_api(entry_id):
+    """Get comments for an entry - query database directly"""
+    from golden.models import Comment
+    from golden.services import normalize_fqid
     
+    # Normalize the entry ID to handle different FQID formats
+    entry_id_normalized = normalize_fqid(entry_id)
+    
+    # Query the database directly - no HTTP requests!
+    try:
+        comments = Comment.objects.filter(
+            entry_id=entry_id_normalized
+        ).select_related('author').order_by('-published')
+        
+        # Return in the same format your API would return
+        comment_list = []
+        for comment in comments:
+            comment_list.append({
+                "type": "comment",
+                "id": str(comment.id),
+                "author": {
+                    "type": "author",
+                    "id": str(comment.author.id),
+                    "host": comment.author.host,
+                    "displayName": comment.author.username,
+                    "github": comment.author.github,
+                    "profileImage": comment.author.profileImage.url if comment.author.profileImage else None,
+                    "web": comment.author.web,
+                },
+                "comment": comment.content,
+                "contentType": comment.contentType,
+                "published": comment.published.isoformat() if comment.published else None,
+            })
+        
+        return comment_list
+    except Exception as e:
+        print(f"Error fetching comment list for entry {entry_id}:", e)
+        return []
+
+
+def get_like_api(like_id):
+    """Get likes for an entry - query database directly"""
+    from golden.models import Like, Entry
+    from golden.services import normalize_fqid
+    
+    # If like_id is actually an entry_id, get all likes for that entry
+    entry_id_normalized = normalize_fqid(like_id)
+    
+    try:
+        # Get all likes for this entry
+        entry = Entry.objects.filter(id=entry_id_normalized).first()
+        
+        if not entry:
+            return []
+        
+        # Return list of authors who liked this entry
+        like_list = []
+        for author in entry.likes.all():
+            like_list.append({
+                "type": "author",
+                "id": str(author.id),
+                "host": author.host,
+                "displayName": author.username,
+                "github": author.github,
+                "profileImage": author.profileImage.url if author.profileImage else None,
+                "web": author.web,
+            })
+        
+        return like_list
+    except Exception as e:
+        print(f"Error fetching likes for entry {like_id}:", e)
+        return []
+
+'''
 def get_like_api(like_id):
     base = settings.SITE_URL.rstrip('/') + '/'
     url = f"{base}api/Like/{like_id}/"
@@ -285,3 +360,4 @@ def get_like_api(like_id):
     except Exception as e:
         print("Error fetching like:", e)
         return None
+'''  

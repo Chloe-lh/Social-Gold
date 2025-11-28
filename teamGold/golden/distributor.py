@@ -390,8 +390,9 @@ def distribute_activity(activity: dict, actor: Author):
                 recipients |= set(get_friends(entry.author))
 
             for r in recipients:
-                print(f"[DEBUG distribute_activity] COMMENT: Sending to {r.username} (id={r.id}, host={r.host})")
-                send_activity_to_inbox(r, activity)
+                if r.id != author.id:
+                    print(f"[DEBUG distribute_activity] COMMENT: Sending to {r.username} (id={r.id}, host={r.host})")
+                    send_activity_to_inbox(r, activity)
         
         return
     
@@ -439,8 +440,9 @@ def distribute_activity(activity: dict, actor: Author):
                 recipients |= set(get_friends(entry.author))
 
             for r in recipients:
-                print(f"[DEBUG distribute_activity] LIKE: Sending to {r.username} (id={r.id}, host={r.host})")
-                send_activity_to_inbox(r, activity)
+                if r.id != author.id:
+                    print(f"[DEBUG distribute_activity] LIKE: Sending to {r.username} (id={r.id}, host={r.host})")
+                    send_activity_to_inbox(r, activity)
         
         return
 
@@ -481,7 +483,7 @@ def distribute_activity(activity: dict, actor: Author):
         #if entry:
             #entry.likes.add(actor_obj)
 
-        return
+        #return
 
     '''
     # LIKE

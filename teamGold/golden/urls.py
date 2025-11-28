@@ -4,7 +4,7 @@ from . import views
 
 # API view imports (use the modules under golden.api)
 from .api.friendsAPIView import AuthorFriendsView, FollowAPIView
-from .api.entryAPIView import EntryAPIView, EntryImageAPIView, ReadingAPIView, AuthorEntriesView, AuthorEntryView
+from .api.entryAPIView import EntryAPIView, EntryImageAPIView, ReadingAPIView
 from .api.commentAPIView import EntryCommentAPIView, SingleCommentAPIView, CommentedAPIView
 from .api.likeAPIView import LikeAPIView, LikedAPIView
 from .api.authorsAPIView import AuthorsListView, SingleAuthorAPIView
@@ -66,7 +66,7 @@ urlpatterns =  [
 
     # Follow-related API Endpoints
     #path("api/authors/<str:author_serial>/followers/<str:foreign_author_fqid>", FollowersView.as_view(), name="api-follower"),
-   # path("api/Follow/<path:author_id>/request/", views.api_follow_requests, name="api-follow-request"),
+    #path("api/Follow/<path:author_id>/request/", views.api_follow_requests, name="api-follow-request"),
     #path("api/Follow/<path:author_id>/accept/", views.api_accept_follow_action, name="api-accept-follow"),
     #path("api/Follow/<path:author_id>/reject/", views.api_reject_follow_action, name="api-reject-follow"),
     #path("api/Follow/<path:author_id>/unfollow/", views.api_unfollow_action, name="api-unfollow"),

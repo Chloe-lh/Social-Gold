@@ -184,66 +184,7 @@ def get_friends(author):
     #following = following_qs.values_list("id", flat=True)
 
     friends = followers_qs.intersection(following_qs)#.values_list("id", flat=True)
-    """
-    # Get followers (people who follow this author) - actor_id is ForeignKey to Author
-    # Try both normalized and raw author.id
-    follower_ids_set = set()
-    followers_normalized = Follow.objects.filter(
-        object=author_id_normalized,
-        state="ACCEPTED"
-    ).values_list("actor_id", flat=True)
-    followers_raw = Follow.objects.filter(
-        object=author_id_raw,
-        state="ACCEPTED"
-    ).values_list("actor_id", flat=True)
-    follower_ids_set.update(followers_normalized)
-    follower_ids_set.update(followers_raw)
     
-    print(f"[DEBUG get_friends] Found {len(follower_ids_set)} followers")
-    
-    # Get following (people this author follows) - object is URLField (FQID string)
-    following_follows = Follow.objects.filter(
-        actor=author,
-        state="ACCEPTED"
-    )
-    following_ids_set = set()
-    following_ids_normalized_set = set()
-    for follow in following_follows:
-        following_ids_set.add(follow.object)  # Raw FQID string
-        following_ids_normalized_set.add(normalize_fqid(str(follow.object)))  # Normalized
-    
-    print(f"[DEBUG get_friends] Found {len(following_ids_set)} following")
-    
-    # Find mutual: authors whose ID appears in both sets
-    # follower_ids_set contains Author.id values (from ForeignKey actor_id)
-    # following_ids_set contains FQID strings (from URLField object)
-    mutual_author_ids = []
-    for follower_id in follower_ids_set:
-        # follower_id is an Author.id (URLField), try both normalized and raw
-        follower_id_normalized = normalize_fqid(str(follower_id))
-        follower_id_raw = str(follower_id).rstrip('/')
-        
-        # Check if this follower is also in the following set
-        # We need to check if the follower's ID (in any form) matches any following ID
-        is_mutual = (
-            follower_id_normalized in following_ids_normalized_set or
-            follower_id_raw in following_ids_set or
-            str(follower_id) in following_ids_set or
-            follower_id_normalized in following_ids_set
-        )
-        
-        if is_mutual:
-            mutual_author_ids.append(follower_id)
-            print(f"[DEBUG get_friends] Found mutual friend: {follower_id}")
-    
-    print(f"[DEBUG get_friends] Total mutual friends: {len(mutual_author_ids)}")
-    
-    # Return Author objects for mutual friends
-    if mutual_author_ids:
-        return Author.objects.filter(id__in=mutual_author_ids)
-    
-    return Author.objects.none()
-    """
     return friends
 
 def absolutize_remote_images(html, base_url):
@@ -289,12 +230,14 @@ def distribute_activity(activity: dict, actor: Author):
         
         visibility = activity.get("visibility", "PUBLIC").upper()
         
-        if visibility == "PUBLIC":
+        if visibility == "PUBLIC" or visibility == "DELETED":
             recipients = set(get_followers(actor)) | set(get_friends(actor))
         elif visibility == "UNLISTED":
             recipients = set(get_followers(actor))
         elif visibility == "FRIENDS":
             recipients = set(get_friends(actor))
+        else:
+            recipients = set()
 
         for r in recipients:
             send_activity_to_inbox(r, activity)

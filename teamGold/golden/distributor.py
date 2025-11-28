@@ -131,17 +131,9 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         auth = (node.auth_user, node.auth_pass)
     
     try:
-        print(f"[DEBUG send_activity_to_inbox] Sending activity to {recipient.username} (id={recipient.id}, host={recipient.host})")
-        print(f"[DEBUG send_activity_to_inbox] Inbox URL: {inbox_url}")
-        print(f"[DEBUG send_activity_to_inbox] Activity type: {activity.get('type')}")
-        print(f"[DEBUG send_activity_to_inbox] Activity: {json.dumps(activity, indent=2, default=str)}")
-        
-        # Ensure all datetime values are strings before JSON serialization
-        activity_clean = ensure_datetime_strings(activity)
-        
         response = requests.post(
             inbox_url,
-            data=json.dumps(activity_clean, default=str),
+            json=activity_clean,
             headers={"Content-Type": "application/json"},
             auth=auth,
             timeout=10,
@@ -149,11 +141,11 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
         print(f"[DEBUG send_activity_to_inbox] Response status: {response.status_code}")
         if response.status_code >= 400:
             print(f"[WARN send_activity_to_inbox] Remote node returned error {response.status_code}: {response.text}")
-            return False  # Do NOT crash — federated nodes commonly fail
-        print(f"[DEBUG send_activity_to_inbox] Successfully sent activity")
+            return False
+
     except requests.exceptions.RequestException as e:
-        print(f"[DEBUG send_activity_to_inbox] EXCEPTION: {e}")
-        raise
+        print(f"[ERROR send_activity_to_inbox] Failed delivering to inbox {inbox_url}: {e}")
+        return False
 
 def get_followers(author: Author):
     """Return all authors who follow this author (FOLLOW.state=ACCEPTED)."""

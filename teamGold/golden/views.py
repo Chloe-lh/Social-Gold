@@ -1830,7 +1830,7 @@ def friends(request):
 
 @login_required
 def add_comment(request):
-    
+
     if request.method == "POST":
         form = CommentForm(request.POST)
         entry_id = request.POST.get("entry_id")
@@ -2176,32 +2176,33 @@ def list_inbox(request, author_id):
 @csrf_exempt
 def inbox_view(request, author_id):
 
+    raw_id = author_id.strip().rstrip("/")
+
     base = settings.SITE_URL.rstrip("/")
     expected_ids = [
-        f"{base}/api/authors/{author_id}",
-        f"{base}/authors/{author_id}",
-        f"{base}/{author_id}",
+        f"{base}/api/authors/{raw_id}",
+        f"{base}/authors/{raw_id}",
+        f"{base}/{raw_id}",
     ]
 
-    # FIRST: try to exact match the author (most likely local)
+    # Local
     author = Author.objects.filter(id__in=expected_ids).first()
 
-    # SECOND: try exact match with the author_id as-is (for remote full FQIDs)
+    # Remote full FQID or mismatched slashes
     if not author:
-        author = Author.objects.filter(id=author_id).first()
-        if not author:
-            # Try with trailing slash variations
-            author = Author.objects.filter(id=author_id.rstrip('/')).first()
-            if not author:
-                author = Author.objects.filter(id=f"{author_id}/").first()
-
-    # THIRD: try to fallback and fuzzy match for remote slashes/https differences
-    if not author:
-        author = Author.objects.filter(id__icontains=author_id).first()
+        clean_id = raw_id.rstrip("/")
+        author = (
+            Author.objects.filter(id=clean_id).first()
+            or Author.objects.filter(id=f"{clean_id}/").first()
+        )
 
     if not author:
-        return JsonResponse({"error": "Author not found"}, status=404)
+        author = Author.objects.filter(id__icontains=raw_id).first()
 
+    if not author:
+        return JsonResponse({"error": f"Author not found for: {raw_id}"}, status=404)
+
+    # GET inbox
     if request.method == "GET":
         inbox_items = Inbox.objects.filter(author=author).order_by("-received_at")
         return JsonResponse({
@@ -2210,21 +2211,25 @@ def inbox_view(request, author_id):
             "items": [item.data for item in inbox_items],
         })
 
+    # POST inbox
     elif request.method == "POST":
-        content_type = request.META.get('CONTENT_TYPE', '')
-        if 'application/json' not in content_type and 'application/ld+json' not in content_type:
-            return JsonResponse({"error": "Invalid Content-Type. Expected application/json or application/ld+json"}, status=400)
+        content_type = request.META.get("CONTENT_TYPE", "")
+        if (
+            "application/json" not in content_type
+            and "application/ld+json" not in content_type
+        ):
+            return JsonResponse(
+                {"error": "Invalid Content-Type. Expected application/json or application/ld+json"},
+                status=400,
+            )
 
         try:
             body = json.loads(request.body)
-        except json.JSONDecodeError as e:
+        except json.JSONDecodeError:
             return JsonResponse({"error": "Invalid JSON"}, status=400)
 
         try:
-            inbox_item = Inbox.objects.create(author=author, data=body)
-            
-            # Immediately process the inbox to update likes/comments/entries
-            # This ensures remote activities are processed right away, not just when the author visits their page
+            Inbox.objects.create(author=author, data=body)
             process_inbox(author)
         except Exception as e:
             return JsonResponse({"error": f"Failed to create/process inbox item: {e}"}, status=500)

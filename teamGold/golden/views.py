@@ -1827,8 +1827,10 @@ def friends(request):
         "page_type": "friends",
     })
 
+
 @login_required
 def add_comment(request):
+    
     if request.method == "POST":
         form = CommentForm(request.POST)
         entry_id = request.POST.get("entry_id")
@@ -1859,6 +1861,8 @@ def add_comment(request):
 
     # Fallback for non-POST: just go back to stream
     return redirect("stream")
+
+
 
 @login_required
 def toggle_like(request):

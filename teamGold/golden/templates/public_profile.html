@@ -18,13 +18,13 @@
 <section class="profile-container">
     <section class="profile-left">
         {% if author.profileImage %}
-            <img class="profile-pic" src="{{ author.profileImage.url|default:'profile_pics/default_profile.png' }}" alt="Profile Picture">
+            <img class="profile-pic" src="{{ author.profileImage.url | default:'profile_pics/default_profile.png' }}" alt="Profile Picture">
         {% else %}
             <img class="profile-pic" src="{% static 'golden/icons/default_profile.png' %}" alt="Default Profile">
         {% endif %}
 
         <h2 class="profile-username">
-            {{ author.displayName|default:author.name|default:author.username }}
+            {{ author.displayName | author.name | default:author.username }}
         </h2>
     </section>
 

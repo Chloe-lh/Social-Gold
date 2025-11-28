@@ -1873,6 +1873,7 @@ def toggle_like(request):
     # FQID of the object being liked needs to be sent for this to work, otherwise fail gracefully.
     # http://host/api/entries/<uuid> 
     object_fqid = request.POST.get('object')
+
     if not object_fqid:
         return redirect(request.META.get('HTTP_REFERER', 'stream'))
 
@@ -1886,11 +1887,9 @@ def toggle_like(request):
 
     # Feature Type 1: Attempts to resolve FQID as an Entry 
     try:
-        # Case 1: FQID is perfect 
         entry_obj = Entry.objects.get(id=object_fqid)
     except Entry.DoesNotExist:
         try:
-            # Case 2: Check endswith because it might be stored as a full URL, and we just got the tail
             entry_obj = Entry.objects.get(id__endswith=object_fqid)
         except Entry.DoesNotExist:
             entry_obj = None

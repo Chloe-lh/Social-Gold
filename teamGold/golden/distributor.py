@@ -246,12 +246,6 @@ def get_friends(author):
     """
     return friends
 
-def previously_delivered(post):
-    """Return all authors who already received this post."""
-    inbox_rows = Inbox.objects.filter(data__object__id=str(post.id))
-    author_ids = inbox_rows.values_list("author_id", flat=True)
-    return Author.objects.filter(id__in=author_ids)
-
 def absolutize_remote_images(html, base_url):
     """
     If a src is relative (e.g. /media/x.jpg), it is converted to

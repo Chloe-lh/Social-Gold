@@ -80,7 +80,7 @@ urlpatterns =  [
 
     # Authors API Endpoints
     #path("api/authors/<path:author_id>/inbox/", inbox_view)
-    path("api/authors/<str:author_id>/inbox/", inbox_view)
+    path("api/authors/<str:author_id>/inbox/", views.inbox_view),
     path("api/authors/<path:author_serial>/inbox/", views.inbox_view, name="author-inbox"),
     path("api/authors/<str:author_uuid>/", SingleAuthorAPIView.as_view(), name="api-author-detail"),  
     path("api/authors/", AuthorsListView.as_view(), name="api-authors-list"), 

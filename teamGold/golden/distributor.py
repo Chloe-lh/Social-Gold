@@ -409,9 +409,9 @@ def distribute_activity(activity: dict, actor: Author):
             actor_id = activity.get("id") 
 
         # Skips actor if local to prevent double processing
-        if actor_id and actor_id.startswith(settings.SITE_URL):
-            print("[DEBUG process_inbox] LIKE: Skipping local-origin like")
-            return
+        #if actor_id and actor_id.startswith(settings.SITE_URL):
+            #print("[DEBUG process_inbox] LIKE: Skipping local-origin like")
+            #return
 
         if actor_id:
             actor_obj = Author.objects.filter(id=normalize_fqid(actor_id)).first()

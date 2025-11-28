@@ -1906,21 +1906,21 @@ def toggle_like(request):
     target_id = (entry_obj.id if entry_obj else (comment_obj.id if comment_obj else object_fqid))
 
     with transaction.atomic():
-        existing = Like.objects.filter(author=author, object=target.id).first()
+        existing = Like.objects.filter(author=author, object=target_id).first()
         if existing:
             activity = create_like_activity(author, existing)
             existing.delete()
             if entry_obj:
                 entry_obj.likes.remove(author)
         else:
-            if not Like.objects.filter(author=author, object=target.id).exists():
+            if not Like.objects.filter(author=author, object=target_id).exists():
                 like_id = (
                     f"{settings.SITE_URL.rstrip('/')}/api/likes/{uuid.uuid4()}"
                 )
                 like = Like.objects.create(
                     id=like_id,
                     author=author,
-                    object=target.id,
+                    object=target_id,
                     published=dj_timezone.now(),
                 )
                 if entry_obj:

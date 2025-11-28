@@ -306,7 +306,7 @@ def distribute_activity(activity: dict, actor: Author):
         visibility = obj.get("visibility", "PUBLIC").upper()
 
         if visibility in ("PUBLIC",):
-            recipients = get_followers(actor) | get_friends(actor)
+            recipients = set(get_followers(actor)) | set(get_friends(actor))
         elif visibility == "UNLISTED":
             recipients = set(get_followers(actor))
         elif visibility == "FRIENDS":

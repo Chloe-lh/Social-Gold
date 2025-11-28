@@ -5,8 +5,8 @@ from . import views
 # API view imports (use the modules under golden.api)
 from .api.friendsAPIView import AuthorFriendsView, FollowAPIView
 from .api.entryAPIView import EntryAPIView, EntryImageAPIView, ReadingAPIView
-from .api.commentAPIView import EntryCommentAPIView, SingleCommentAPIView, CommentedAPIView
-from .api.likeAPIView import LikeAPIView, LikedAPIView
+from .api.commentAPIView import EntryCommentAPIView, SingleCommentAPIView
+from .api.likeAPIView import LikeAPIView
 from .api.authorsAPIView import AuthorsListView, SingleAuthorAPIView
 from .api.followersAPIView import FollowersView
 

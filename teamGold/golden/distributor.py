@@ -293,7 +293,6 @@ def distribute_activity(activity: dict, actor: Author):
     obj = activity.get("object")
     print(obj)
 
-    
     # ============================================================
     # ENTTRIES RELATED
     # ============================================================
@@ -557,32 +556,29 @@ def distribute_activity(activity: dict, actor: Author):
     
     # SEND FOLLOW (REQUEST OR AUTOMATIC)
     if type_lower == "follow":
-
-        target = None
         target_id = obj.get("id")
+        print(f"[DEBUG distribute_activity] FOLLOW: Processing follow activity")
+        print(f"[DEBUG distribute_activity] FOLLOW: actor={actor.username} (id={actor.id})")
+        print(f"[DEBUG distribute_activity] FOLLOW: target_id (raw)={target_id}")
+        
+        target_id_normalized = normalize_fqid(target_id)
+        print(f"[DEBUG distribute_activity] FOLLOW: target_id (normalized)={target_id_normalized}")
+        
+        target = Author.objects.filter(id=target_id_normalized).first()
+        print(f"[DEBUG distribute_activity] FOLLOW: Lookup by normalized FQID: target={target.username if target else 'None'} (id={target.id if target else 'None'})")
 
-        try:
-            if not target_id:
-                raise ValueError("FOLLOW activity missing 'id' field")
-
-            target_id_normalized = normalize_fqid(target_id)
-
-            # Tries to look at local authors first
-            target = Author.objects.filter(id=target_id_normalized).first()
-
-            # Fallback through remote authors
-            if not target:
-                target = get_or_create_foreign_author(target_id)
-
+        # If target doesn't exist locally by FQID, try to get/create
+        if not target:
+            print(f"[DEBUG distribute_activity] FOLLOW: Target not found, calling get_or_create_foreign_author")
+            target = get_or_create_foreign_author(target_id)
+            print(f"[DEBUG distribute_activity] FOLLOW: get_or_create_foreign_author returned: target={target.username if target else 'None'} (id={target.id if target else 'None'})")
+        
+        if target:
+            print(f"[DEBUG distribute_activity] FOLLOW: Sending activity to target inbox: target={target.username} (id={target.id}, host={target.host})")
             send_activity_to_inbox(target, activity)
-
-        except (ValueError, LookupError) as e:
-            # Expected / logical errors
-            print(f"[DEBUG distribute_activity] FOLLOW: {e}")
-
-        finally:
-            print(f"[DEBUG distribute_activity] FOLLOW: finished handling activity for id={target_id}")
-            
+            print(f"[DEBUG distribute_activity] FOLLOW: Activity sent successfully")
+        else:
+            print(f"[DEBUG distribute_activity] FOLLOW: ERROR - Target is None, cannot send activity")
         return
     
     # UNFOLLOW

@@ -118,6 +118,8 @@ def send_activity_to_inbox(recipient: Author, activity: dict):
     else:
         inbox_url = f"{base_host}/api/authors/{author_id_part}/inbox/"
 
+    print(f"[DEBUG send_activity_to_inbox] REMOTE delivery: Sending to inbox URL: {inbox_url}")
+
     # Get node authentication
     parsed = urlparse(recipient.host)
     node_base = f"{parsed.scheme}://{parsed.netloc}".rstrip('/')
@@ -406,7 +408,7 @@ def distribute_activity(activity: dict, actor: Author):
         elif isinstance(activity.get("actor"), str):
             actor_id = activity.get("actor")
         else:
-            print("[DEBUG process_inbox] LIKE: No actor found in Like activity")
+            print("[DEBUG distrbute_activity] LIKE: No actor found in Like activity")
             #actor_id = activity.get("id") 
 
         # Skips actor if local to prevent double processing
@@ -419,17 +421,17 @@ def distribute_activity(activity: dict, actor: Author):
             if not actor_obj:
                 actor_obj = get_or_create_foreign_author(actor_id)
         else:
-            print("[DEBUG process_inbox] LIKE: No actor found in Like activity")
+            print("[DEBUG distrbute_activity] LIKE: No actor found in Like activity")
             return
 
         liked_fqid = activity.get("id")
         if not isinstance(liked_fqid, str):
-            print("[DEBUG process_inbox] LIKE: Invalid liked_fqid, skipping")
+            print("[DEBUG distrbute_activity] LIKE: Invalid liked_fqid, skipping")
             return
 
         target = activity.get("author")
-        if not isinstance(target, str):
-            print("[DEBUG process_inbox] LIKE: Invalid target, skipping")
+        if not isinstance(target, dict):
+            print("[DEBUG distrbute_activity] LIKE: Invalid target, skipping")
             return
 
         send_activity_to_inbox(target, activity)

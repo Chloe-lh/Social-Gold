@@ -65,7 +65,8 @@ def safe_parse_datetime(value):
 
 def send_activity_to_inbox(recipient: Author, activity: dict):
     print("RUNNING UPDATED CODE")
-    print(f"[DEBUG send_activity_to_inbox] Called: recipient={recipient.displayName} (id={recipient.id}, host={recipient.host})")
+    name = recipient.displayName or recipient.username
+    print(f"[DEBUG send_activity_to_inbox] Called: recipient={recipient.name} (id={recipient.id}, host={recipient.host})")
     print(f"[DEBUG send_activity_to_inbox] Activity type: {activity.get('type')}")
     print("[DEBUG] type(recipient.host) =", type(recipient.host))
     print("[DEBUG] recipient.host =", recipient.host)

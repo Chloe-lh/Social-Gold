@@ -1,0 +1,93 @@
+{% extends "components/base.html" %}
+{% load static %}
+
+<!DOCTYPE HTML> 
+<html lang="en">
+   <head>
+    {% block head %}
+    <title>Golden - Stream</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="{% static 'golden/css/global.css' %}">
+    <link rel="stylesheet" href="{% static 'golden/css/stream.css' %}">
+    {% endblock %}
+  </head>
+  <body>
+    {% block content %}
+   <br>
+   <header class="feed-header">
+    <h2 class="feed-title">MY FEED</h2>
+    <button type="button" class="globe-btn" id="globeBtn" data-mode="all">
+      <img src="{% static 'golden/icons/entry-all-icon.png' %}" alt="All entries" class="mode-icon" data-icon="all">
+      <img src="{% static 'golden/icons/entry-unlisted-icon.png' %}" alt="Unlisted entries" class="mode-icon" data-icon="unlisted">
+      <img src="{% static 'golden/icons/friends-icon.png' %}" alt="Friends entries" class="mode-icon" data-icon="friends">
+    </button>
+    </header>
+  
+     <!-- Entry Tab Section -->
+    <section class="feed-section">
+      {% for entry in entries %}
+        {% include "components/entry_component.html" with entry=entry %}
+      {% empty %}
+        <p>No posts to show.</p>
+      {% endfor %}
+    </section>
+
+</body>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  
+  const globeBtn = document.getElementById('globeBtn');
+  const modes = ['all', 'unlisted', 'friends'];
+  let currentMode = 0;
+
+  if (globeBtn) {
+    updateModeIcon();
+
+    globeBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+        currentMode = (currentMode + 1) % modes.length;
+        globeBtn.setAttribute('data-mode', modes[currentMode]);
+        updateModeIcon();
+        console.log('Current visibility mode:', modes[currentMode]);
+      });
+    }
+
+  function updateModeIcon() {
+    const icons = globeBtn.querySelectorAll('.mode-icon');
+    icons.forEach(icon => {
+      if (icon.getAttribute('data-icon') === modes[currentMode]) {
+        icon.style.display = 'block';
+      } else {
+        icon.style.display = 'none';
+      }
+    });
+  }
+
+document.querySelectorAll('.comment-btn').forEach(btn => {
+  btn.addEventListener("click", function(e) {
+    e.stopPropagation();
+
+    const url = this.dataset.entryUrl || (() => {
+      const fqid = this.dataset.entryId || '';
+      const uuid = fqid.split('/').pop();
+      
+      return `/golden/entry/${uuid}/`;
+    })();
+    
+    if (url) window.location.href = url;
+  });
+});
+
+document.querySelectorAll('.like-btn').forEach(btn => {
+  btn.addEventListener("click", function(e){
+    e.stopPropagation();
+    })
+  })
+});
+
+</script>
+{% endblock %}
+</html>
+

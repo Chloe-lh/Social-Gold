@@ -1,0 +1,248 @@
+.feed-section {
+    display: flex;
+    flex-flow: column;
+    gap: 5px;
+}
+
+.article-header {
+    display: flex;
+    background-color: var(--off-contrast-background);
+    width: 50%;
+    min-width: 400px;
+    border-radius: 6px 6px 0 0;
+    font-size: 20px;
+    font-family: 'BlackMango';
+    padding: 0 5px;
+    justify-content: space-between;
+}
+
+.article-header > a {
+    color: black;
+}
+
+.article-header > p, .entry-body > p {
+    margin: 0;
+}
+
+.entry-body {
+    background-color: var(--off-background);
+    color: var(--off-contrast-background);
+    font-size: 14px;
+    font-family: 'Montserrat-Medium';
+    padding: 5px;
+    min-height: 50px;
+}
+
+.entry-image {
+    width: 50%;
+    max-width: 300px;
+    aspect-ratio: 1/1;
+}
+
+.like-btn, .comment-btn, .share-btn {
+    background-color: transparent;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 15px;
+    color: var(--off-contrast-background);
+    font-family: 'Montserrat-Medium';
+    padding-left: 0;
+}
+
+.like-btn img, .comment-btn img, .share-btn img {
+    width: 20px;
+    height: 20px;
+}
+
+p.updated-footer {
+    text-align: end;
+    margin-top: 10px;
+}
+
+/* Feed Header with Globe Button */
+.feed-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 25px;
+}
+
+/* Feed Header with Globe Button */
+.feed-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 25px;
+}
+
+.feed-title {
+    font-family: 'BlackMango';
+    font-size: 32px;
+    font-weight: 900;
+    color: var(--primary-colour);
+    letter-spacing: 1px;
+    margin: 0;
+}
+
+/* Globe Visibility Toggle Button */
+.globe-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+    padding: 0;
+    position: relative;
+    flex-shrink: 0;
+}
+
+/* Blue for "all" mode (public) */
+.globe-btn[data-mode="all"] {
+    background: var(--contrast-colour-2);
+}
+
+/* Purple for "unlisted" mode */
+.globe-btn[data-mode="unlisted"] {
+    background: var(--contrast-colour-1);
+}
+
+/* Red for "friends" mode */
+.globe-btn[data-mode="friends"] {
+    background: var(--contrast-colour-3);
+}
+
+.globe-btn:hover {
+    transform: scale(1.1);
+}
+
+.globe-btn .mode-icon {
+    width: 20px;
+    height: 20px;
+    filter: brightness(0) invert(1);
+    position: absolute;
+}
+
+
+/* Entry Article */
+.entry {
+    border-radius: 12px;
+    overflow: hidden;
+    cursor: pointer;
+}
+
+/* Article Header */
+.article-header {
+    display: flex;
+    background-color: var(--off-contrast-background);
+    width: 100%;
+    border-radius: 6px 6px 0 0;
+    font-size: 20px;
+    font-family: 'BlackMango';
+    padding: 8px 15px;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+}
+
+.article-header > a {
+    color: black;
+    text-decoration: none;
+    flex-shrink: 0;
+}
+
+.article-header > p {
+    margin: 0;
+    margin-left: auto;
+    color: black;
+}
+
+/* Visibility Badge on Entries */
+.visibility-badge {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.visibility-badge[data-visibility="PUBLIC"] {
+    background: var(--contrast-colour-2);
+}
+
+.visibility-badge[data-visibility="UNLISTED"] {
+    background: var(--contrast-colour-1);
+}
+
+.visibility-badge[data-visibility="FRIENDS"] {
+    background: var(--contrast-colour-3);
+}
+
+.visibility-badge img {
+    width: 16px;
+    height: 16px;
+    filter: brightness(0) invert(1);
+}
+
+/* Entry Body */
+.entry-body {
+    background-color: var(--off-background);
+    color: var(--off-contrast-background);
+    font-size: 14px;
+    font-family: 'Montserrat-Medium';
+    padding: 15px;
+    min-height: 50px;
+}
+
+
+
+.entry-body h3 {
+    margin: 0 0 10px 0;
+    font-size: 20px;
+}
+
+.entry-body > p {
+    margin: 0;
+}
+
+/* Entry Images */
+.entry-image {
+    width: 50%;
+    max-width: 300px;
+    aspect-ratio: 1/1;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+/* Footer Buttons */
+.like-btn, .comment-btn, .share-btn {
+    background-color: transparent;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 15px;
+    color: var(--off-contrast-background);
+    font-family: 'Montserrat-Medium';
+    padding-left: 0;
+    cursor: pointer;
+}
+
+.like-btn img, .comment-btn img, .share-btn img {
+    width: 20px;
+    height: 20px;
+}
+
+p.updated-footer {
+    text-align: end;
+    margin-top: 10px;
+    font-size: 10px;
+    color: var(--off-background)
+}

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>Golden - Login</title>
+        <meta charset="UTF-8">
+        {% load static %}
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" href="{% static 'golden/css/global.css' %}">
+        <link rel="stylesheet" href="{% static 'golden/css/login.css' %}">
+    </head>
+
+    <body>
+        <section>
+            <header>
+                <h2>
+                    <span>Make Yours</span><br>GOLDEN
+                </h2>
+            </header>
+            
+            <form name="login" method="POST" enctype="application/x-www-form-urlencoded">
+                {% csrf_token %}
+                <input name="username" aria-label="Username" placeholder="username" autocomplete="username">
+                <input name="password" type="password" aria-label="password" placeholder="password" autocomplete="off">
+                <button type="submit">LOG IN</button>
+                <input type="hidden" name="next" value="{{ next }}">
+            </form>
+            <p class="large">Don't have an account?</p>
+
+            {% if next %}
+                <a class="button" href="{% url 'signup' %}?next={{ next }}">SIGN UP</a>
+            {% else %}
+                <a class="button" href="{% url 'signup' %}">SIGN UP</a>
+            {% endif %}
+
+            <div>
+                <!-- Will provide a correct error when log in is clicked -->
+                {% if form.errors and request.method == "POST" %}
+                    <p class="large" role="alert">Invalid credentials</p>
+                {% endif %}
+            </div>
+        </section>
+    </body>
+</html>

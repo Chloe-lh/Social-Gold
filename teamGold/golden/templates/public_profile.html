@@ -1,0 +1,167 @@
+{% extends "components/base.html" %}
+{% load static %}
+{% load author_filters %}
+
+{% block head %}
+<title>Golden - Public Profile</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="stylesheet" href="{% static 'golden/css/global.css' %}">
+<link rel="stylesheet" href="{% static 'golden/css/profile.css' %}">
+<link rel="stylesheet" href="{% static 'golden/css/mobile-profile.css' %}">
+<link rel="stylesheet" href="{% static 'golden/css/stream.css' %}">
+{% endblock %}
+
+{% block content %}
+<main class="content">
+
+<section class="profile-container">
+    <section class="profile-left">
+        {% if author.profileImage %}
+            <img class="profile-pic" src="{{ author.profileImage.url | default:'profile_pics/default_profile.png' }}" alt="Profile Picture">
+        {% else %}
+            <img class="profile-pic" src="{% static 'golden/icons/default_profile.png' %}" alt="Default Profile">
+        {% endif %}
+
+        <h2 class="profile-username">
+            {{ author.displayName | author.name | default:author.username }}
+        </h2>
+    </section>
+
+    <section class="profile-right">
+
+        <section class="profile-name-row">
+            <h1 class="profile-title">@{{ author.username }}</h1>
+
+             <!-- Profile URL Copy -->
+            <button id="copyProfileBtn" class="icon-btn" type="button">
+                <img src="{% static 'golden/icons/share-icon.png' %}" class="icon">
+            </button>
+
+            <section class="profile-icons">
+                {% if author.github %}
+                <a href="{{ author.github }}" target="_blank">
+                    <img src="{% static 'golden/icons/github-icon.png' %}" class="icon">
+                </a>
+                {% endif %}
+
+                {% if author.web %}
+                <a href="{{ author.web }}" target="_blank">
+                    <img src="{% static 'golden/icons/link-icon.png' %}" class="icon">
+                </a>
+                {% endif %}
+            </section>
+        </section>
+
+        {% if author.email %}
+        <section class="profile-email">
+            <p>{{ author.email }}</p>
+        </section>
+        {% endif %}
+
+        <section class="profile-bio">
+            <p>{{ author.description|default:"This user does not have a bio."|safe }}</p>
+        </section>
+    </section>
+</section>
+
+<section class="tabs-section">
+    <nav class="tabs">
+        <button class="tab-btn active" data-tab="entries">entries</button>
+        <button class="tab-btn" data-tab="followers">followers</button>
+        <button class="tab-btn" data-tab="following">following</button>
+    </nav>
+
+    <!-- Entries Tab -->
+    <section class="tab-panel active" data-tab-panel="entries">
+        {% if entries %}
+            {% for entry in entries %}
+                {% include "components/entry_component.html" with entry=entry %}
+            {% endfor %}
+        {% else %}
+            <p>This author has no entries yet.</p>
+        {% endif %}
+    </section>
+
+    <!-- Followers Tab -->
+    <section class="tab-panel" data-tab-panel="followers">
+        {% if followers_with_urls %}
+            {% for f in followers_with_urls %}
+                <section class="author-list-item follower-row">
+                    <a href="{% url 'public-profile' f.url_id %}" class="follower-username">
+                        {{ f.author.displayName|default:f.author.username }}
+                    </a>
+
+                    {% if f.author in friends %}
+                        <img src="{% static 'golden/icons/friends-icon.png' %}" alt="friend" class="friend-icon">
+                    {% endif %}
+                </section>
+                <hr class="follower-divider">
+            {% endfor %}
+        {% else %}
+            <p>No followers yet.</p>
+        {% endif %}
+    </section>
+
+    <!-- Following Tab -->
+    <section class="tab-panel" data-tab-panel="following">
+        {% if following_with_urls %}
+            {% for f in following_with_urls %}
+                <section class="author-list-item follower-row">
+                    <a href="{% url 'public-profile' f.url_id %}" class="follower-username">
+                        {{ f.author.displayName|default:f.author.username }}
+                    </a>
+
+                    {% if f.author in friends %}
+                        <img src="{% static 'golden/icons/friends-icon.png' %}" alt="friend" class="friend-icon">
+                    {% endif %}
+                </section>
+                <hr class="follower-divider">
+            {% endfor %}
+        {% else %}
+            <p>Not following anyone.</p>
+        {% endif %}
+    </section>
+</section>
+
+<script>
+
+// Tab Switching
+document.addEventListener("DOMContentLoaded", () => {
+    const tabButtons = document.querySelectorAll(".tab-btn");
+    const tabPanels = document.querySelectorAll(".tab-panel");
+
+    tabButtons.forEach(button => {
+        button.addEventListener("click", () => {
+            const target = button.dataset.tab;
+            const panel = document.querySelector(`[data-tab-panel="${target}"]`);
+
+            tabButtons.forEach(btn => btn.classList.remove("active"));
+            tabPanels.forEach(p => p.classList.remove("active"));
+
+            button.classList.add("active");
+            if (panel) panel.classList.add("active");
+        });
+    });
+
+// Copy Profile URL 
+const copyBtn = document.getElementById("copyProfileBtn");
+
+  if (copyBtn) {
+    copyBtn.addEventListener("click", e => {
+      e.preventDefault();
+      const url = window.location.href;
+
+      navigator.clipboard.writeText(url)
+        .then(() => alert("Profile link copied to clipboard!"))
+        .catch(err => {
+          console.error("Failed to copy profile link:", err);
+          alert("Could not copy link. Copy manually from the address bar.");
+        });
+    });
+  }
+});
+</script>
+
+</main>
+{% endblock %}
